@@ -21,5 +21,6 @@ module.exports = function (api) {
     presets: [
       ['module:@react-native/babel-preset', { useTransformReactJSX: true }],
     ],
+    plugins: ['react-native-worklets/plugin'],
   };
 };
