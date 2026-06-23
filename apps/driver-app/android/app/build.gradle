@@ -4,6 +4,10 @@ apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
+// Needed by react-native-worklets (and react-native-reanimated v4) in pnpm monorepos
+// so the library can locate react-native headers without falling back to a slow node resolution.
+project.ext.REACT_NATIVE_NODE_MODULES_DIR = new File(projectRoot, "node_modules/react-native").absolutePath
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
