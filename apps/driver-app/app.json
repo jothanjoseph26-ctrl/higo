@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "HiGo Driver",
+    "slug": "higo-driver",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "higodriver",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.driverapp"
+    },
+    "android": {
+      "package": "com.driverapp",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED"
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4cd8fd34-fa56-4cf2-aaec-4163f5329143"
+      }
+    }
+  }
+}

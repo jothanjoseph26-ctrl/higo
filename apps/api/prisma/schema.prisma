@@ -1,0 +1,495 @@
+// ============================================================================
+// HiGo Abuja — Prisma Schema (PostgreSQL 15 + PostGIS)
+// Mobility module of the Hiconnect Super App
+// MOU ref: JTL/HGS/HGO/001/2026
+//
+// NOTES:
+// - PostGIS geography columns are declared with Unsupported(...) because Prisma
+//   has no native geography type. All reads/writes to these columns MUST use
+//   $queryRaw / $executeRaw with ST_* functions and SRID 4326.
+// - Before first migration run, ensure: CREATE EXTENSION IF NOT EXISTS postgis;
+//   (also enable the postgis extension via a manual migration step — see
+//   monorepo-setup.md, step 6).
+// - All monetary values are stored in KOBO as Int (never floats). Currency NGN.
+// - Spatial (GiST) indexes on geography columns must be added via raw SQL in a
+//   migration (Prisma cannot express USING GIST). See the migration note blocks.
+// - JSONB columns use Prisma's Json type.
+// ============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum TripStatus {
+  requested
+  matched
+  en_route
+  active
+  completed
+  cancelled
+}
+
+enum KYCStatus {
+  pending
+  under_review
+  approved
+  rejected
+}
+
+enum VehicleType {
+  keke      // keke napep (motorised tricycle) — Phase 1 primary
+  car       // reserved for future
+  bike      // reserved for future
+}
+
+enum ZoneType {
+  permitted // launch/service zones
+  restricted // legally restricted (FCTA) — no pickup/dropoff allowed
+  surge      // dynamic pricing zone
+}
+
+enum SubscriptionTier {
+  daily
+  weekly
+  monthly
+}
+
+enum DisputeStatus {
+  open
+  investigating
+  resolved
+  dismissed
+}
+
+enum AdminRole {
+  super_admin
+  admin
+  moderator
+}
+
+enum PaymentMethod {
+  card
+  bank
+  ussd
+  cash // settled offline; recorded for reporting
+}
+
+enum PaymentStatus {
+  pending
+  held      // escrow hold after charge.success
+  released  // disbursed/settled after trip completion
+  failed
+  refunded
+}
+
+enum UserType {
+  passenger
+  driver
+  admin
+}
+
+enum DisputeRaisedBy {
+  passenger
+  driver
+  admin
+}
+
+enum VerificationTier {
+  tier_0 // unverified
+  tier_1 // NIN only
+  tier_2 // NIN + Licence
+  tier_3 // all 5 documents approved
+}
+
+// ============================================================================
+// USERS (passengers)
+// ============================================================================
+
+model User {
+  id                 String   @id @default(uuid()) @db.Uuid
+  phone              String   @unique
+  email              String?  @unique
+  name               String?
+  avatarUrl          String?  @map("avatar_url")
+  fcmToken           String?  @map("fcm_token")
+  preferredLanguage  String   @default("en") @map("preferred_language") // en | pcm | ha | yo
+  higoPoints         Int      @default(0) @map("higo_points")
+  ratingAvg          Decimal  @default(0) @map("rating_avg") @db.Decimal(3, 2)
+  totalTrips         Int      @default(0) @map("total_trips")
+  isVerified         Boolean  @default(false) @map("is_verified")
+  isBlocked          Boolean  @default(false) @map("is_blocked")
+  emergencyContacts  Json?    @map("emergency_contacts") @db.JsonB // [{name, phone, relationship}]
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // A user MAY also be a driver (drivers.user_id FK)
+  driverProfile      Driver?
+  tripsAsPassenger   Trip[]          @relation("PassengerTrips")
+  notifications      Notification[]  @relation("UserNotifications")
+
+  @@index([phone])
+  @@index([email])
+  @@index([isBlocked])
+  @@map("users")
+}
+
+// ============================================================================
+// DRIVERS
+// ============================================================================
+
+model Driver {
+  id                    String           @id @default(uuid()) @db.Uuid
+  userId                String?          @unique @map("user_id") @db.Uuid
+  name                  String
+  phone                 String           @unique
+  email                 String?          @unique
+  avatarUrl             String?          @map("avatar_url")
+  fcmToken              String?          @map("fcm_token")
+
+  vehicleType           VehicleType      @default(keke) @map("vehicle_type")
+  vehiclePlate          String           @map("vehicle_plate")
+  vehicleModel          String?          @map("vehicle_model")
+  vehicleYear           Int?             @map("vehicle_year")
+  vehicleColor          String?          @map("vehicle_color")
+
+  kycStatus             KYCStatus        @default(pending) @map("kyc_status")
+  kycDocuments          Json?            @map("kyc_documents") @db.JsonB // {nin:{...}, licence:{...}, ...}
+  verificationTier      VerificationTier @default(tier_0) @map("verification_tier")
+
+  // NDPA: encrypted at rest (AES-256-GCM) -> stored as {iv,tag,ciphertext}
+  ninEncrypted          Json?            @map("nin_encrypted") @db.JsonB
+  bankDetailsEncrypted  Json?            @map("bank_details_encrypted") @db.JsonB
+  paystackRecipientCode String?          @map("paystack_recipient_code")
+
+  ratingAvg             Decimal          @default(0) @map("rating_avg") @db.Decimal(3, 2)
+  totalTrips            Int              @default(0) @map("total_trips")
+  isOnline              Boolean          @default(false) @map("is_online")
+  isActive              Boolean          @default(true) @map("is_active")
+  isSuspended           Boolean          @default(false) @map("is_suspended")
+
+  subscriptionTier      SubscriptionTier? @map("subscription_tier")
+  subscriptionExpiresAt DateTime?         @map("subscription_expires_at")
+
+  // FCTA compliance: which permitted zones this driver operates in
+  operatingZoneIds      String[]          @map("operating_zone_ids") @db.Uuid
+
+  // PostGIS — write/read via raw SQL only. ST_SetSRID(ST_MakePoint(lng,lat),4326)::geography
+  currentLocation       Unsupported("geography(Point,4326)")? @map("current_location")
+
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+
+  user                  User?             @relation(fields: [userId], references: [id])
+  tripsAsDriver         Trip[]            @relation("DriverTrips")
+  locationHistory       DriverLocation[]  @relation("DriverLocationHistory")
+  subscriptions         Subscription[]    @relation("DriverSubscriptions")
+
+  @@index([kycStatus])
+  @@index([isSuspended])
+  @@index([subscriptionExpiresAt])
+  // GiST index on (is_online, current_location) for nearest-driver search must be
+  // added via raw SQL migration:
+  //   CREATE INDEX idx_drivers_online_location ON drivers USING GIST (current_location)
+  //     WHERE is_online = true;
+  @@map("drivers")
+}
+
+// ============================================================================
+// TRIPS
+// ============================================================================
+
+model Trip {
+  id                   String      @id @default(uuid()) @db.Uuid
+  passengerId          String      @map("passenger_id") @db.Uuid
+  driverId             String?     @map("driver_id") @db.Uuid
+
+  // PostGIS points — raw SQL only
+  pickupLocation       Unsupported("geography(Point,4326)") @map("pickup_location")
+  pickupAddress        String      @map("pickup_address")
+  destinationLocation  Unsupported("geography(Point,4326)") @map("destination_location")
+  destinationAddress   String      @map("destination_address")
+
+  routePolyline        String?     @map("route_polyline") // encoded polyline
+  distanceKm           Decimal?    @map("distance_km") @db.Decimal(8, 3)
+  durationMin          Int?        @map("duration_min")
+
+  vehicleType          VehicleType @default(keke) @map("vehicle_type")
+  status               TripStatus  @default(requested)
+
+  // All fares in KOBO (Int)
+  baseFare             Int         @default(0) @map("base_fare")
+  distanceFare         Int         @default(0) @map("distance_fare")
+  timeFare             Int         @default(0) @map("time_fare")
+  surgeMultiplier      Decimal     @default(1.0) @map("surge_multiplier") @db.Decimal(4, 2)
+  totalFare            Int         @default(0) @map("total_fare")
+
+  paymentMethod        PaymentMethod? @map("payment_method")
+  paymentStatus        PaymentStatus  @default(pending) @map("payment_status")
+  paystackReference    String?        @unique @map("paystack_reference")
+
+  passengerRating      Int?        @map("passenger_rating") // 1..5 rating GIVEN BY driver to passenger
+  driverRating         Int?        @map("driver_rating")    // 1..5 rating GIVEN BY passenger to driver
+
+  rideSharePartnerId   String?     @map("ride_share_partner_id") @db.Uuid
+  isShared             Boolean     @default(false) @map("is_shared")
+
+  startedAt            DateTime?   @map("started_at")
+  completedAt          DateTime?   @map("completed_at")
+  cancelledAt          DateTime?   @map("cancelled_at")
+  cancelReason         String?     @map("cancel_reason")
+  createdAt            DateTime    @default(now()) @map("created_at")
+
+  passenger            User        @relation("PassengerTrips", fields: [passengerId], references: [id])
+  driver               Driver?     @relation("DriverTrips", fields: [driverId], references: [id])
+  disputes             Dispute[]   @relation("TripDisputes")
+
+  @@index([status])
+  @@index([passengerId])
+  @@index([driverId])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  // GiST on pickup_location for geofencing checks (raw SQL migration):
+  //   CREATE INDEX idx_trips_pickup_location ON trips USING GIST (pickup_location);
+  @@map("trips")
+}
+
+// ============================================================================
+// DRIVER LOCATIONS (append-only history)
+// ============================================================================
+
+model DriverLocation {
+  id         String   @id @default(uuid()) @db.Uuid
+  driverId   String   @map("driver_id") @db.Uuid
+
+  // PostGIS point — raw SQL only
+  location   Unsupported("geography(Point,4326)") @map("location")
+  bearing    Decimal? @db.Decimal(6, 2)
+  speed      Decimal? @db.Decimal(6, 2)
+  accuracy   Decimal? @db.Decimal(6, 2)
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  driver     Driver   @relation("DriverLocationHistory", fields: [driverId], references: [id])
+
+  @@index([driverId, recordedAt])
+  // GiST on location for spatial history queries (raw SQL migration):
+  //   CREATE INDEX idx_driver_locations_location ON driver_locations USING GIST (location);
+  @@map("driver_locations")
+}
+
+// ============================================================================
+// ZONES (geofencing + surge)
+// ============================================================================
+
+model Zone {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  zoneType        ZoneType @map("zone_type")
+
+  // PostGIS polygon — raw SQL only
+  boundary        Unsupported("geography(Polygon,4326)") @map("boundary")
+
+  surgeMultiplier Decimal  @default(1.0) @map("surge_multiplier") @db.Decimal(4, 2)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  surgeRules      SurgeRule[] @relation("ZoneSurgeRules")
+
+  @@index([zoneType])
+  @@index([isActive])
+  // GiST on boundary for ST_Contains (raw SQL migration):
+  //   CREATE INDEX idx_zones_boundary ON zones USING GIST (boundary);
+  // SEED DATA REQUIRED:
+  //   Restricted: Maitama, Asokoro, Guzape, Ahmadu Bello Way,
+  //               Nnamdi Azikiwe Expressway, Yakubu Gowon Crescent
+  //   Permitted (launch): Apo, Galadimawa, Lugbe FHA, Lokogoma, Kuje, Gosa,
+  //               Gaduwa, Gwarimpa, Dawaki, Kubwa, Nyanya, Karu
+  //   Polygon coordinates pending client sign-off (see ADR Item 4).
+  @@map("zones")
+}
+
+// ============================================================================
+// PRICING CONFIG
+// ============================================================================
+
+model PricingConfig {
+  id          String      @id @default(uuid()) @db.Uuid
+  vehicleType VehicleType @map("vehicle_type")
+  baseFare    Int         @map("base_fare")    // kobo
+  perKmFare   Int         @map("per_km_fare")  // kobo
+  perMinFare  Int         @map("per_min_fare") // kobo
+  minFare     Int         @map("min_fare")     // kobo
+  currency    String      @default("NGN")
+  isActive    Boolean     @default(true) @map("is_active")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@index([vehicleType, isActive])
+  // SEED DATA REQUIRED: one active row per vehicle type (keke at minimum).
+  // Fare values pending client sign-off (see ADR Item 5). All values in kobo.
+  @@map("pricing_config")
+}
+
+// ============================================================================
+// SURGE RULES
+// ============================================================================
+
+model SurgeRule {
+  id         String   @id @default(uuid()) @db.Uuid
+  zoneId     String   @map("zone_id") @db.Uuid
+  dayOfWeek  Int      @map("day_of_week") // 0=Sunday .. 6=Saturday (EXTRACT(DOW))
+  startTime  String   @map("start_time")  // 'HH:MM:SS' (compared as ::time)
+  endTime    String   @map("end_time")    // 'HH:MM:SS'
+  multiplier Decimal  @db.Decimal(4, 2)
+  isActive   Boolean  @default(true) @map("is_active")
+
+  zone       Zone     @relation("ZoneSurgeRules", fields: [zoneId], references: [id])
+
+  @@index([zoneId, dayOfWeek, isActive])
+  // SEED DATA REQUIRED only if surge enabled at launch (see ADR Item 6).
+  @@map("surge_rules")
+}
+
+// ============================================================================
+// SUBSCRIPTIONS (driver subscription billing)
+// ============================================================================
+
+model Subscription {
+  id                      String           @id @default(uuid()) @db.Uuid
+  driverId                String           @map("driver_id") @db.Uuid
+  tier                    SubscriptionTier
+  amount                  Int              // kobo
+  paystackSubscriptionCode String?         @map("paystack_subscription_code")
+  startedAt               DateTime         @default(now()) @map("started_at")
+  expiresAt               DateTime         @map("expires_at")
+  isActive                Boolean          @default(true) @map("is_active")
+  autoRenew               Boolean          @default(false) @map("auto_renew")
+
+  driver                  Driver           @relation("DriverSubscriptions", fields: [driverId], references: [id])
+
+  @@index([driverId, isActive])
+  @@index([expiresAt])
+  // SEED DATA REQUIRED: Paystack Plan codes per tier in env (see ADR Item 2).
+  @@map("subscriptions")
+}
+
+// ============================================================================
+// DISPUTES
+// ============================================================================
+
+model Dispute {
+  id           String          @id @default(uuid()) @db.Uuid
+  tripId       String          @map("trip_id") @db.Uuid
+  raisedBy     DisputeRaisedBy @map("raised_by")
+  type         String          // e.g. fare_dispute, no_show, safety, payment
+  description  String
+  evidenceUrls Json?           @map("evidence_urls") @db.JsonB // [s3 keys / presignable]
+  status       DisputeStatus   @default(open)
+  resolution   String?
+  resolvedBy   String?         @map("resolved_by") @db.Uuid // admin_users.id
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  trip         Trip            @relation("TripDisputes", fields: [tripId], references: [id])
+
+  @@index([status])
+  @@index([tripId])
+  @@map("disputes")
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  userType  UserType @map("user_type") // passenger | driver
+  title     String
+  body      String
+  type      String   // trip | payment | kyc | promo | system | broadcast
+  data      Json?    @db.JsonB
+  isRead    Boolean  @default(false) @map("is_read")
+  sentAt    DateTime? @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation("UserNotifications", fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([userType])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================================================
+// ADMIN USERS
+// ============================================================================
+
+model AdminUser {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         AdminRole @default(moderator)
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([email])
+  @@index([role])
+  // SEED DATA REQUIRED: one super_admin account (credentials provided securely
+  // out-of-band; never commit). Password hashed with argon2id/bcrypt.
+  @@map("admin_users")
+}
+
+// ============================================================================
+// FINANCIAL AUDIT LOGS (append-only)
+// ============================================================================
+
+model FinancialAudit {
+  id           String   @id @default(uuid()) @db.Uuid
+  action       String   // e.g. initialize, charge.success, escrow_release, transfer_create, transfer_success, transfer_failed, refund, subscription_create, subscription_renew, subscription_expire
+  actorId      String?  @map("actor_id") @db.Uuid // passenger, driver or admin UUID
+  actorType    String?  @map("actor_type") // passenger | driver | admin
+  reference    String   @unique
+  amount       Int?     // amount in kobo (if applicable)
+  beforeStatus String?  @map("before_status")
+  afterStatus  String?  @map("after_status")
+  metadata     Json?    @db.JsonB
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([action])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("financial_audit_logs")
+}
+
+// ============================================================================
+// COMPLIANCE AUDIT LOGS (append-only, NDPA / FCTA)
+// ============================================================================
+
+model ComplianceAudit {
+  id        String   @id @default(uuid()) @db.Uuid
+  driverId  String   @map("driver_id") @db.Uuid
+  docType   String?  @map("doc_type")
+  action    String
+  actorId   String?  @map("actor_id") @db.Uuid
+  actorType String?  @map("actor_type")
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([driverId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("compliance_audit_logs")
+}
+

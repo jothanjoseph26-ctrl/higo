@@ -1,2 +1,14 @@
 packages:
   - 'packages/*'
+  - 'apps/*'
+allowBuilds:
+  '@parcel/watcher': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  '@scarf/scarf': true
+  esbuild: true
+  less: true
+  msgpackr-extract: set this to true or false
+  nx: true
+  prisma: true
+  unrs-resolver: true

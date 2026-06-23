@@ -1,0 +1,9 @@
+{
+  "name": "PassengerApp",
+  "displayName": "PassengerApp",
+  "extra": {
+    "eas": {
+      "projectId": "2c1b89dc-6f6d-4797-96d5-1c2c9ccdce75"
+    }
+  }
+}

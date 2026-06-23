@@ -1,0 +1,137 @@
+{
+  "name": "@higo/api",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "targets": {
+      "build": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "webpack-cli build",
+          "env": {
+            "NODE_ENV": "production"
+          },
+          "cwd": "apps/api"
+        },
+        "configurations": {
+          "development": {
+            "env": {
+              "NODE_ENV": "development"
+            }
+          }
+        }
+      },
+      "prune-lockfile": {
+        "dependsOn": [
+          "build"
+        ],
+        "cache": true,
+        "executor": "@nx/js:prune-lockfile",
+        "outputs": [
+          "{workspaceRoot}/apps/api/dist/package.json",
+          "{workspaceRoot}/apps/api/dist/pnpm-lock.yaml"
+        ],
+        "options": {
+          "buildTarget": "build"
+        }
+      },
+      "copy-workspace-modules": {
+        "dependsOn": [
+          "build"
+        ],
+        "cache": true,
+        "outputs": [
+          "{workspaceRoot}/apps/api/dist/workspace_modules"
+        ],
+        "executor": "@nx/js:copy-workspace-modules",
+        "options": {
+          "buildTarget": "build"
+        }
+      },
+      "prune": {
+        "dependsOn": [
+          "prune-lockfile",
+          "copy-workspace-modules"
+        ],
+        "executor": "nx:noop"
+      },
+      "serve": {
+        "continuous": true,
+        "executor": "@nx/js:node",
+        "defaultConfiguration": "development",
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "buildTarget": "@higo/api:build",
+          "runBuildTargetDependencies": false
+        },
+        "configurations": {
+          "development": {
+            "buildTarget": "@higo/api:build:development"
+          },
+          "production": {
+            "buildTarget": "@higo/api:build:production"
+          }
+        }
+      },
+      "test": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "jest --config jest.config.cjs",
+          "cwd": "apps/api"
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1072.0",
+    "@aws-sdk/client-textract": "^3.1072.0",
+    "@aws-sdk/s3-request-presigner": "^3.1072.0",
+    "@higo/shared-types": "workspace:*",
+    "@nestjs/bull": "^11.0.0",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/platform-express": "^11.1.27",
+    "@nestjs/platform-socket.io": "^11.1.27",
+    "@nestjs/swagger": "^11.4.4",
+    "@nestjs/terminus": "^11.1.1",
+    "@nestjs/websockets": "^11.1.27",
+    "@prisma/client": "^6.19.3",
+    "axios": "^1.16.0",
+    "bull": "^4.16.5",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "cookie-parser": "^1.4.7",
+    "google-auth-library": "^10.7.0",
+    "ioredis": "^5.11.1",
+    "joi": "^18.2.3",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0",
+    "sharp": "^0.35.2",
+    "socket.io": "^4.8.3",
+    "tslib": "^2.3.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.0.0",
+    "@types/bull": "^4.10.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^29.5.12",
+    "@types/passport-jwt": "^4.0.1",
+    "@types/uuid": "^11.0.0",
+    "jest": "^29.7.0",
+    "prisma": "^6.19.3",
+    "ts-jest": "^29.4.11",
+    "tsx": "^4.22.4"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}

@@ -1,0 +1,18 @@
+---
+pid: 25884
+cwd: "C:\Users\flood\hiconnect\higo-platform"
+command: "Set-Location C:\\Users\\flood\\hiconnect\\higo-platform; pnpm nx show projects --withTarget serve"
+started_at: 2026-06-22T14:17:44.317Z
+running_for_ms: 260007   
+---
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.onlyBuiltDependencies". See https://pnpm.io/settings for the new home of each setting.
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.onlyBuiltDependencies". See https://pnpm.io/settings for the new home of each setting.
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.onlyBuiltDependencies". See https://pnpm.io/settings for the new home of each setting.
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.onlyBuiltDependencies". See https://pnpm.io/settings for the new home of each setting.
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.onlyBuiltDependencies". See https://pnpm.io/settings for the new home of each setting.
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.onlyBuiltDependencies". See https://pnpm.io/settings for the new home of each setting.
+The `nxViteTsPaths` plugin from `@nx/vite/plugins/nx-tsconfig-paths.plugin` is deprecated and will be removed in Nx v24. Replace it with `tsconfigPaths()` from the `vite-tsconfig-paths` package. See https://nx.dev/docs/technologies/build-tools/vite/configure-vite for details.
+@higo/admin-dashboard
+@higo/passenger-app
+@higo/driver-app
+@higo/api
