@@ -1,0 +1,116 @@
+databases:
+  - name: higo-postgres
+    databaseName: higo
+    user: higo
+    plan: free
+    postgresMajorVersion: 16
+
+  - name: higo-redis
+    plan: free
+    ipAllowList: []
+
+services:
+  - type: web
+    name: higo-api
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: .
+    buildCommand: >
+      corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm nx build @higo/api &&
+      cd apps/api && pnpm exec prisma generate
+    startCommand: node apps/api/dist/main.js
+    preDeployCommand: cd apps/api && pnpm exec prisma migrate deploy
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: higo-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: higo-redis
+          type: redis
+          property: connectionString
+
+      # ── App URLs (fill in after first deploy) ───────────────────────────────
+      - key: APP_BASE_URL
+        sync: false
+      - key: APP_PAYMENT_CALLBACK_URL
+        sync: false
+      - key: EXPO_PUBLIC_API_BASE_URL
+        sync: false
+      - key: EXPO_PUBLIC_SOCKET_URL
+        sync: false
+
+      # ── Auth / Encryption ────────────────────────────────────────────────────
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+
+      # ── SMS / Notifications ──────────────────────────────────────────────────
+      - key: TERMII_API_KEY
+        sync: false
+      - key: TERMII_SENDER_ID
+        sync: false
+      - key: AFRICASTALKING_USERNAME
+        sync: false
+      - key: AFRICASTALKING_API_KEY
+        sync: false
+      - key: AFRICASTALKING_SENDER_ID
+        sync: false
+      - key: FIREBASE_SERVER_KEY
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+
+      # ── AWS / S3 / Textract ──────────────────────────────────────────────────
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_S3_BUCKET_KYC
+        sync: false
+      - key: TEXTRACT_REGION
+        sync: false
+
+      # ── Payments (Paystack) ──────────────────────────────────────────────────
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_PLAN_DAILY
+        sync: false
+      - key: PAYSTACK_PLAN_WEEKLY
+        sync: false
+      - key: PAYSTACK_PLAN_MONTHLY
+        sync: false
+
+      # ── Maps / AI ────────────────────────────────────────────────────────────
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+      # ── Observability (optional) ─────────────────────────────────────────────
+      - key: SENTRY_DSN
+        sync: false
+      - key: DATADOG_API_KEY
+        sync: false
