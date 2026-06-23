@@ -8,13 +8,18 @@
   "private": true,
   "packageManager": "pnpm@11.8.0",
   "pnpm": {
-    "approvedBuilds": [
+    "onlyBuiltDependencies": [
       "@parcel/watcher",
-      "less",
-      "unrs-resolver",
+      "@prisma/client",
+      "@prisma/engines",
+      "@scarf/scarf",
       "@swc/core",
       "esbuild",
-      "msgpackr-extract"
+      "less",
+      "msgpackr-extract",
+      "nx",
+      "prisma",
+      "unrs-resolver"
     ]
   },
   "devDependencies": {
