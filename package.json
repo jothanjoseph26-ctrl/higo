@@ -2,9 +2,7 @@
   "name": "@higo/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {
-    "postinstall": "node scripts/patch-gradle-plugins.js"
-  },
+  "scripts": {},
   "private": true,
   "packageManager": "pnpm@11.8.0",
   "pnpm": {
