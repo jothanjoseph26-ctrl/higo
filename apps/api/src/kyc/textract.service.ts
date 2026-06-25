@@ -1,83 +1,58 @@
-import {
-  AnalyzeDocumentCommand,
-  Block,
-  FeatureType,
-  TextractClient,
-} from '@aws-sdk/client-textract';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { OssService } from '../s3/s3.service';
 
 @Injectable()
 export class TextractService {
   private readonly logger = new Logger(TextractService.name);
-  private readonly client: TextractClient;
-  private readonly bucket: string;
+  private readonly region: string;
 
-  constructor(config: ConfigService) {
-    this.bucket = config.getOrThrow<string>('AWS_S3_BUCKET_KYC');
-    this.client = new TextractClient({
-      region: config.getOrThrow<string>('TEXTRACT_REGION'),
-      credentials: {
-        accessKeyId: config.getOrThrow<string>('AWS_ACCESS_KEY_ID'),
-        secretAccessKey: config.getOrThrow<string>('AWS_SECRET_ACCESS_KEY'),
-      },
-    });
+  constructor(
+    private readonly config: ConfigService,
+    private readonly oss: OssService,
+  ) {
+    this.region = this.config.get<string>('VISION_API_REGION', 'ap-southeast-1');
   }
 
+  /**
+   * Extract form fields from a document stored in OSS using Alibaba Cloud Vision OCR.
+   */
   async extractForm(s3Key: string): Promise<Record<string, string>> {
     try {
-      const response = await this.client.send(
-        new AnalyzeDocumentCommand({
-          Document: {
-            S3Object: { Bucket: this.bucket, Name: s3Key },
-          },
-          FeatureTypes: [FeatureType.FORMS],
-        }),
-      );
-      return this.flattenKeyValueBlocks(response.Blocks ?? []);
+      const presignedUrl = await this.oss.getPresignedUrl(s3Key, 300);
+
+      const response = await fetch(presignedUrl);
+      if (!response.ok) {
+        this.logger.warn(`Failed to download doc from OSS: ${response.status}`);
+        return {};
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const contentType = response.headers.get('content-type') || 'image/jpeg';
+
+      return await this.callVisionOCR(buffer, contentType);
     } catch (error) {
       this.logger.warn(
-        `Textract failed for key prefix ${s3Key.split('/')[0]}: ${
-          error instanceof Error ? error.message : 'unknown'
-        }`,
+        `Vision OCR failed: ${error instanceof Error ? error.message : 'unknown'}`,
       );
       return {};
     }
   }
 
-  private flattenKeyValueBlocks(blocks: Block[]): Record<string, string> {
-    const blockMap = new Map(blocks.map((b) => [b.Id!, b]));
-    const result: Record<string, string> = {};
-
-    for (const block of blocks) {
-      if (block.BlockType !== 'KEY_VALUE_SET' || !block.EntityTypes?.includes('KEY')) {
-        continue;
-      }
-
-      const key = this.getText(block, blockMap);
-      const valueBlock = block.Relationships?.find((r) => r.Type === 'VALUE')
-        ?.Ids?.[0];
-      const value = valueBlock
-        ? this.getText(blockMap.get(valueBlock)!, blockMap)
-        : '';
-
-      if (key) {
-        result[key.trim()] = value.trim();
-      }
-    }
-
-    return result;
-  }
-
-  private getText(block: Block, blockMap: Map<string, Block>): string {
-    if (block.Text) {
-      return block.Text;
-    }
-    const childIds =
-      block.Relationships?.find((r) => r.Type === 'CHILD')?.Ids ?? [];
-    return childIds
-      .map((id) => blockMap.get(id)?.Text ?? '')
-      .join(' ')
-      .trim();
+  private async callVisionOCR(
+    fileBuffer: Buffer,
+    contentType: string,
+  ): Promise<Record<string, string>> {
+    // Alibaba Cloud OCR API call
+    // Docs: https://www.alibabacloud.com/help/en/ocr/api-overview
+    //
+    // When credentials are provisioned, implement using:
+    //   - RecognizeGeneral / RecognizeIDCard for general OCR
+    //   - RecognizeDriverLicense for NIN slip
+    //   - POST to ocr-api.{region}.aliyuncs.com with base64 body
+    //
+    // For now, return empty - will be wired when Vision API is live
+    this.logger.log('Vision OCR called - awaiting Alibaba Cloud Vision API credentials');
+    return {};
   }
 }

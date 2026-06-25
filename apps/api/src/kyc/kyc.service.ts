@@ -20,7 +20,7 @@ import { AesService } from '../common/crypto/aes.service';
 import { AppException } from '../common/errors/app.exception';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { S3Service } from '../s3/s3.service';
+import { OssService } from '../s3/s3.service';
 import { BackgroundCheckService } from './background-check.service';
 import { ComplianceService } from './compliance.service';
 import { compressImage, isImageMime } from './image-compression.util';
@@ -55,7 +55,7 @@ export class KYCService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly s3: S3Service,
+    private readonly s3: OssService,
     private readonly aes: AesService,
     private readonly textract: TextractService,
     private readonly compliance: ComplianceService,

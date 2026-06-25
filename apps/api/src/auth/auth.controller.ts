@@ -13,6 +13,7 @@ import { AuthGuard } from '../common/guards/auth.guard';
 import { RateLimit, RateLimitGuard } from '../common/guards/rate-limit.guard';
 import { AuthService } from './auth.service';
 import {
+  AdminLoginDto,
   GoogleAuthDto,
   LogoutDto,
   RefreshTokenDto,
@@ -80,6 +81,19 @@ export class AuthController {
     }
 
     return { ...response, refreshToken };
+  }
+
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ scope: 'admin-login', limit: 10, windowSeconds: 3600, keyFrom: 'email' })
+  @Post('admin/login')
+  async adminLogin(
+    @Body() dto: AdminLoginDto,
+    @Headers('x-client-platform') platform: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.auth.adminLogin(dto);
+    return this.attachRefresh(result, platform, res);
   }
 
   @UseGuards(AuthGuard)

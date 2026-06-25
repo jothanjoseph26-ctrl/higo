@@ -1,27 +1,26 @@
-import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { Injectable } from '@nestjs/common';
+import OSS from 'ali-oss';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class S3Service {
-  private readonly client: S3Client;
+export class OssService {
+  private readonly logger = new Logger(OssService.name);
+  private readonly client: OSS;
   private readonly defaultBucket: string;
+  private readonly region: string;
 
   constructor(config: ConfigService) {
-    this.client = new S3Client({
-      region: config.getOrThrow<string>('AWS_REGION'),
-      credentials: {
-        accessKeyId: config.getOrThrow<string>('AWS_ACCESS_KEY_ID'),
-        secretAccessKey: config.getOrThrow<string>('AWS_SECRET_ACCESS_KEY'),
-      },
+    this.region = config.getOrThrow<string>('ALIBABA_CLOUD_REGION');
+    this.defaultBucket = config.getOrThrow<string>('ALIBABA_CLOUD_OSS_BUCKET');
+
+    this.client = new OSS({
+      region: this.region,
+      accessKeyId: config.getOrThrow<string>('ALIBABA_CLOUD_ACCESS_KEY_ID'),
+      accessKeySecret: config.getOrThrow<string>('ALIBABA_CLOUD_ACCESS_KEY_SECRET'),
+      bucket: this.defaultBucket,
+      endpoint: config.get<string>('ALIBABA_CLOUD_OSS_ENDPOINT'),
+      secure: true,
     });
-    this.defaultBucket = config.getOrThrow<string>('AWS_S3_BUCKET_KYC');
   }
 
   async upload(params: {
@@ -31,16 +30,23 @@ export class S3Service {
     contentType: string;
   }): Promise<string> {
     const bucket = params.bucket ?? this.defaultBucket;
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: params.key,
-        Body: params.body,
-        ContentType: params.contentType,
-        ServerSideEncryption: 'AES256',
-      }),
-    );
-    return params.key;
+    try {
+      const client = params.bucket
+        ? this.client.useBucket(params.bucket)
+        : this.client;
+
+      await client.put(params.key, params.body, {
+        headers: {
+          'Content-Type': params.contentType,
+          'x-oss-server-side-encryption': 'AES256',
+        },
+      });
+
+      return params.key;
+    } catch (error) {
+      this.logger.error(`OSS upload failed for ${params.key}: ${error}`);
+      throw error;
+    }
   }
 
   async getPresignedUrl(
@@ -48,11 +54,16 @@ export class S3Service {
     expiresInSeconds = 3600,
     bucket?: string,
   ): Promise<string> {
-    const command = new GetObjectCommand({
-      Bucket: bucket ?? this.defaultBucket,
-      Key: key,
-    });
-    return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
+    try {
+      const client = bucket ? this.client.useBucket(bucket) : this.client;
+      return client.signatureUrl(key, {
+        expires: expiresInSeconds,
+        method: 'GET',
+      });
+    } catch (error) {
+      this.logger.error(`OSS presigned URL failed for ${key}: ${error}`);
+      throw error;
+    }
   }
 
   async getPresignedUploadUrl(
@@ -61,21 +72,27 @@ export class S3Service {
     expiresInSeconds = 3600,
     bucket?: string,
   ): Promise<string> {
-    const command = new PutObjectCommand({
-      Bucket: bucket ?? this.defaultBucket,
-      Key: key,
-      ContentType: contentType,
-      ServerSideEncryption: 'AES256',
-    });
-    return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
+    try {
+      const client = bucket ? this.client.useBucket(bucket) : this.client;
+      return client.signatureUrl(key, {
+        expires: expiresInSeconds,
+        method: 'PUT',
+        'Content-Type': contentType,
+        'x-oss-server-side-encryption': 'AES256',
+      });
+    } catch (error) {
+      this.logger.error(`OSS presigned upload URL failed for ${key}: ${error}`);
+      throw error;
+    }
   }
 
   async deleteObject(key: string, bucket?: string): Promise<void> {
-    await this.client.send(
-      new DeleteObjectCommand({
-        Bucket: bucket ?? this.defaultBucket,
-        Key: key,
-      }),
-    );
+    try {
+      const client = bucket ? this.client.useBucket(bucket) : this.client;
+      await client.delete(key);
+    } catch (error) {
+      this.logger.error(`OSS delete failed for ${key}: ${error}`);
+      throw error;
+    }
   }
 }

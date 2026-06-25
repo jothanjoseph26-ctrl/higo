@@ -8,7 +8,6 @@ import { PaymentsModule } from '../payments/payments.module';
 import { RedisModule } from '../redis/redis.module';
 import { TripService } from './trips.service';
 import { TripsController } from './trips.controller';
-import { DriversController } from './drivers.controller';
 
 @Module({
   imports: [
@@ -21,7 +20,7 @@ import { DriversController } from './drivers.controller';
     PaymentsModule,
   ],
   providers: [TripService],
-  controllers: [TripsController, DriversController],
+  controllers: [TripsController],
   exports: [TripService],
 })
 export class TripsModule {}

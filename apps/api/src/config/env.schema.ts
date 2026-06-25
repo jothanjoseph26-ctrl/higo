@@ -25,11 +25,12 @@ export const envSchema = Joi.object({
   AFRICASTALKING_API_KEY: Joi.string().required(),
   AFRICASTALKING_SENDER_ID: Joi.string().required(),
 
-  AWS_ACCESS_KEY_ID: Joi.string().required(),
-  AWS_SECRET_ACCESS_KEY: Joi.string().required(),
-  AWS_REGION: Joi.string().required(),
-  AWS_S3_BUCKET_KYC: Joi.string().required(),
-  TEXTRACT_REGION: Joi.string().required(),
+  ALIBABA_CLOUD_ACCESS_KEY_ID: Joi.string().required(),
+  ALIBABA_CLOUD_ACCESS_KEY_SECRET: Joi.string().required(),
+  ALIBABA_CLOUD_REGION: Joi.string().required(),
+  ALIBABA_CLOUD_OSS_BUCKET: Joi.string().required(),
+  ALIBABA_CLOUD_OSS_ENDPOINT: Joi.string().uri().allow('').default(''),
+  VISION_API_REGION: Joi.string().default('ap-southeast-1'),
 
   PAYSTACK_SECRET_KEY: Joi.string().required(),
   PAYSTACK_PUBLIC_KEY: Joi.string().required(),
@@ -39,8 +40,8 @@ export const envSchema = Joi.object({
   PLATFORM_COMMISSION_RATE: Joi.number().min(0).max(1).default(0.1),
 
   GOOGLE_MAPS_API_KEY: Joi.string().required(),
-  FIREBASE_SERVER_KEY: Joi.string().required(),
-  SENDGRID_API_KEY: Joi.string().required(),
+  FIREBASE_SERVER_KEY: Joi.string().allow('').default(''),
+  SENDGRID_API_KEY: Joi.string().allow('').default(''),
   SENTRY_DSN: Joi.string().uri().allow('').default(''),
   DATADOG_API_KEY: Joi.string().allow('').default(''),
   OPENAI_API_KEY: Joi.string().allow('').default(''),

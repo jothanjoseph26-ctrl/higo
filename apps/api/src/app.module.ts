@@ -22,6 +22,9 @@ import { PricingModule } from './pricing/pricing.module';
 import { MatchingModule } from './matching/matching.module';
 import { TripsModule } from './trips/trips.module';
 import { PassengersModule } from './passengers/passengers.module';
+import { DriversModule } from './drivers/drivers.module';
+import { AdminModule } from './admin/admin.module';
+import { SmsModule } from './sms/sms.module';
 
 @Module({
   imports: [
@@ -42,6 +45,7 @@ import { PassengersModule } from './passengers/passengers.module';
     RedisModule,
     S3Module,
     AuthModule,
+    SmsModule,
     RealtimeModule,
     HealthModule,
     PaymentsModule,
@@ -51,6 +55,8 @@ import { PassengersModule } from './passengers/passengers.module';
     MatchingModule,
     TripsModule,
     PassengersModule,
+    DriversModule,
+    AdminModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

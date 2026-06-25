@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { OAuth2Client } from 'google-auth-library';
 import { randomUUID } from 'crypto';
+import * as bcrypt from 'bcryptjs';
 import {
   GoogleAuthRequest,
   LogoutRequest,
@@ -20,6 +21,7 @@ import { AppException } from '../common/errors/app.exception';
 import { OtpService } from './otp.service';
 import { mapDriver, mapUser } from './auth.mappers';
 import { JwtPayload } from './jwt.strategy';
+import { AdminLoginDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -153,6 +155,50 @@ export class AuthService {
       type: 'driver',
     });
     return { ...tokens, isNewUser, driver: mapDriver(driver) };
+  }
+
+  async adminLogin(dto: AdminLoginDto): Promise<{
+    response: { accessToken: string; accessTokenExpiresIn: number };
+    refreshToken: string;
+    user: any;
+  }> {
+    const admin = await this.prisma.adminUser.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (!admin || !admin.isActive) {
+      throw new AppException('UNAUTHORIZED', undefined, 'Invalid credentials');
+    }
+
+    const passwordValid = await bcrypt.compare(dto.password, admin.passwordHash);
+    if (!passwordValid) {
+      throw new AppException('UNAUTHORIZED', undefined, 'Invalid credentials');
+    }
+
+    await this.prisma.adminUser.update({
+      where: { id: admin.id },
+      data: { lastLogin: new Date() },
+    });
+
+    const tokens = await this.issueTokens({
+      sub: admin.id,
+      type: 'admin',
+      role: admin.role,
+    });
+
+    return {
+      response: {
+        accessToken: tokens.accessToken,
+        accessTokenExpiresIn: tokens.accessTokenExpiresIn,
+      },
+      refreshToken: tokens.refreshToken,
+      user: {
+        id: admin.id,
+        name: admin.name,
+        email: admin.email,
+        role: admin.role,
+      },
+    };
   }
 
   async refresh(dto: RefreshTokenRequest, cookieToken?: string): Promise<{

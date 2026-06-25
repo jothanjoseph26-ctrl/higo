@@ -52,3 +52,11 @@ export class LogoutDto implements LogoutRequest {
   @IsString()
   refreshToken?: string;
 }
+
+export class AdminLoginDto {
+  @IsString()
+  email!: string;
+
+  @IsString()
+  password!: string;
+}

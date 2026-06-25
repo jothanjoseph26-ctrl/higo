@@ -4,22 +4,7 @@
   "license": "MIT",
   "scripts": {},
   "private": true,
-  "packageManager": "pnpm@11.8.0",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@parcel/watcher",
-      "@prisma/client",
-      "@prisma/engines",
-      "@scarf/scarf",
-      "@swc/core",
-      "esbuild",
-      "less",
-      "msgpackr-extract",
-      "nx",
-      "prisma",
-      "unrs-resolver"
-    ]
-  },
+  "packageManager": "pnpm@10.28.2",
   "devDependencies": {
     "@babel/core": "^7.14.5",
     "@babel/preset-react": "^7.14.5",
