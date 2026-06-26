@@ -84,6 +84,11 @@ export const ERROR_CATALOG = {
     message: 'Something go wrong for our side. Try again',
     statusCode: 500,
   },
+  SERVICE_UNAVAILABLE: {
+    code: 'SERVICE_UNAVAILABLE',
+    message: 'Service no dey available right now. Try again later',
+    statusCode: 503,
+  },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;
