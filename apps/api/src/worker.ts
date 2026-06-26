@@ -28,12 +28,6 @@ import { DispatchProcessor } from './matching/dispatch.processor';
 export class WorkerModule {}
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.createApplicationContext(WorkerModule, {
-    logger: ['error', 'warn', 'log'],
-  });
-
-  Logger.log('Bull dispatch worker started');
-
   const port = Number(process.env.PORT ?? 3000);
   const healthServer = createServer((req, res) => {
     if (req.url === '/health') {
@@ -44,9 +38,14 @@ async function bootstrap(): Promise<void> {
     res.writeHead(404);
     res.end();
   });
-  healthServer.listen(port, () => {
-    Logger.log(`Worker health endpoint on port ${port}`);
+  await new Promise<void>((resolve) => healthServer.listen(port, () => resolve()));
+  Logger.log(`Worker health endpoint on port ${port}`);
+
+  const app = await NestFactory.createApplicationContext(WorkerModule, {
+    logger: ['error', 'warn', 'log'],
   });
+
+  Logger.log('Bull dispatch worker started');
 
   const shutdown = async (signal: string): Promise<void> => {
     healthServer.close();
