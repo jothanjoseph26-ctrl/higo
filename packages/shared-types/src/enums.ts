@@ -230,6 +230,14 @@ export enum LanguageCode {
   PCM = 'pcm',
 }
 
+/** Supported UI languages for passenger/driver apps. */
+export enum SupportedLanguage {
+  ENGLISH = 'en',
+  PIDGIN = 'pcm',
+  HAUSA = 'ha',
+  YORUBA = 'yo',
+}
+
 /** Landmark type for the Abuja landmark database. */
 export enum LandmarkType {
   JUNCTION = 'junction',
