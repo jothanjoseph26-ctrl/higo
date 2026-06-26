@@ -46,8 +46,8 @@ COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder /app/apps/api/package.json ./apps/api/
 COPY --from=builder /app/packages/shared-types ./packages/shared-types
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# pnpm stores Prisma engines under node_modules/.pnpm — copy full store for runtime resolution
+COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 3000
 
