@@ -48,4 +48,5 @@ COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 3000
 
-CMD ["node", "apps/api/dist/main.js"]
+# Railway sets RAILWAY_SERVICE_NAME per service — same image for API and Worker.
+CMD ["sh", "-c", "if [ \"$RAILWAY_SERVICE_NAME\" = \"Worker\" ]; then exec node apps/api/dist/worker.js; else exec node apps/api/dist/main.js; fi"]
