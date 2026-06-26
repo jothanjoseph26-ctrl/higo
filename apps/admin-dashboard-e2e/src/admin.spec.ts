@@ -30,21 +30,17 @@ test.describe('Admin dashboard', () => {
       timeout: 30_000,
     });
 
-    // 2. Dashboard overview KPI elements
+    // 2. Dashboard overview KPI elements (scope to main — sidebar also has nav labels)
+    const main = page.getByRole('main');
     for (const label of KPI_LABELS) {
-      await expect(page.getByText(label, { exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect(main.getByText(label, { exact: true })).toBeVisible({ timeout: 30_000 });
     }
 
-    // 3. Drivers page — table or loading overlay
-    await page.goto('/drivers');
+    // 3. Drivers page — client-side nav (full page.goto clears in-memory auth)
+    await page.getByRole('link', { name: 'Drivers (KYC)' }).click();
+    await expect(page).toHaveURL('/drivers');
     await expect(page.getByRole('heading', { name: 'Driver Management' })).toBeVisible();
 
-    const table = page.locator('table');
-    const loadingOverlay = page.locator('table').locator('..').locator('.animate-spin').first();
-
-    await expect(table.or(loadingOverlay)).toBeVisible({ timeout: 30_000 });
-
-    // Once loading finishes, table headers should be present
     await expect(page.getByRole('columnheader', { name: 'Driver Name' })).toBeVisible({
       timeout: 30_000,
     });

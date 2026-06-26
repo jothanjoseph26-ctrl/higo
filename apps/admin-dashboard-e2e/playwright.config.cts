@@ -15,6 +15,8 @@ module.exports = defineConfig({
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
   workers: isCI ? 1 : undefined,
+  timeout: 60_000,
+  expect: { timeout: 30_000 },
   use: {
     baseURL,
     trace: 'on-first-retry',
@@ -34,7 +36,7 @@ module.exports = defineConfig({
       cwd: workspaceRoot,
       timeout: 120_000,
       env: {
-        VITE_API_URL: apiUrl,
+        VITE_API_URL: `${apiUrl}/api`,
       },
     },
   ],

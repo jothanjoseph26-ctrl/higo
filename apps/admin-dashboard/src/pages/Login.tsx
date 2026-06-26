@@ -55,25 +55,33 @@ export const Login: React.FC = () => {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-darkNavy mb-1">Email Address</label>
+            <label htmlFor="admin-email" className="block text-xs font-semibold text-darkNavy mb-1">
+              Email Address
+            </label>
             <input
+              id="admin-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3.5 py-2.5 border border-lightGrey rounded-input text-sm focus:outline-none focus:border-primaryGreen focus:ring-1 focus:ring-primaryGreen"
               placeholder="e.g. superadmin@higo.ng"
+              autoComplete="username"
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-darkNavy mb-1">Password</label>
+            <label htmlFor="admin-password" className="block text-xs font-semibold text-darkNavy mb-1">
+              Password
+            </label>
             <input
+              id="admin-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-3.5 py-2.5 border border-lightGrey rounded-input text-sm focus:outline-none focus:border-primaryGreen focus:ring-1 focus:ring-primaryGreen"
               placeholder="••••••••"
+              autoComplete="current-password"
               required
             />
           </div>
