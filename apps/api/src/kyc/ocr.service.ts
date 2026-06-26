@@ -18,16 +18,24 @@ export class OcrService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly oss: OssService) {}
 
   async onModuleInit(): Promise<void> {
+    // Tesseract worker threads break under webpack/Docker paths — lazy-init on demand.
+    this.logger.log('Tesseract OCR will initialize on first use');
+  }
+
+  private async ensureWorker(): Promise<boolean> {
+    if (this.workerReady && this.worker) return true;
     try {
       this.worker = await createWorker('eng');
       this.workerReady = true;
       this.logger.log('Tesseract OCR worker ready');
+      return true;
     } catch (error) {
       this.logger.warn(
         `Tesseract OCR init failed: ${
           error instanceof Error ? error.message : 'unknown'
         }`,
       );
+      return false;
     }
   }
 
@@ -94,7 +102,7 @@ export class OcrService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async extractImageText(buffer: Buffer): Promise<string> {
-    if (!this.workerReady || !this.worker) {
+    if (!(await this.ensureWorker()) || !this.worker) {
       this.logger.debug('Tesseract worker unavailable; skipping image OCR');
       return '';
     }
