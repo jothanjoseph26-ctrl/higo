@@ -1,5 +1,10 @@
 import { Controller, Get, Post, Put, Delete, Body, Query, Param } from '@nestjs/common';
+import {
+  AdminGetWeeklyKpisHistoryResponse,
+  AdminGetWeeklyKpisResponse,
+} from '@higo/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
+import { WeeklyKpiService } from '../jobs/weekly-kpi.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UseGuards } from '@nestjs/common';
@@ -83,7 +88,31 @@ function mapZoneRow(row: any) {
 @Roles('admin', 'super_admin')
 @UseGuards(RolesGuard)
 export class AdminController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly weeklyKpi: WeeklyKpiService,
+  ) {}
+
+  @Get('weekly-kpis')
+  async getWeeklyKpis(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<AdminGetWeeklyKpisResponse> {
+    if (from && to) {
+      return this.weeklyKpi.computeForPeriod(new Date(from), new Date(to));
+    }
+    const range = this.weeklyKpi.getCurrentWeekRange();
+    return this.weeklyKpi.computeForPeriod(range.from, range.to);
+  }
+
+  @Get('weekly-kpis/history')
+  async getWeeklyKpisHistory(
+    @Query('weeks') weeks?: string,
+  ): Promise<AdminGetWeeklyKpisHistoryResponse> {
+    const count = Math.min(Math.max(Number(weeks) || 12, 1), 52);
+    const history = await this.weeklyKpi.computeHistory(count);
+    return { weeks: history };
+  }
 
   @Get('dashboard/stats')
   async getDashboardStats() {

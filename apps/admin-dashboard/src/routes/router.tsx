@@ -18,6 +18,7 @@ import TransactionLogs from '../pages/TransactionLogs';
 import RefundManagement from '../pages/RefundManagement';
 import ComplaintsInbox from '../pages/ComplaintsInbox';
 import ActiveTrips from '../pages/ActiveTrips';
+import WeeklyKpis from '../pages/WeeklyKpis';
 import Login from '../pages/Login';
 import Unauthorized from '../pages/Unauthorized';
 
@@ -67,6 +68,10 @@ export const router = createBrowserRouter([
           {
             path: '/financial-reports',
             element: <FinancialReports />,
+          },
+          {
+            path: '/weekly-kpis',
+            element: <WeeklyKpis />,
           },
           {
             path: '/transaction-logs',

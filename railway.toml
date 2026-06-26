@@ -14,3 +14,5 @@ restartPolicyMaxRetries = 3
 [deploy.environmentVariables]
 NODE_ENV = "production"
 PORT = "3000"
+# Also set in Railway dashboard: RESEND_API_KEY, WEEKLY_KPI_EMAIL_RECIPIENTS,
+# CLOUDFLARE_*, FIREBASE_SERVICE_ACCOUNT_JSON, OTP_PROVIDER=firebase, CRON_JOBS_ENABLED=true

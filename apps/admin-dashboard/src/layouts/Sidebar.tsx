@@ -20,6 +20,7 @@ import {
   Undo2,
   Inbox,
   Activity,
+  Gauge,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -35,6 +36,7 @@ export const Sidebar: React.FC = () => {
     { to: '/pricing', label: 'Pricing Config', icon: CreditCard, roles: ['super_admin', 'admin'] },
     { to: '/promotions', label: 'Promotions', icon: Tag, roles: ['super_admin', 'admin'] },
     { to: '/financial-reports', label: 'Financials', icon: TrendingUp },
+    { to: '/weekly-kpis', label: 'Weekly KPIs', icon: Gauge },
     { to: '/transaction-logs', label: 'Transaction Logs', icon: Receipt },
     { to: '/refund-management', label: 'Refunds', icon: Undo2 },
     { to: '/complaints-inbox', label: 'Complaints', icon: Inbox },

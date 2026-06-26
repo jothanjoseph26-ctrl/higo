@@ -39,6 +39,8 @@ import {
   DeletePromoResponse,
   TransactionEntry,
   PaymentStatus,
+  AdminGetWeeklyKpisResponse,
+  AdminGetWeeklyKpisHistoryResponse,
 } from '@higo/shared-types';
 
 export interface RefundEligibleItem {
@@ -263,6 +265,23 @@ export const apiService = {
 
   async getDashboardOverview(): Promise<DashboardOverviewResponse> {
     const res = await api.get<ApiResponse<DashboardOverviewResponse>>('/admin/dashboard/overview');
+    return unwrap(res);
+  },
+
+  async getWeeklyKpis(from?: string, to?: string): Promise<AdminGetWeeklyKpisResponse> {
+    const res = await api.get<ApiResponse<AdminGetWeeklyKpisResponse>>('/admin/weekly-kpis', {
+      params: { from, to },
+    });
+    return unwrap(res);
+  },
+
+  async getWeeklyKpisHistory(
+    weeks = 12,
+  ): Promise<AdminGetWeeklyKpisHistoryResponse> {
+    const res = await api.get<ApiResponse<AdminGetWeeklyKpisHistoryResponse>>(
+      '/admin/weekly-kpis/history',
+      { params: { weeks } },
+    );
     return unwrap(res);
   },
 

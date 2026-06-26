@@ -1,3 +1,6 @@
+# Render.com blueprint — aligned with HiGo's actual stack (Railway is primary).
+# Use this only if deploying to Render instead of Railway.
+
 databases:
   - name: higo-postgres
     databaseName: higo
@@ -12,15 +15,10 @@ databases:
 services:
   - type: web
     name: higo-api
-    runtime: node
+    runtime: docker
     region: oregon
     plan: free
-    rootDir: .
-    buildCommand: >
-      corepack enable &&
-      pnpm install --frozen-lockfile &&
-      pnpm nx build @higo/api &&
-      cd apps/api && pnpm exec prisma generate
+    dockerfilePath: ./Dockerfile
     startCommand: node apps/api/dist/main.js
     preDeployCommand: cd apps/api && pnpm exec prisma migrate deploy
     healthCheckPath: /health
@@ -39,7 +37,6 @@ services:
           type: redis
           property: connectionString
 
-      # ── App URLs (fill in after first deploy) ───────────────────────────────
       - key: APP_BASE_URL
         sync: false
       - key: APP_PAYMENT_CALLBACK_URL
@@ -49,7 +46,6 @@ services:
       - key: EXPO_PUBLIC_SOCKET_URL
         sync: false
 
-      # ── Auth / Encryption ────────────────────────────────────────────────────
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
@@ -59,7 +55,12 @@ services:
       - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false
 
-      # ── SMS / Notifications ──────────────────────────────────────────────────
+      - key: OTP_PROVIDER
+        value: firebase
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: PUSH_ENABLED
+        value: true
       - key: TERMII_API_KEY
         sync: false
       - key: TERMII_SENDER_ID
@@ -70,24 +71,29 @@ services:
         sync: false
       - key: AFRICASTALKING_SENDER_ID
         sync: false
-      - key: FIREBASE_SERVER_KEY
+
+      - key: CLOUDFLARE_ACCOUNT_ID
         sync: false
-      - key: SENDGRID_API_KEY
+      - key: CLOUDFLARE_R2_BUCKET
+        sync: false
+      - key: CLOUDFLARE_ACCESS_KEY_ID
+        sync: false
+      - key: CLOUDFLARE_SECRET_ACCESS_KEY
         sync: false
 
-      # ── AWS / S3 / Textract ──────────────────────────────────────────────────
-      - key: AWS_ACCESS_KEY_ID
+      - key: RESEND_API_KEY
         sync: false
-      - key: AWS_SECRET_ACCESS_KEY
+      - key: EMAIL_FROM
         sync: false
-      - key: AWS_REGION
+      - key: WEEKLY_KPI_EMAIL_RECIPIENTS
         sync: false
-      - key: AWS_S3_BUCKET_KYC
+      - key: WEEKLY_MARKETING_SPEND_KOBO
         sync: false
-      - key: TEXTRACT_REGION
+      - key: WEEKLY_OPERATING_COSTS_KOBO
         sync: false
+      - key: CRON_JOBS_ENABLED
+        value: true
 
-      # ── Payments (Paystack) ──────────────────────────────────────────────────
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: PAYSTACK_PUBLIC_KEY
@@ -100,8 +106,9 @@ services:
         sync: false
       - key: PAYSTACK_PLAN_MONTHLY
         sync: false
+      - key: PLATFORM_COMMISSION_RATE
+        value: "0.10"
 
-      # ── Maps / AI ────────────────────────────────────────────────────────────
       - key: GOOGLE_MAPS_API_KEY
         sync: false
       - key: EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
@@ -111,8 +118,40 @@ services:
       - key: OPENROUTER_MODEL
         sync: false
 
-      # ── Observability (optional) ─────────────────────────────────────────────
       - key: SENTRY_DSN
         sync: false
       - key: DATADOG_API_KEY
         sync: false
+
+  - type: worker
+    name: higo-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    startCommand: node apps/api/dist/worker.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: higo-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: higo-redis
+          type: redis
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        fromService:
+          name: higo-api
+          type: web
+          envVarKey: JWT_ACCESS_SECRET
+      - key: JWT_REFRESH_SECRET
+        fromService:
+          name: higo-api
+          type: web
+          envVarKey: JWT_REFRESH_SECRET
+      - key: ENCRYPTION_KEY
+        fromService:
+          name: higo-api
+          type: web
+          envVarKey: ENCRYPTION_KEY

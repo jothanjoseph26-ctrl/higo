@@ -5,6 +5,7 @@ import { TripsModule } from '../trips/trips.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { AdminController } from './admin.controller';
+import { JobsModule } from '../jobs/jobs.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { AdminController } from './admin.controller';
     forwardRef(() => TripsModule),
     PaymentsModule,
     RealtimeModule,
+    JobsModule,
   ],
   controllers: [AdminController],
 })

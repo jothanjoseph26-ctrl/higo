@@ -285,7 +285,7 @@ export interface KycUploadResponse {
   docType: string;
   s3Key: string;
   status: KYCStatus;
-  /** Vision API auto-fill key-value payload. */
+  /** Tesseract OCR auto-fill key-value payload. */
   ocrFields?: Record<string, string>;
 }
 

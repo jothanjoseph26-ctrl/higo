@@ -32,6 +32,7 @@ import { MapsModule } from './maps/maps.module';
 import { PromosModule } from './promos/promos.module';
 import { MessagesModule } from './messages/messages.module';
 import { EmailModule } from './email/email.module';
+import { JobsModule } from './jobs/jobs.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { EmailModule } from './email/email.module';
     PromosModule,
     MessagesModule,
     EmailModule,
+    JobsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

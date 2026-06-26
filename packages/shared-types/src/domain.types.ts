@@ -133,7 +133,7 @@ export interface KycDocumentMeta {
   uploadedAt: ISODateString;
   reviewedAt?: ISODateString;
   reviewedBy?: UUID;
-  ocrFields?: Record<string, string>; // Vision API key-value auto-fill
+  ocrFields?: Record<string, string>; // Tesseract OCR auto-fill
 }
 
 export interface BankDetails {

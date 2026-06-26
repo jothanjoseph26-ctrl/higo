@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
-import { KYCStatus } from '@higo/shared-types';
+import { KYCStatus, WeeklyKpi } from '@higo/shared-types';
 
 @Injectable()
 export class EmailService {
@@ -31,7 +31,7 @@ export class EmailService {
   }
 
   async send(params: {
-    to: string;
+    to: string | string[];
     subject: string;
     html: string;
     text?: string;
@@ -83,6 +83,38 @@ export class EmailService {
       subject,
       html,
       text: `Hello ${params.name}, your HiGo KYC status is now ${statusLabel}.`,
+    });
+  }
+
+  async sendWeeklyKpiSummary(params: {
+    to: string[];
+    kpi: WeeklyKpi;
+    plainText: string;
+  }): Promise<boolean> {
+    const pct = (value: number) => `${(value * 100).toFixed(1)}%`;
+    const ngn = (kobo: number) =>
+      `₦${(kobo / 100).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
+
+    const subject = `HiGo Weekly KPI — week ending ${params.kpi.period.to.slice(0, 10)}`;
+    const html = `
+      <h2>HiGo Weekly KPI Summary</h2>
+      <p>Period: ${params.kpi.period.from.slice(0, 10)} to ${params.kpi.period.to.slice(0, 10)}</p>
+      <table cellpadding="8" cellspacing="0" border="1" style="border-collapse:collapse;font-family:sans-serif;font-size:14px;">
+        <tr><td><strong>Driver Active Rate</strong></td><td>${pct(params.kpi.driverActiveRate)}</td></tr>
+        <tr><td><strong>Ride Completion Rate</strong></td><td>${pct(params.kpi.rideCompletionRate)}</td></tr>
+        <tr><td><strong>Avg Passenger Wait</strong></td><td>${params.kpi.avgPassengerWaitMinutes.toFixed(1)} min</td></tr>
+        <tr><td><strong>Customer Acquisition Cost</strong></td><td>${ngn(params.kpi.customerAcquisitionCost)}</td></tr>
+        <tr><td><strong>Cash Burn vs Revenue</strong></td><td>${params.kpi.cashBurnVsRevenue.toFixed(2)}x</td></tr>
+      </table>
+      <pre style="font-family:sans-serif;font-size:13px;white-space:pre-wrap;margin-top:16px;">${params.plainText}</pre>
+      <p>— HiGo by Hiconnect</p>
+    `;
+
+    return this.send({
+      to: params.to,
+      subject,
+      html,
+      text: params.plainText,
     });
   }
 }
