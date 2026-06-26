@@ -3,6 +3,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node apps/api/dist/worker.js"
+startCommand = "sh -c 'exec node apps/api/dist/worker.js'"
+healthcheckPath = ""
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3

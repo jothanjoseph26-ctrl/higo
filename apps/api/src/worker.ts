@@ -1,3 +1,4 @@
+import { createServer } from 'http';
 import { Logger, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
@@ -33,7 +34,22 @@ async function bootstrap(): Promise<void> {
 
   Logger.log('Bull dispatch worker started');
 
+  const port = Number(process.env.PORT ?? 3000);
+  const healthServer = createServer((req, res) => {
+    if (req.url === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: { status: 'ok', role: 'worker' } }));
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  healthServer.listen(port, () => {
+    Logger.log(`Worker health endpoint on port ${port}`);
+  });
+
   const shutdown = async (signal: string): Promise<void> => {
+    healthServer.close();
     Logger.log(`Received ${signal}, shutting down worker...`);
     await app.close();
     process.exit(0);
