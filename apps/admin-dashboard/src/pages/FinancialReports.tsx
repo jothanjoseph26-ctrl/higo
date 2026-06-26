@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import DateRangePicker from '../components/DateRangePicker';
-import ExportButton from '../components/ExportButton';
+import { DateRangePicker } from '../components/DateRangePicker';
+import { ExportButton } from '../components/ExportButton';
 import { apiService } from '../services/api';
 import { FinancialReportResponse } from '@higo/shared-types';
 import {

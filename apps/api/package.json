@@ -141,6 +141,12 @@
     "ts-jest": "^29.4.11",
     "tsx": "^4.22.4"
   },
+  "scripts": {
+    "migrate:deploy": "node ../../scripts/prisma-env.cjs migrate deploy",
+    "migrate:dev": "node ../../scripts/prisma-env.cjs migrate dev",
+    "db:seed": "node ../../scripts/prisma-env.cjs db seed",
+    "prisma:generate": "node ../../scripts/prisma-env.cjs generate"
+  },
   "prisma": {
     "seed": "node prisma/seed.js"
   }

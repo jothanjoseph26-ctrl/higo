@@ -49,7 +49,21 @@ function ensureRecaptcha(activeAuth: Auth): RecaptchaVerifier {
 export async function sendFirebasePhoneOtp(phone: string): Promise<void> {
   const activeAuth = await ensureFirebase();
   const verifier = ensureRecaptcha(activeAuth);
-  pendingConfirmation = await signInWithPhoneNumber(activeAuth, phone, verifier);
+  try {
+    pendingConfirmation = await signInWithPhoneNumber(activeAuth, phone, verifier);
+  } catch (err: unknown) {
+    // Reset reCAPTCHA so the next attempt gets a fresh verifier instead of timing out
+    recaptchaVerifier?.clear();
+    recaptchaVerifier = null;
+
+    const code = (err as { code?: string })?.code ?? '';
+    if (code.includes('too-many-requests') || code.includes('error-code:-39')) {
+      throw new Error(
+        'Too many verification attempts. Please wait a few minutes before trying again.',
+      );
+    }
+    throw err;
+  }
 }
 
 export async function verifyFirebasePhoneOtp(code: string): Promise<string> {
