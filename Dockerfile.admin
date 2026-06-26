@@ -1,0 +1,40 @@
+# ── Admin dashboard static build + serve (Railway) ─────────────────────────────
+FROM node:20-alpine AS deps
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/admin-dashboard/package.json ./apps/admin-dashboard/
+COPY packages/api-client/package.json ./packages/api-client/
+COPY packages/shared-types/package.json ./packages/shared-types/
+COPY packages/brand-tokens/package.json ./packages/brand-tokens/
+RUN pnpm install --frozen-lockfile
+
+FROM node:20-alpine AS builder
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/admin-dashboard/node_modules ./apps/admin-dashboard/node_modules
+COPY . .
+
+ENV CI=true
+ARG VITE_API_URL=https://hiconnect-production.up.railway.app/api
+ENV VITE_API_URL=$VITE_API_URL
+
+RUN pnpm install --frozen-lockfile
+RUN cd packages/shared-types && pnpm exec tsc --build tsconfig.lib.json
+RUN cd packages/brand-tokens && pnpm exec tsc --build tsconfig.lib.json
+RUN cd packages/api-client && pnpm exec tsc --build tsconfig.lib.json
+RUN cd apps/admin-dashboard && pnpm exec vite build
+RUN test -f apps/admin-dashboard/dist/index.html
+# Shared railway.toml healthcheckPath = /health
+RUN printf '%s' '{"success":true,"data":{"status":"ok"}}' > apps/admin-dashboard/dist/health
+
+FROM node:20-alpine AS runner
+RUN npm install -g serve@14
+WORKDIR /app
+COPY --from=builder /app/apps/admin-dashboard/dist ./dist
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD ["sh", "-c", "serve -s dist -l ${PORT:-3000}"]
