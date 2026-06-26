@@ -57,9 +57,24 @@ export async function sendFirebasePhoneOtp(phone: string): Promise<void> {
     recaptchaVerifier = null;
 
     const code = (err as { code?: string })?.code ?? '';
+    const message = err instanceof Error ? err.message : String(err);
+
     if (code.includes('too-many-requests') || code.includes('error-code:-39')) {
       throw new Error(
         'Too many verification attempts. Please wait a few minutes before trying again.',
+      );
+    }
+    if (
+      code.includes('auth/invalid-app-credential') ||
+      code.includes('auth/app-not-authorized')
+    ) {
+      throw new Error(
+        'Firebase Phone Auth is not authorized for this domain. Add admin-production-13cc.up.railway.app to Firebase Authorized domains and enable Phone sign-in.',
+      );
+    }
+    if (message.includes('CONNECTION_CLOSED') || message.includes('Failed to fetch')) {
+      throw new Error(
+        'Could not reach Firebase to send SMS. Check your network connection and try again.',
       );
     }
     throw err;

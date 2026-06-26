@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { API_BASE_URL } from '../config';
+import { HEALTH_CHECK_URL } from '../config';
 import { api } from './api';
 
 const OFFLINE_QUEUE_KEY = '@higo/passenger/offlineQueue';
@@ -44,7 +44,7 @@ export class OfflineManager {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5_000);
-      const response = await fetch(`${API_BASE_URL}/health`, {
+      const response = await fetch(HEALTH_CHECK_URL, {
         method: 'GET',
         signal: controller.signal,
       });

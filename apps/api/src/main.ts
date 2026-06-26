@@ -15,6 +15,12 @@ async function bootstrap() {
     exclude: ['health', 'health/ready', 'docs', 'docs-json'],
   });
 
+  // Back-compat for clients that probe `${API_BASE_URL}/health` (i.e. /api/health).
+  const http = app.getHttpAdapter().getInstance();
+  http.get('/api/health', (_req: unknown, res: { redirect: (code: number, url: string) => void }) => {
+    res.redirect(308, '/health');
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

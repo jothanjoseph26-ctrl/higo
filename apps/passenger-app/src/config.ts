@@ -14,6 +14,11 @@ export const API_BASE_URL =
     default: PROD_API,
   });
 
+/** Origin without the `/api` suffix — health lives at `/health`, not `/api/health`. */
+export const API_ROOT_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+
+export const HEALTH_CHECK_URL = `${API_ROOT_URL}/health`;
+
 export const WS_BASE_URL =
   (typeof import.meta !== 'undefined' &&
     (import.meta as ImportMeta & { env?: { VITE_SOCKET_URL?: string } }).env

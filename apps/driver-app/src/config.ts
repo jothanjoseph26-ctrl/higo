@@ -7,5 +7,10 @@ export const API_BASE_URL =
       ?.VITE_API_BASE_URL) ||
   PROD_API;
 
+/** Origin without the `/api` suffix — health lives at `/health`, not `/api/health`. */
+export const API_ROOT_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+
+export const HEALTH_CHECK_URL = `${API_ROOT_URL}/health`;
+
 /** Android emulator loopback to host machine. */
 export const API_BASE_URL_ANDROID_EMULATOR = 'http://10.0.2.2:3000/api';
