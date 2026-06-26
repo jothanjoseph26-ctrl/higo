@@ -18,6 +18,9 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+# Bust builder cache when migrations change (20260627000000_sync_schema_drift)
+ARG MIGRATION_CACHE_BUST=20260627000000
+RUN echo "migration cache bust: ${MIGRATION_CACHE_BUST}"
 COPY . .
 
 ENV CI=true

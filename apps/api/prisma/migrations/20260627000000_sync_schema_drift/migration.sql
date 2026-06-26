@@ -19,43 +19,43 @@ CREATE TYPE "NotificationType" AS ENUM ('trip', 'payment', 'kyc', 'promo', 'syst
 CREATE TYPE "HceService" AS ENUM ('transcribe', 'translate', 'speak', 'voice_booking', 'landmark', 'assistant', 'intent_extract');
 
 -- Users: fraud risk fields
-ALTER TABLE "users" ADD COLUMN "fraud_risk_level" TEXT NOT NULL DEFAULT 'normal';
-ALTER TABLE "users" ADD COLUMN "refund_request_count" INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE "users" ADD COLUMN "dispute_rate" DECIMAL(4,2) NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "fraud_risk_level" TEXT NOT NULL DEFAULT 'normal';
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "refund_request_count" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "dispute_rate" DECIMAL(4,2) NOT NULL DEFAULT 0;
 
-CREATE INDEX "users_fraud_risk_level_idx" ON "users"("fraud_risk_level");
+CREATE INDEX IF NOT EXISTS "users_fraud_risk_level_idx" ON "users"("fraud_risk_level");
 
 -- Drivers: referral, fraud, trust score, activity, financial
-ALTER TABLE "drivers" ADD COLUMN "referral_code" TEXT;
-ALTER TABLE "drivers" ADD COLUMN "fraud_risk_score" INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE "drivers" ADD COLUMN "fraud_flags" JSONB DEFAULT '[]';
-ALTER TABLE "drivers" ADD COLUMN "device_id" TEXT;
-ALTER TABLE "drivers" ADD COLUMN "device_id_locked" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "drivers" ADD COLUMN "composite_score" DECIMAL(4,2);
-ALTER TABLE "drivers" ADD COLUMN "punctuality_score" DECIMAL(4,2);
-ALTER TABLE "drivers" ADD COLUMN "complaint_rate" DECIMAL(4,2);
-ALTER TABLE "drivers" ADD COLUMN "acceptance_rate" DECIMAL(4,2);
-ALTER TABLE "drivers" ADD COLUMN "completion_rate" DECIMAL(4,2);
-ALTER TABLE "drivers" ADD COLUMN "consecutive_rejections" INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE "drivers" ADD COLUMN "fee_owed" DECIMAL(10,2) NOT NULL DEFAULT 0;
-ALTER TABLE "drivers" ADD COLUMN "activity_status" TEXT NOT NULL DEFAULT 'dormant';
-ALTER TABLE "drivers" ADD COLUMN "last_trip_at" TIMESTAMP(3);
-ALTER TABLE "drivers" ADD COLUMN "trips_last_7_days" INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE "drivers" ADD COLUMN "subscription_loyalty_months" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "referral_code" TEXT;
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "fraud_risk_score" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "fraud_flags" JSONB DEFAULT '[]';
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "device_id" TEXT;
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "device_id_locked" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "composite_score" DECIMAL(4,2);
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "punctuality_score" DECIMAL(4,2);
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "complaint_rate" DECIMAL(4,2);
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "acceptance_rate" DECIMAL(4,2);
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "completion_rate" DECIMAL(4,2);
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "consecutive_rejections" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "fee_owed" DECIMAL(10,2) NOT NULL DEFAULT 0;
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "activity_status" TEXT NOT NULL DEFAULT 'dormant';
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "last_trip_at" TIMESTAMP(3);
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "trips_last_7_days" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "drivers" ADD COLUMN IF NOT EXISTS "subscription_loyalty_months" INTEGER NOT NULL DEFAULT 0;
 
-CREATE UNIQUE INDEX "drivers_referral_code_key" ON "drivers"("referral_code");
-CREATE INDEX "drivers_activity_status_idx" ON "drivers"("activity_status");
-CREATE INDEX "drivers_fraud_risk_score_idx" ON "drivers"("fraud_risk_score");
+CREATE UNIQUE INDEX IF NOT EXISTS "drivers_referral_code_key" ON "drivers"("referral_code");
+CREATE INDEX IF NOT EXISTS "drivers_activity_status_idx" ON "drivers"("activity_status");
+CREATE INDEX IF NOT EXISTS "drivers_fraud_risk_score_idx" ON "drivers"("fraud_risk_score");
 
 -- Trips: pickup enrichment, cash confirmation, rejection tracking
-ALTER TABLE "trips" ADD COLUMN "pickup_landmark" TEXT;
-ALTER TABLE "trips" ADD COLUMN "pickup_voice_note_url" VARCHAR(500);
-ALTER TABLE "trips" ADD COLUMN "pickup_confirmed_at" TIMESTAMP(3);
-ALTER TABLE "trips" ADD COLUMN "pickup_attempts" INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE "trips" ADD COLUMN "actual_pickup_location" geography(Point,4326);
-ALTER TABLE "trips" ADD COLUMN "cash_confirmed_by_driver" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "trips" ADD COLUMN "cash_confirmed_at" TIMESTAMP(3);
-ALTER TABLE "trips" ADD COLUMN "rejection_reason" VARCHAR(100);
+ALTER TABLE "trips" ADD COLUMN IF NOT EXISTS "pickup_landmark" TEXT;
+ALTER TABLE "trips" ADD COLUMN IF NOT EXISTS "pickup_voice_note_url" VARCHAR(500);
+ALTER TABLE "trips" ADD COLUMN IF NOT EXISTS "pickup_confirmed_at" TIMESTAMP(3);
+ALTER TABLE "trips" ADD COLUMN IF NOT EXISTS "pickup_attempts" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "trips" ADD COLUMN IF NOT EXISTS "actual_pickup_location" geography(Point,4326);
+ALTER TABLE "trips" ADD COLUMN IF NOT EXISTS "cash_confirmed_by_driver" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "trips" ADD COLUMN IF NOT EXISTS "cash_confirmed_at" TIMESTAMP(3);
+ALTER TABLE "trips" ADD COLUMN IF NOT EXISTS "rejection_reason" VARCHAR(100);
 
 -- Driver referrals
 CREATE TABLE "driver_referrals" (
