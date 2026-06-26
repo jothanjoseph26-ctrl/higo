@@ -9,6 +9,7 @@ import {
   LogoutRequest,
   RefreshTokenRequest,
   RefreshTokenResponse,
+  FirebaseWebConfig,
   SendOtpRequest,
   SendOtpResponse,
   VerifyOtpRequest,
@@ -41,6 +42,28 @@ export class AuthService {
     this.googleClient = new OAuth2Client(
       config.getOrThrow<string>('GOOGLE_OAUTH_CLIENT_ID'),
     );
+  }
+
+  getFirebaseWebConfig(): FirebaseWebConfig {
+    const apiKey = this.config.get<string>('FIREBASE_WEB_API_KEY', '').trim();
+    if (!apiKey) {
+      throw new AppException(
+        'SERVICE_UNAVAILABLE',
+        undefined,
+        'Firebase web phone auth is not configured (set FIREBASE_WEB_API_KEY)',
+      );
+    }
+
+    const projectId = this.config.get<string>(
+      'FIREBASE_PROJECT_ID',
+      'hiconnect-3caf8',
+    );
+
+    return {
+      apiKey,
+      authDomain: `${projectId}.firebaseapp.com`,
+      projectId,
+    };
   }
 
   async sendOtp(dto: SendOtpRequest): Promise<SendOtpResponse> {

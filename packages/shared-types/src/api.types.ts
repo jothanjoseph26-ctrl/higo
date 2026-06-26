@@ -121,6 +121,12 @@ export interface SendOtpResponse {
   channel: 'firebase' | 'firebase-dev' | 'termii' | 'africastalking' | 'mock';
 }
 
+export interface FirebaseWebConfig {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+}
+
 export interface VerifyFirebasePhoneRequest {
   idToken: string;
   userType: 'passenger' | 'driver';

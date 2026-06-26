@@ -32,6 +32,8 @@ export const envSchema = Joi.object({
   ),
   FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().allow('').default(''),
   FIREBASE_SERVER_KEY: Joi.string().allow('').default(''),
+  FIREBASE_PROJECT_ID: Joi.string().default('hiconnect-3caf8'),
+  FIREBASE_WEB_API_KEY: Joi.string().allow('').default(''),
 
   CLOUDFLARE_ACCOUNT_ID: Joi.string().required(),
   CLOUDFLARE_R2_BUCKET: Joi.string().default('higo-kyc-docs'),

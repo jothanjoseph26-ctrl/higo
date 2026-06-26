@@ -14,8 +14,10 @@ import {
   LogoutResponse,
   RefreshTokenRequest,
   RefreshTokenResponse,
+  FirebaseWebConfig,
   SendOtpRequest,
   SendOtpResponse,
+  VerifyFirebasePhoneRequest,
   VerifyOtpRequest,
   VerifyOtpResponse,
   RequestTripRequest,
@@ -174,12 +176,34 @@ export class HigoClient {
     }
   }
 
+  async getFirebaseConfig(): Promise<FirebaseWebConfig> {
+    return this.request<FirebaseWebConfig>({
+      method: 'GET',
+      url: '/auth/firebase-config',
+    });
+  }
+
   async sendOtp(dto: SendOtpRequest): Promise<SendOtpResponse> {
     return this.request<SendOtpResponse>({
       method: 'POST',
       url: '/auth/send-otp',
       data: dto,
     });
+  }
+
+  async verifyFirebasePhone(
+    dto: VerifyFirebasePhoneRequest,
+  ): Promise<VerifyOtpResponse> {
+    const data = await this.request<VerifyOtpResponse>({
+      method: 'POST',
+      url: '/auth/verify-firebase-phone',
+      data: dto,
+    });
+    await this.options.tokenStorage.setAccessToken(data.accessToken);
+    if (data.refreshToken) {
+      await this.options.tokenStorage.setRefreshToken(data.refreshToken);
+    }
+    return data;
   }
 
   async verifyOtp(dto: VerifyOtpRequest): Promise<VerifyOtpResponse> {

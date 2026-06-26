@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Headers,
   Post,
   Req,
@@ -27,6 +28,12 @@ const REFRESH_COOKIE = 'higo_rt';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
+
+  @Public()
+  @Get('firebase-config')
+  firebaseConfig() {
+    return this.auth.getFirebaseWebConfig();
+  }
 
   @Public()
   @UseGuards(RateLimitGuard)

@@ -1,11 +1,16 @@
 import { create } from 'zustand';
 import type { Driver, User } from '@higo/shared-types';
+import { Platform } from 'react-native';
 import {
   api,
   getDriverProfile,
   updateDriverProfile,
   type UpdateDriverProfilePayload,
 } from '../services/api';
+import {
+  sendFirebasePhoneOtp,
+  verifyFirebasePhoneOtp,
+} from '../services/firebase-phone-auth';
 import {
   loadPersistedSession,
   persistSession,
@@ -59,7 +64,11 @@ export const useDriverAuthStore = create<DriverAuthState>((set, get) => ({
   async sendOtp(phone: string) {
     set({ isLoading: true, error: null });
     try {
-      await api.sendOtp({ phone, userType: 'driver' });
+      if (Platform.OS === 'web') {
+        await sendFirebasePhoneOtp(phone);
+      } else {
+        await api.sendOtp({ phone, userType: 'driver' });
+      }
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to send OTP',
@@ -73,7 +82,13 @@ export const useDriverAuthStore = create<DriverAuthState>((set, get) => ({
   async verifyOtp(phone: string, code: string) {
     set({ isLoading: true, error: null });
     try {
-      const result = await api.verifyOtp({ phone, code, userType: 'driver' });
+      const result =
+        Platform.OS === 'web'
+          ? await api.verifyFirebasePhone({
+              idToken: await verifyFirebasePhoneOtp(code),
+              userType: 'driver',
+            })
+          : await api.verifyOtp({ phone, code, userType: 'driver' });
       await persistSession(result.user, result.driver);
       set({
         user: result.user ?? null,

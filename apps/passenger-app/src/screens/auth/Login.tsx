@@ -6,6 +6,7 @@ import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ScreenShell } from '../../components/ScreenShell';
 import { useAuthStore } from '../../stores/authStore';
+import { normalizeNigerianPhone } from '../../utils/phone';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/types';
 
@@ -34,14 +35,16 @@ export function Login({ navigation }: Props) {
     return () => clearTimeout(timer);
   }, [countdown]);
 
+  const normalizedPhone = normalizeNigerianPhone(phone);
+
   const handleSendOtp = async () => {
-    if (!phone || phone.length < 10) {
+    if (!normalizedPhone) {
       Alert.alert('Error', t('auth.invalidPhone'));
       return;
     }
 
     try {
-      await sendOtp(phone);
+      await sendOtp(normalizedPhone);
       setStep('otp');
       setCountdown(60); // 1-minute resend lockout
     } catch (err: any) {
@@ -56,7 +59,12 @@ export function Login({ navigation }: Props) {
     }
 
     try {
-      const isNewUser = await verifyOtp(phone, code);
+      if (!normalizedPhone) {
+        Alert.alert('Error', t('auth.invalidPhone'));
+        return;
+      }
+
+      const isNewUser = await verifyOtp(normalizedPhone, code);
       if (isNewUser) {
         navigation.navigate('SignUp');
       } else {
@@ -76,7 +84,11 @@ export function Login({ navigation }: Props) {
   return (
     <ScreenShell
       title={step === 'phone' ? t('auth.loginTitle') : t('auth.otpTitle')}
-      subtitle={step === 'phone' ? t('auth.loginSubtitle') : t('auth.otpSubtitle', { phone })}
+      subtitle={
+        step === 'phone'
+          ? t('auth.loginSubtitle')
+          : t('auth.otpSubtitle', { phone: normalizedPhone ?? phone })
+      }
       scroll={false}
     >
       <View style={styles.form}>
