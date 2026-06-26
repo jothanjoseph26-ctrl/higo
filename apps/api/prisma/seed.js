@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'HiGo@Admin2024';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'M1cr0s0ft@8!';
 
 async function main() {
   // 1. Seed Launch Zones (permitted)
@@ -110,7 +110,7 @@ async function main() {
   }
 
   // 3. Seed Super Admin (with proper bcrypt hash)
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@hiconnect.com';
+  const adminEmail = process.env.ADMIN_EMAIL || 'hiconnectgo@gmail.com';
   const existingAdmin = await prisma.adminUser.findUnique({
     where: { email: adminEmail },
   });

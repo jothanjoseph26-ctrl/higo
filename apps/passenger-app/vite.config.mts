@@ -59,6 +59,12 @@ export default defineConfig({
     global: 'window',
     __DEV__: 'true',
     'process.env': '{}',
+    'import.meta.env.VITE_API_BASE_URL': JSON.stringify(
+      process.env.VITE_API_BASE_URL ?? 'https://hiconnect-production.up.railway.app/api',
+    ),
+    'import.meta.env.VITE_SOCKET_URL': JSON.stringify(
+      process.env.VITE_SOCKET_URL ?? 'https://hiconnect-production.up.railway.app',
+    ),
   },
   resolve: {
     extensions,

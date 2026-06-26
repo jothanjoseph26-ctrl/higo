@@ -1,0 +1,47 @@
+# ── Admin + Passenger + Driver web apps (single Railway service, host routing) ─
+FROM node:20-alpine AS deps
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/admin-dashboard/package.json ./apps/admin-dashboard/
+COPY apps/passenger-app/package.json ./apps/passenger-app/
+COPY apps/driver-app/package.json ./apps/driver-app/
+COPY packages/api-client/package.json ./packages/api-client/
+COPY packages/shared-types/package.json ./packages/shared-types/
+COPY packages/brand-tokens/package.json ./packages/brand-tokens/
+RUN pnpm install --frozen-lockfile
+
+FROM node:20-alpine AS builder
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+ENV CI=true
+ARG VITE_API_URL=https://hiconnect-production.up.railway.app/api
+ARG VITE_API_BASE_URL=https://hiconnect-production.up.railway.app/api
+ARG VITE_SOCKET_URL=https://hiconnect-production.up.railway.app
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
+
+RUN pnpm install --frozen-lockfile
+RUN cd packages/shared-types && pnpm exec tsc --build tsconfig.lib.json
+RUN cd packages/brand-tokens && pnpm exec tsc --build tsconfig.lib.json
+RUN cd packages/api-client && pnpm exec tsc --build tsconfig.lib.json
+RUN cd apps/admin-dashboard && pnpm exec vite build
+RUN cd apps/passenger-app && pnpm exec vite build
+RUN cd apps/driver-app && pnpm exec vite build
+RUN test -f apps/admin-dashboard/dist/index.html
+RUN test -f dist/apps/passenger-app/web/index.html
+RUN test -f dist/apps/driver-app/web/index.html
+
+FROM nginx:alpine AS runner
+COPY docker/nginx-web.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=builder /app/apps/admin-dashboard/dist /usr/share/nginx/html/admin
+COPY --from=builder /app/dist/apps/passenger-app/web /usr/share/nginx/html/passenger
+COPY --from=builder /app/dist/apps/driver-app/web /usr/share/nginx/html/driver
+ENV NODE_ENV=production
+EXPOSE 3000

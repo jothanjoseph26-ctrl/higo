@@ -20,9 +20,13 @@ test-output
 .env.*
 !.env.example
 
-# Mobile apps not needed for API image (admin-dashboard required for Dockerfile.admin)
-apps/passenger-app
-apps/driver-app
+# Mobile native artifacts not needed for web/API images
+apps/passenger-app/android
+apps/passenger-app/ios
+apps/passenger-app/.expo
+apps/driver-app/android
+apps/driver-app/ios
+apps/driver-app/.expo
 apps/admin-dashboard-e2e
 
 # Docs, scripts, local tooling

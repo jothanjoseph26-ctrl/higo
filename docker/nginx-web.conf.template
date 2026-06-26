@@ -1,0 +1,20 @@
+map $http_host $web_root {
+    ~*passenger /usr/share/nginx/html/passenger;
+    ~*driver    /usr/share/nginx/html/driver;
+    default     /usr/share/nginx/html/admin;
+}
+
+server {
+    listen ${PORT};
+    server_name _;
+
+    location /health {
+        default_type application/json;
+        return 200 '{"success":true,"data":{"status":"ok"}}';
+    }
+
+    location / {
+        root $web_root;
+        try_files $uri $uri/ /index.html;
+    }
+}
