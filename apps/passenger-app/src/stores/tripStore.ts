@@ -147,7 +147,10 @@ export const useTripStore = create<TripState>((set, get) => ({
 
       return response;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Booking failed';
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Booking failed. Check pickup and destination are inside the service area.';
       set({ tripError: message, isSubmitting: false });
       throw err;
     }

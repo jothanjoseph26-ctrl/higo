@@ -21,13 +21,13 @@ interface PlaceSuggestion {
 }
 
 const LOCAL_SUGGESTIONS: PlaceSuggestion[] = [
-  { description: 'Federal Secretariat, Central Business District, Abuja', lat: 9.0631, lng: 7.4913 },
-  { description: 'Transcorp Hilton, Maitama, Abuja', lat: 9.0772, lng: 7.4936 },
   { description: 'Wuse Market, Wuse II, Abuja', lat: 9.0694, lng: 7.4647 },
-  { description: 'Garki Mall, Garki Area 11, Abuja', lat: 9.0345, lng: 7.4859 },
-  { description: 'Nnamdi Azikiwe International Airport, Abuja', lat: 9.0067, lng: 7.2631 },
   { description: 'Jabi Lake Mall, Jabi, Abuja', lat: 9.0792, lng: 7.4206 },
-  { description: 'Aso Rock Presidential Villa, Abuja', lat: 9.0673, lng: 7.5312 },
+  { description: 'Garki Mall, Garki Area 11, Abuja', lat: 9.0345, lng: 7.4859 },
+  { description: 'Utako Market, Utako, Abuja', lat: 9.07, lng: 7.44 },
+  { description: 'Gwarimpa Estate, Abuja', lat: 9.11, lng: 7.415 },
+  { description: 'Lokogoma, Abuja', lat: 9.0, lng: 7.43 },
+  { description: 'Nnamdi Azikiwe International Airport, Abuja', lat: 9.0067, lng: 7.2631 },
 ];
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 350;
@@ -175,7 +175,7 @@ export function Booking({ navigation }: Props) {
     }
 
     if (!destination) {
-      const fallback = LOCAL_SUGGESTIONS[5];
+      const fallback = LOCAL_SUGGESTIONS[0];
       setDestination({
         lat: fallback.lat!,
         lng: fallback.lng!,

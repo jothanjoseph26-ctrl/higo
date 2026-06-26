@@ -6,12 +6,37 @@ const prisma = new PrismaClient();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'M1cr0s0ft@8!';
 
 async function main() {
+  // 0. Ensure broad metro envelope exists (covers GPS / autocomplete outside micro-zones)
+  const metroExists = await prisma.$queryRaw`
+    SELECT id FROM zones WHERE name = 'Abuja Metro' LIMIT 1
+  `;
+  if (metroExists.length === 0) {
+    await prisma.$executeRaw`
+      INSERT INTO zones (id, name, zone_type, boundary, surge_multiplier, is_active, created_at)
+      VALUES (
+        gen_random_uuid(),
+        'Abuja Metro',
+        'permitted',
+        ST_GeogFromText('SRID=4326;POLYGON((7.25 8.95, 7.55 8.95, 7.55 9.15, 7.25 9.15, 7.25 8.95))'),
+        1.0,
+        true,
+        NOW()
+      )
+    `;
+    console.log('Seeded Abuja Metro permitted zone');
+  }
+
   // 1. Seed Launch Zones (permitted)
   const zoneCount = await prisma.$queryRaw`SELECT COUNT(*)::int as count FROM zones`;
   if (zoneCount[0].count <= 1) {
     await prisma.$executeRaw`DELETE FROM zones;`;
 
+    // Broad metro envelope so GPS / autocomplete coords outside micro-zones still book.
     const launchZones = [
+      {
+        name: 'Abuja Metro',
+        poly: 'POLYGON((7.25 8.95, 7.55 8.95, 7.55 9.15, 7.25 9.15, 7.25 8.95))',
+      },
       { name: 'Apo', poly: 'POLYGON((7.48 8.97, 7.50 8.97, 7.50 8.99, 7.48 8.99, 7.48 8.97))' },
       { name: 'Lokogoma', poly: 'POLYGON((7.42 8.99, 7.44 8.99, 7.44 9.01, 7.42 9.01, 7.42 8.99))' },
       { name: 'Lugbe', poly: 'POLYGON((7.36 8.96, 7.38 8.96, 7.38 8.98, 7.36 8.98, 7.36 8.96))' },

@@ -13,7 +13,7 @@ export const useLocationStore = create<LocationState>((set, get) => {
   let watchInterval: any = null;
 
   return {
-    userLocation: { lat: 9.0765, lng: 7.3986 }, // Default to Abuja FCT coordinates
+    userLocation: { lat: 9.07, lng: 7.465 }, // Wuse II — inside launch service area
     permissionStatus: 'granted',
 
     async requestPermission() {
@@ -29,7 +29,7 @@ export const useLocationStore = create<LocationState>((set, get) => {
       // In a real device/Expo environment, you'd use expo-location / react-native-geolocation.
       // Here we simulate subtle passenger location movements or return Abuja baseline coordinates.
       const update = () => {
-        const current = get().userLocation || { lat: 9.0765, lng: 7.3986 };
+        const current = get().userLocation || { lat: 9.07, lng: 7.465 };
         // Add tiny random jitter to simulate live presence
         const newLoc = {
           lat: current.lat + (Math.random() - 0.5) * 0.0001,
