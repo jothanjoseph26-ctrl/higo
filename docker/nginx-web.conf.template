@@ -7,6 +7,14 @@ server {
         return 200 '{"success":true,"data":{"status":"ok"}}';
     }
 
+    location = /passenger {
+        return 301 /passenger/;
+    }
+
+    location = /driver {
+        return 301 /driver/;
+    }
+
     location /passenger/ {
         alias /usr/share/nginx/html/passenger/;
         try_files $uri $uri/ /passenger/index.html;
