@@ -46,6 +46,18 @@ export class TripService {
     private readonly promosService: PromosService,
   ) {}
 
+  /** Launch envelope when micro-zones miss GPS / autocomplete coordinates. */
+  private isWithinAbujaMetro(point: LatLng): boolean {
+    return point.lat >= 8.95 && point.lat <= 9.15 && point.lng >= 7.25 && point.lng <= 7.55;
+  }
+
+  private async isInServiceArea(point: LatLng): Promise<boolean> {
+    if (await this.zonesService.isPointInPermittedZone(point)) {
+      return true;
+    }
+    return this.isWithinAbujaMetro(point);
+  }
+
   private haversineDistance(p1: LatLng, p2: LatLng): number {
     const R = 6371; // Earth radius in km
     const dLat = ((p2.lat - p1.lat) * Math.PI) / 180;
@@ -223,8 +235,8 @@ export class TripService {
       );
     }
 
-    const permittedPickup = await this.zonesService.isPointInPermittedZone(dto.pickup);
-    const permittedDest = await this.zonesService.isPointInPermittedZone(dto.destination);
+    const permittedPickup = await this.isInServiceArea(dto.pickup);
+    const permittedDest = await this.isInServiceArea(dto.destination);
     if (!permittedPickup && !permittedDest) {
       throw new AppException('INVALID_ZONE');
     }
