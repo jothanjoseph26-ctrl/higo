@@ -27,11 +27,8 @@ ENV NX_DAEMON=false
 RUN pnpm install --frozen-lockfile
 
 RUN cd apps/api && pnpm exec prisma generate
-# Build shared-types first (webpack externalizes @higo/shared-types — dist must exist)
-RUN cd packages/shared-types && pnpm exec tsc --build tsconfig.lib.json
-RUN test -f packages/shared-types/dist/index.js
-# Use webpack directly — avoids Nx sync/cache races in CI
-RUN cd apps/api && pnpm exec webpack-cli build
+RUN pnpm nx sync
+RUN pnpm nx build @higo/api --skip-nx-cache --parallel=1
 RUN test -f apps/api/dist/main.js && test -f apps/api/dist/worker.js
 
 # ── Stage 3: Production ────────────────────────────────────────────────────────
