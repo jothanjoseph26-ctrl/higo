@@ -16,7 +16,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { Printer, TrendingUp, DollarSign, Award, ArrowDownLeft, Calendar, FileSpreadsheet } from 'lucide-react';
+import { Printer, AlertCircle, RefreshCw } from 'lucide-react';
 
 const COLORS = ['#0B6E4F', '#FF7A00', '#0A2540'];
 
@@ -31,10 +31,12 @@ export const FinancialReports: React.FC = () => {
 
   const [report, setReport] = useState<FinancialReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchReport = async () => {
     try {
       setLoading(true);
+      setError(null);
       const query = {
         from: startDate ? startDate.toISOString() : undefined,
         to: endDate ? endDate.toISOString() : undefined,
@@ -42,33 +44,9 @@ export const FinancialReports: React.FC = () => {
       };
       const data = await apiService.getFinancialReport(query);
       setReport(data);
-    } catch (err) {
-      console.warn('Backend report endpoint failed, rendering mock details for demo:', err);
-      // Fallback Mock Data matching the requirements:
-      // Commission 5%, subscriptions: Weekly (2000), Monthly (7000), Quarterly (18000)
-      setReport({
-        range: {
-          from: startDate ? startDate.toISOString() : new Date().toISOString(),
-          to: endDate ? endDate.toISOString() : new Date().toISOString(),
-        },
-        totals: {
-          gross: 124500000,           // ₦1,245,000 Gross in Kobo
-          platformFee: 6225000,       // 5% Commission = ₦62,250 in Kobo
-          driverPayout: 118275000,    // ₦1,182,750 in Kobo
-          refunds: 500000,            // ₦5,000 in Kobo
-          subscriptionRevenue: 45000000, // ₦450,000 from subscriptions
-          trips: 640,
-        },
-        series: [
-          { period: 'Mon 06-15', gross: 18000000, platformFee: 900000, driverPayout: 17100000, trips: 92 },
-          { period: 'Tue 06-16', gross: 20000000, platformFee: 1000000, driverPayout: 19000000, trips: 105 },
-          { period: 'Wed 06-17', gross: 22000000, platformFee: 1100000, driverPayout: 20900000, trips: 110 },
-          { period: 'Thu 06-18', gross: 21000000, platformFee: 1050000, driverPayout: 19950000, trips: 100 },
-          { period: 'Fri 06-19', gross: 25000000, platformFee: 1250000, driverPayout: 23750000, trips: 130 },
-          { period: 'Sat 06-20', gross: 28000000, platformFee: 1400000, driverPayout: 26600000, trips: 145 },
-          { period: 'Sun 06-21', gross: 24500000, platformFee: 1225000, driverPayout: 23275000, trips: 124 },
-        ],
-      });
+    } catch (err: any) {
+      setReport(null);
+      setError(err?.message || 'Failed to load financial report.');
     } finally {
       setLoading(false);
     }
@@ -87,10 +65,34 @@ export const FinancialReports: React.FC = () => {
     window.print();
   };
 
-  if (loading || !report) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
         <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-primaryGreen"></div>
+      </div>
+    );
+  }
+
+  if (error || !report) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-darkNavy font-poppins">Financial Reports</h1>
+          <p className="text-xs text-gray-500">Track commissions, platform revenue, and subscriptions</p>
+        </div>
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-card text-error text-sm flex items-center gap-2 max-w-md">
+            <AlertCircle size={20} />
+            <span>{error || 'Unable to load financial report.'}</span>
+          </div>
+          <button
+            onClick={fetchReport}
+            className="px-4 py-2 bg-primaryGreen text-white rounded-button text-xs font-semibold hover:bg-opacity-95 flex items-center gap-2"
+          >
+            <RefreshCw size={14} />
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -111,13 +113,9 @@ export const FinancialReports: React.FC = () => {
     Trips: item.trips,
   }));
 
-  // Subscription breakdown (Mocking segments matching the tiers)
-  // Weekly (₦2,000), Monthly (₦7,000), Quarterly (₦18,000)
-  const subscriptionBreakdown = [
-    { name: 'Weekly (₦2,000)', value: 15000000 },  // 150k
-    { name: 'Monthly (₦7,000)', value: 21000000 }, // 210k
-    { name: 'Quarterly (₦18,000)', value: 9000000 }, // 90k
-  ];
+  const subscriptionBreakdown = report.totals.subscriptionRevenue > 0
+    ? [{ name: 'Total Subscription Revenue', value: report.totals.subscriptionRevenue }]
+    : [];
 
   return (
     <div className="space-y-6 print:p-0 print:space-y-4">
@@ -214,41 +212,47 @@ export const FinancialReports: React.FC = () => {
           </div>
         </div>
 
-        {/* Subscription segments chart */}
+        {/* Subscription revenue summary */}
         <div className="bg-white p-6 rounded-card border border-lightGrey shadow-custom print:border-2">
-          <h3 className="text-xs font-bold text-darkNavy mb-4 uppercase tracking-wider">Plan Revenue Share</h3>
+          <h3 className="text-xs font-bold text-darkNavy mb-4 uppercase tracking-wider">Subscription Revenue</h3>
           <div className="h-72 flex flex-col justify-center items-center">
-            <div className="w-full h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={subscriptionBreakdown}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={75}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {subscriptionBreakdown.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => `₦${(Number(value) / 100).toLocaleString()}`} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-1 w-full text-xs font-semibold">
-              {subscriptionBreakdown.map((plan, index) => (
-                <div key={plan.name} className="flex justify-between items-center text-[10px]">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                    <span>{plan.name}</span>
-                  </div>
-                  <span className="text-darkNavy">₦{(plan.value / 100).toLocaleString()}</span>
+            {subscriptionBreakdown.length > 0 ? (
+              <>
+                <div className="w-full h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={subscriptionBreakdown}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={75}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {subscriptionBreakdown.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => `₦${(Number(value) / 100).toLocaleString()}`} />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
+                <div className="space-y-1 w-full text-xs font-semibold">
+                  {subscriptionBreakdown.map((plan, index) => (
+                    <div key={plan.name} className="flex justify-between items-center text-[10px]">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                        <span>{plan.name}</span>
+                      </div>
+                      <span className="text-darkNavy">₦{(plan.value / 100).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-gray-500 text-center">No subscription revenue recorded for this period.</p>
+            )}
           </div>
         </div>
       </div>

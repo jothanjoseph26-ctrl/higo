@@ -7,8 +7,6 @@ import { Button } from '../../components/Button';
 import { ScreenShell } from '../../components/ScreenShell';
 import { useDriverAuthStore } from '../../stores/driverAuthStore';
 import { useOnlineStore } from '../../stores/onlineStore';
-import { useTripStore } from '../../stores/tripStore';
-import { connectSocket } from '../../services/socket';
 import { checkRestrictedGeofence, fetchAndCacheZones } from '../../services/geofence';
 import { theme } from '../../theme';
 import type { DriverMainStackParamList } from '../../navigation/types';
@@ -27,8 +25,6 @@ export function GoOnlineHome({ navigation }: { navigation: any }) {
     goOffline,
     resetBlockedReason,
   } = useOnlineStore();
-  const { setIncomingRequest } = useTripStore();
-  
   const [restrictedZoneName, setRestrictedZoneName] = useState<string | null>(null);
 
   // Periodically fetch zones & check current geofence (mock driver location in Abuja)
@@ -48,27 +44,6 @@ export function GoOnlineHome({ navigation }: { navigation: any }) {
     }, 15_000);
     return () => clearInterval(interval);
   }, [isOnline]);
-
-  // Socket listener for new trip requests
-  useEffect(() => {
-    let socket: any;
-    if (isOnline) {
-      void connectSocket().then((s) => {
-        socket = s;
-        s.on('trip:new_request', (payload: any) => {
-          console.log('Received new trip request via socket', payload);
-          // Set in store and navigate
-          void setIncomingRequest(payload);
-          navigation.navigate('TripRequest');
-        });
-      });
-    }
-    return () => {
-      if (socket) {
-        socket.off('trip:new_request');
-      }
-    };
-  }, [isOnline, navigation, setIncomingRequest]);
 
   const handleToggleOnline = async () => {
     if (isOnline) {

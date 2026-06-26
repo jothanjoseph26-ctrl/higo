@@ -1,11 +1,21 @@
 import { create } from 'zustand';
 import type { Driver, User } from '@higo/shared-types';
-import { api } from '../services/api';
+import {
+  api,
+  getDriverProfile,
+  updateDriverProfile,
+  type UpdateDriverProfilePayload,
+} from '../services/api';
 import {
   loadPersistedSession,
   persistSession,
   tokenStorage,
 } from '../services/storage';
+
+export function isVehicleProfileIncomplete(driver?: Driver | null): boolean {
+  const plate = driver?.vehiclePlate?.trim();
+  return !plate || plate === 'PENDING';
+}
 
 interface DriverAuthState {
   user: User | null;
@@ -18,6 +28,8 @@ interface DriverAuthState {
   hydrate: () => Promise<void>;
   sendOtp: (phone: string) => Promise<void>;
   verifyOtp: (phone: string, code: string) => Promise<boolean>;
+  refreshDriverProfile: () => Promise<Driver>;
+  updateVehicleProfile: (payload: UpdateDriverProfilePayload) => Promise<Driver>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -78,6 +90,22 @@ export const useDriverAuthStore = create<DriverAuthState>((set, get) => ({
     } finally {
       set({ isLoading: false });
     }
+  },
+
+  async refreshDriverProfile() {
+    const driver = await getDriverProfile();
+    const { user } = get();
+    await persistSession(user ?? undefined, driver);
+    set({ driver });
+    return driver;
+  },
+
+  async updateVehicleProfile(payload: UpdateDriverProfilePayload) {
+    const driver = await updateDriverProfile(payload);
+    const { user } = get();
+    await persistSession(user ?? undefined, driver);
+    set({ driver });
+    return driver;
   },
 
   async logout() {

@@ -1,56 +1,128 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TextInput, Pressable } from 'react-native';
-import { theme } from '../../theme';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import type { TripMessage } from '@higo/shared-types';
 import { ScreenShell } from '../../components/ScreenShell';
+import { theme } from '../../theme';
+import { api } from '../../services/api';
+import { useAuthStore } from '../../stores/authStore';
 
-interface Message {
-  id: string;
-  text: string;
-  sender: 'user' | 'support';
-  time: string;
+type ChatRow = TripMessage & { isMine: boolean };
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 export function ChatSupport() {
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '1', text: 'Hello, welcome to HiGo Support! How can we assist you today?', sender: 'support', time: '12:00' },
-  ]);
+  const userId = useAuthStore((state) => state.user?.id);
+  const [messages, setMessages] = useState<ChatRow[]>([]);
   const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
 
-  const handleSend = () => {
-    if (input.trim() === '') return;
+  const mapMessages = useCallback(
+    (items: TripMessage[]): ChatRow[] =>
+      items.map((message) => ({
+        ...message,
+        isMine: message.senderType === 'passenger' && message.senderId === userId,
+      })),
+    [userId],
+  );
 
-    const newMessage: Message = {
-      id: Math.random().toString(),
-      text: input,
-      sender: 'user',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const result = await api.getSupportMessages();
+        if (!cancelled) {
+          setMessages(mapMessages(result.messages));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          Alert.alert('Support', 'Could not load support messages. Please try again.');
+          console.error('Failed to load support messages', error);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
     };
+  }, [mapMessages]);
 
-    setMessages((prev) => [...prev, newMessage]);
+  const pollForAiReply = useCallback(
+    async (sentAt: string) => {
+      const deadline = Date.now() + 15_000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        try {
+          const result = await api.getSupportMessages();
+          const hasNewReply = result.messages.some(
+            (message) =>
+              message.senderType === 'admin' &&
+              new Date(message.createdAt).getTime() > new Date(sentAt).getTime(),
+          );
+          if (hasNewReply) {
+            setMessages(mapMessages(result.messages));
+            return;
+          }
+        } catch {
+          // Keep polling until deadline
+        }
+      }
+    },
+    [mapMessages],
+  );
+
+  const handleSend = async () => {
+    const body = input.trim();
+    if (!body || sending) return;
+
+    setSending(true);
     setInput('');
 
-    // Simulate reply after 1.5s
-    setTimeout(() => {
-      const replyMessage: Message = {
-        id: Math.random().toString(),
-        text: 'Thank you for your message. An agent will review this shortly. If urgent, please call our SOS line.',
-        sender: 'support',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages((prev) => [...prev, replyMessage]);
-    }, 1500);
+    try {
+      const result = await api.sendSupportMessage({ body });
+      setMessages((prev) => [
+        ...prev,
+        {
+          ...result.message,
+          isMine: true,
+        },
+      ]);
+      void pollForAiReply(result.message.createdAt);
+    } catch (error) {
+      setInput(body);
+      Alert.alert('Support', 'Failed to send message. Please try again.');
+      console.error('Failed to send support message', error);
+    } finally {
+      setSending(false);
+    }
   };
 
-  const renderItem = ({ item }: { item: Message }) => {
-    const isUser = item.sender === 'user';
+  const renderItem = ({ item }: { item: ChatRow }) => {
+    const isUser = item.isMine;
     return (
       <View style={[styles.bubbleWrap, isUser ? styles.userWrap : styles.supportWrap]}>
         <View style={[styles.bubble, isUser ? styles.userBubble : styles.supportBubble]}>
           <Text style={[styles.messageText, isUser ? styles.userText : styles.supportText]}>
-            {item.text}
+            {item.body}
           </Text>
           <Text style={[styles.timeText, isUser ? styles.userTime : styles.supportTime]}>
-            {item.time}
+            {formatTime(item.createdAt)}
           </Text>
         </View>
       </View>
@@ -59,13 +131,24 @@ export function ChatSupport() {
 
   return (
     <ScreenShell title="Chat Support" scroll={false}>
-      <FlatList
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        style={styles.chatList}
-        contentContainerStyle={styles.chatContent}
-      />
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={theme.colors.primaryGreen} />
+        </View>
+      ) : (
+        <FlatList
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          style={styles.chatList}
+          contentContainerStyle={styles.chatContent}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>
+              Welcome to HiGo Support. Send a message and our team will respond shortly.
+            </Text>
+          }
+        />
+      )}
 
       <View style={styles.inputRow}>
         <TextInput
@@ -74,9 +157,10 @@ export function ChatSupport() {
           value={input}
           onChangeText={setInput}
           style={styles.textInput}
+          editable={!sending}
         />
-        <Pressable onPress={handleSend} style={styles.sendBtn}>
-          <Text style={styles.sendIcon}>➔</Text>
+        <Pressable onPress={() => void handleSend()} style={styles.sendBtn} disabled={sending}>
+          <Text style={styles.sendIcon}>{sending ? '…' : '➔'}</Text>
         </Pressable>
       </View>
     </ScreenShell>
@@ -84,6 +168,18 @@ export function ChatSupport() {
 }
 
 const styles = StyleSheet.create({
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#6B7280',
+    fontSize: 14,
+    lineHeight: 20,
+    paddingVertical: theme.spacing.lg,
+  },
   chatList: {
     flex: 1,
     marginBottom: theme.spacing.md,
@@ -168,4 +264,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
+
 export default ChatSupport;

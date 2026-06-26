@@ -3,6 +3,8 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
+# Web API service (default). For Bull dispatch jobs, deploy a second Railway
+# service from the same repo with: node apps/api/dist/worker.js
 startCommand = "node apps/api/dist/main.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 300

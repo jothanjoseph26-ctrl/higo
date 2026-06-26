@@ -35,8 +35,26 @@ export const SOCKET_EVENTS = {
   TRIP_COMPLETED: 'trip:completed',
   TRIP_CANCELLED: 'trip:cancelled',
 
+  // ---- Client -> Server (trip chat) ----
+  TRIP_MESSAGE_SEND: 'trip:message_send',
+
+  // ---- Server -> Client (trip chat) ----
+  MESSAGE_NEW: 'trip:message_new',
+
   // ---- Server -> Client (general) ----
   NOTIFICATION_GENERAL: 'notification:general',
+
+  // ---- HCE: voice & language events ----
+  HCE_VOICE_INPUT: 'hce:voice_input',
+  HCE_VOICE_OUTPUT: 'hce:voice_output',
+  HCE_LANGUAGE_CHANGED: 'hce:language_changed',
+
+  // ---- Geofencing alerts ----
+  DRIVER_ZONE_ALERT: 'driver:zone_alert',
+  DRIVER_ZONE_EXIT: 'driver:zone_exit',
+
+  // ---- Fraud alerts (admin:ops room) ----
+  FRAUD_ALERT: 'fraud:alert',
 
   // ---- Connection lifecycle (Socket.io reserved-style, app-level) ----
   CONNECT_ERROR: 'connect_error',
@@ -87,6 +105,24 @@ export interface DriverTripCompletedPayload {
   tripId: UUID;
   /** Driver-reported final location (server recomputes authoritative fare). */
   finalLocation?: LatLng;
+}
+
+export interface TripMessageSendPayload {
+  tripId: UUID;
+  body: string;
+}
+
+/** Driver sends voice audio to HCE for transcription. */
+export interface HceVoiceInputPayload {
+  /** Base64-encoded audio buffer. */
+  audioBase64: string;
+  /** Optional trip context for intent extraction. */
+  tripId?: UUID;
+}
+
+/** Driver changes language preference via UI or voice detection. */
+export interface HceLanguageChangedPayload {
+  languageCode: string; // LanguageCode value
 }
 
 // ============================================================================
@@ -160,6 +196,71 @@ export interface NotificationGeneralPayload {
   data?: Record<string, unknown>;
 }
 
+/** Trip-scoped chat message broadcast to trip:{tripId} room. */
+export interface TripMessageNewPayload {
+  tripId: UUID;
+  message: {
+    id: UUID;
+    conversationId: UUID;
+    senderId: UUID;
+    senderType: 'passenger' | 'driver' | 'admin';
+    body: string;
+    createdAt: string;
+  };
+}
+
+/** Server sends transcribed/translated voice output to driver. */
+export interface HceVoiceOutputPayload {
+  /** Transcribed text from driver's speech. */
+  transcription: string | null;
+  /** AI-generated response text. */
+  responseText: string | null;
+  /** S3 URL of audio to auto-play in driver's language. */
+  audioUrl: string | null;
+  /** Detected language. */
+  language: string;
+  /** Intent extracted (if voice booking). */
+  intent?: {
+    destination: string | null;
+    lat: number | null;
+    lng: number | null;
+  };
+}
+
+/** Server confirms language change. */
+export interface HceLanguageChangedPayload {
+  languageCode: string;
+  success: boolean;
+}
+
+/** Geofencing alert — driver entering restricted zone. */
+export interface DriverZoneAlertPayload {
+  zoneId: UUID;
+  zoneName: string;
+  zoneType: 'restricted' | 'surge';
+  /** Surge multiplier if zoneType === 'surge'. */
+  surgeMultiplier?: number;
+  /** Seconds until forced offline if restricted. */
+  warningSeconds?: number;
+}
+
+/** Geofencing exit — driver left restricted zone. */
+export interface DriverZoneExitPayload {
+  zoneId: UUID;
+  zoneName: string;
+}
+
+/** Fraud alert broadcast to admin:ops room. */
+export interface FraudAlertPayload {
+  eventId: UUID;
+  eventType: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  driverId: UUID | null;
+  passengerId: UUID | null;
+  tripId: UUID | null;
+  description: string;
+}
+
 // ============================================================================
 // TYPED EVENT MAPS (for socket.io typed sockets)
 // ============================================================================
@@ -174,6 +275,9 @@ export interface ClientToServerEvents {
   [SOCKET_EVENTS.DRIVER_ARRIVED_AT_PICKUP]: (p: DriverArrivedAtPickupPayload) => void;
   [SOCKET_EVENTS.DRIVER_TRIP_STARTED]: (p: DriverTripStartedPayload) => void;
   [SOCKET_EVENTS.DRIVER_TRIP_COMPLETED]: (p: DriverTripCompletedPayload) => void;
+  [SOCKET_EVENTS.TRIP_MESSAGE_SEND]: (p: TripMessageSendPayload) => void;
+  [SOCKET_EVENTS.HCE_VOICE_INPUT]: (p: HceVoiceInputPayload) => void;
+  [SOCKET_EVENTS.HCE_LANGUAGE_CHANGED]: (p: HceLanguageChangedPayload) => void;
 }
 
 /** Events the server emits (server -> client). */
@@ -187,6 +291,12 @@ export interface ServerToClientEvents {
   [SOCKET_EVENTS.TRIP_COMPLETED]: (p: TripCompletedPayload) => void;
   [SOCKET_EVENTS.TRIP_CANCELLED]: (p: TripCancelledPayload) => void;
   [SOCKET_EVENTS.NOTIFICATION_GENERAL]: (p: NotificationGeneralPayload) => void;
+  [SOCKET_EVENTS.MESSAGE_NEW]: (p: TripMessageNewPayload) => void;
+  [SOCKET_EVENTS.HCE_VOICE_OUTPUT]: (p: HceVoiceOutputPayload) => void;
+  [SOCKET_EVENTS.HCE_LANGUAGE_CHANGED]: (p: HceLanguageChangedPayload) => void;
+  [SOCKET_EVENTS.DRIVER_ZONE_ALERT]: (p: DriverZoneAlertPayload) => void;
+  [SOCKET_EVENTS.DRIVER_ZONE_EXIT]: (p: DriverZoneExitPayload) => void;
+  [SOCKET_EVENTS.FRAUD_ALERT]: (p: FraudAlertPayload) => void;
   [SOCKET_EVENTS.AUTH_ERROR]: (p: { message: string }) => void;
 }
 

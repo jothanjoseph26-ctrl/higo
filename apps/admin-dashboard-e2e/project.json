@@ -1,0 +1,13 @@
+{
+  "name": "@higo/admin-dashboard-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/admin-dashboard-e2e/src",
+  "projectType": "application",
+  "tags": ["e2e", "npm:private"],
+  "implicitDependencies": ["@higo/admin-dashboard", "@higo/api"],
+  "targets": {
+    "e2e": {
+      "dependsOn": []
+    }
+  }
+}

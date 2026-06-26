@@ -10,7 +10,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
           HomeTab: 'home',
           TripHistoryTab: 'history',
           WalletTab: 'wallet',
-          ProfileTab: 'profile',
+          ProfileTab: 'settings',
         },
       },
       Booking: 'booking',
@@ -20,6 +20,9 @@ export const linking: LinkingOptions<RootStackParamList> = {
       ChatSupport: 'support/chat',
       Notifications: 'notifications',
       PaymentMethods: 'payment-callback', // maps callbacks from Paystack or banks back to the app
+      Profile: 'profile',
+      SavedPlaces: 'saved-places',
+      Language: 'language',
     },
   },
 };

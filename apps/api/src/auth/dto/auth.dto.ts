@@ -10,6 +10,7 @@ import {
   LogoutRequest,
   RefreshTokenRequest,
   SendOtpRequest,
+  VerifyFirebasePhoneRequest,
   VerifyOtpRequest,
 } from '@higo/shared-types';
 
@@ -51,6 +52,14 @@ export class LogoutDto implements LogoutRequest {
   @IsOptional()
   @IsString()
   refreshToken?: string;
+}
+
+export class VerifyFirebasePhoneDto implements VerifyFirebasePhoneRequest {
+  @IsString()
+  idToken!: string;
+
+  @IsIn(['passenger', 'driver'])
+  userType!: 'passenger' | 'driver';
 }
 
 export class AdminLoginDto {

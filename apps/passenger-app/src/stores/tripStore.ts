@@ -1,7 +1,17 @@
 import { create } from 'zustand';
-import type { Trip, LatLng, FareEstimate, MatchedDriverDetails } from '@higo/shared-types';
+import type {
+  Trip,
+  LatLng,
+  FareEstimate,
+  MatchedDriverDetails,
+  RequestTripResponse,
+  GetMyTripsResponse,
+  RateResponse,
+  CancelTripResponse,
+} from '@higo/shared-types';
 import { TripStatus, VehicleType, PaymentMethod } from '@higo/shared-types';
-import { getStoredTriviaPoints, setStoredTriviaPoints } from '../services/storage';
+import { api } from '../services/api';
+import { getStoredTriviaPoints, setStoredTriviaPoints, setTripHistoryCache } from '../services/storage';
 
 interface BookingInfo {
   pickup: (LatLng & { address: string }) | null;
@@ -17,9 +27,16 @@ interface TripState extends BookingInfo {
   driverLocation: (LatLng & { bearing?: number }) | null;
   driverDetails: MatchedDriverDetails | null;
   estimate: FareEstimate | null;
-  eta: number | null; // in minutes
+  eta: number | null;
   triviaPoints: number;
   pointsEarned: number;
+
+  isSubmitting: boolean;
+  tripError: string | null;
+
+  tripHistory: Trip[];
+  historyLoading: boolean;
+  historyError: string | null;
 
   setPickup: (pickup: (LatLng & { address: string }) | null) => void;
   setDestination: (destination: (LatLng & { address: string }) | null) => void;
@@ -33,6 +50,13 @@ interface TripState extends BookingInfo {
   updateDriverLocation: (loc: (LatLng & { bearing?: number }) | null) => void;
   setDriverDetails: (details: MatchedDriverDetails | null) => void;
   setEta: (eta: number | null) => void;
+  setTripError: (error: string | null) => void;
+  clearTripError: () => void;
+
+  requestTrip: () => Promise<RequestTripResponse>;
+  cancelTrip: (reason: string) => Promise<CancelTripResponse>;
+  rateTrip: (rating: number, comment?: string) => Promise<RateResponse>;
+  fetchTripHistory: () => Promise<GetMyTripsResponse>;
 
   hydrateTriviaPoints: () => Promise<void>;
   addTriviaPoints: (points: number) => Promise<void>;
@@ -57,6 +81,13 @@ export const useTripStore = create<TripState>((set, get) => ({
   triviaPoints: 0,
   pointsEarned: 0,
 
+  isSubmitting: false,
+  tripError: null,
+
+  tripHistory: [],
+  historyLoading: false,
+  historyError: null,
+
   setPickup: (pickup) => set({ pickup }),
   setDestination: (destination) => set({ destination }),
   setVehicleType: (vehicleType) => set({ vehicleType }),
@@ -70,10 +101,121 @@ export const useTripStore = create<TripState>((set, get) => ({
       status: currentTrip ? (currentTrip.status as TripStatus) : null,
     });
   },
-  setStatus: (status) => set({ status }),
+  setStatus: (status) => {
+    const { currentTrip } = get();
+    if (currentTrip && status) {
+      set({
+        status,
+        currentTrip: { ...currentTrip, status },
+      });
+    } else {
+      set({ status });
+    }
+  },
   updateDriverLocation: (driverLocation) => set({ driverLocation }),
   setDriverDetails: (driverDetails) => set({ driverDetails }),
   setEta: (eta) => set({ eta }),
+  setTripError: (tripError) => set({ tripError }),
+  clearTripError: () => set({ tripError: null }),
+
+  async requestTrip() {
+    const { pickup, destination, vehicleType, paymentMethod, isShared } = get();
+    if (!pickup || !destination) {
+      const message = 'Invalid booking details. Please try again.';
+      set({ tripError: message });
+      throw new Error(message);
+    }
+
+    set({ isSubmitting: true, tripError: null });
+    try {
+      const response = await api.requestTrip({
+        pickup: { lat: pickup.lat, lng: pickup.lng },
+        pickupAddress: pickup.address,
+        destination: { lat: destination.lat, lng: destination.lng },
+        destinationAddress: destination.address,
+        vehicleType,
+        paymentMethod,
+        isShared,
+      });
+
+      set({
+        currentTrip: response.trip,
+        estimate: response.estimate,
+        status: TripStatus.REQUESTED,
+        isSubmitting: false,
+      });
+
+      return response;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Booking failed';
+      set({ tripError: message, isSubmitting: false });
+      throw err;
+    }
+  },
+
+  async cancelTrip(reason: string) {
+    const { currentTrip } = get();
+    if (!currentTrip) {
+      const message = 'No active trip to cancel.';
+      set({ tripError: message });
+      throw new Error(message);
+    }
+
+    set({ isSubmitting: true, tripError: null });
+    try {
+      const response = await api.cancelTrip(currentTrip.id, { reason });
+      set({
+        currentTrip: response.trip,
+        status: TripStatus.CANCELLED,
+        driverLocation: null,
+        driverDetails: null,
+        eta: null,
+        isSubmitting: false,
+      });
+      return response;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Cancellation failed';
+      set({ tripError: message, isSubmitting: false });
+      throw err;
+    }
+  },
+
+  async rateTrip(rating: number, comment?: string) {
+    const { currentTrip } = get();
+    if (!currentTrip) {
+      const message = 'No trip to rate.';
+      set({ tripError: message });
+      throw new Error(message);
+    }
+
+    set({ isSubmitting: true, tripError: null });
+    try {
+      const response = await api.rateDriver(currentTrip.id, { rating, comment });
+      set({ isSubmitting: false });
+      return response;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Rating submission failed';
+      set({ tripError: message, isSubmitting: false });
+      throw err;
+    }
+  },
+
+  async fetchTripHistory() {
+    set({ historyLoading: true, historyError: null });
+    try {
+      const response = await api.getTripHistory();
+      set({
+        tripHistory: response.items,
+        historyLoading: false,
+      });
+      await setTripHistoryCache(response.items);
+      return response;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load trip history';
+      set({ historyError: message, historyLoading: false });
+      throw err;
+    }
+  },
 
   async hydrateTriviaPoints() {
     const points = await getStoredTriviaPoints();
@@ -104,5 +246,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       estimate: null,
       eta: null,
       pointsEarned: 0,
+      tripError: null,
+      isSubmitting: false,
     }),
 }));

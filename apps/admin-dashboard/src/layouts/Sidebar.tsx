@@ -15,6 +15,11 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
+  Tag,
+  Receipt,
+  Undo2,
+  Inbox,
+  Activity,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -24,10 +29,15 @@ export const Sidebar: React.FC = () => {
   const links = [
     { to: '/', label: 'Overview', icon: LayoutDashboard },
     { to: '/operations-map', label: 'Operations Map', icon: Map },
+    { to: '/active-trips', label: 'Active Trips', icon: Activity },
     { to: '/drivers', label: 'Drivers (KYC)', icon: UserCheck },
     { to: '/passengers', label: 'Passengers', icon: Users },
     { to: '/pricing', label: 'Pricing Config', icon: CreditCard, roles: ['super_admin', 'admin'] },
+    { to: '/promotions', label: 'Promotions', icon: Tag, roles: ['super_admin', 'admin'] },
     { to: '/financial-reports', label: 'Financials', icon: TrendingUp },
+    { to: '/transaction-logs', label: 'Transaction Logs', icon: Receipt },
+    { to: '/refund-management', label: 'Refunds', icon: Undo2 },
+    { to: '/complaints-inbox', label: 'Complaints', icon: Inbox },
     { to: '/disputes', label: 'Disputes', icon: Scale },
     { to: '/zones', label: 'Zones/Geofencing', icon: MapPin },
     { to: '/notifications', label: 'Broadcasts', icon: Megaphone },

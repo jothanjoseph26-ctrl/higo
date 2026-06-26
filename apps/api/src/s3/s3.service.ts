@@ -1,25 +1,37 @@
-import OSS from 'ali-oss';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class OssService {
   private readonly logger = new Logger(OssService.name);
-  private readonly client: OSS;
+  private readonly client: S3Client;
   private readonly defaultBucket: string;
-  private readonly region: string;
 
   constructor(config: ConfigService) {
-    this.region = config.getOrThrow<string>('ALIBABA_CLOUD_REGION');
-    this.defaultBucket = config.getOrThrow<string>('ALIBABA_CLOUD_OSS_BUCKET');
+    const accountId = config.getOrThrow<string>('CLOUDFLARE_ACCOUNT_ID');
+    const accessKeyId = config.getOrThrow<string>('CLOUDFLARE_ACCESS_KEY_ID');
+    const secretAccessKey =
+      config.get<string>('CLOUDFLARE_SECRET_ACCESS_KEY') ??
+      config.getOrThrow<string>('CLOUDFLARE_SECRET_ACESS_KEY');
 
-    this.client = new OSS({
-      region: this.region,
-      accessKeyId: config.getOrThrow<string>('ALIBABA_CLOUD_ACCESS_KEY_ID'),
-      accessKeySecret: config.getOrThrow<string>('ALIBABA_CLOUD_ACCESS_KEY_SECRET'),
-      bucket: this.defaultBucket,
-      endpoint: config.get<string>('ALIBABA_CLOUD_OSS_ENDPOINT'),
-      secure: true,
+    const endpoint =
+      config.get<string>('CLOUDFLARE_R2_ENDPOINT') ??
+      `https://${accountId}.r2.cloudflarestorage.com`;
+
+    this.defaultBucket = config.getOrThrow<string>('CLOUDFLARE_R2_BUCKET');
+
+    this.client = new S3Client({
+      region: 'auto',
+      endpoint,
+      credentials: { accessKeyId, secretAccessKey },
+      forcePathStyle: true,
     });
   }
 
@@ -31,20 +43,17 @@ export class OssService {
   }): Promise<string> {
     const bucket = params.bucket ?? this.defaultBucket;
     try {
-      const client = params.bucket
-        ? this.client.useBucket(params.bucket)
-        : this.client;
-
-      await client.put(params.key, params.body, {
-        headers: {
-          'Content-Type': params.contentType,
-          'x-oss-server-side-encryption': 'AES256',
-        },
-      });
-
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: params.key,
+          Body: params.body,
+          ContentType: params.contentType,
+        }),
+      );
       return params.key;
     } catch (error) {
-      this.logger.error(`OSS upload failed for ${params.key}: ${error}`);
+      this.logger.error(`R2 upload failed for ${params.key}: ${error}`);
       throw error;
     }
   }
@@ -55,13 +64,16 @@ export class OssService {
     bucket?: string,
   ): Promise<string> {
     try {
-      const client = bucket ? this.client.useBucket(bucket) : this.client;
-      return client.signatureUrl(key, {
-        expires: expiresInSeconds,
-        method: 'GET',
-      });
+      return getSignedUrl(
+        this.client,
+        new GetObjectCommand({
+          Bucket: bucket ?? this.defaultBucket,
+          Key: key,
+        }),
+        { expiresIn: expiresInSeconds },
+      );
     } catch (error) {
-      this.logger.error(`OSS presigned URL failed for ${key}: ${error}`);
+      this.logger.error(`R2 presigned URL failed for ${key}: ${error}`);
       throw error;
     }
   }
@@ -73,25 +85,31 @@ export class OssService {
     bucket?: string,
   ): Promise<string> {
     try {
-      const client = bucket ? this.client.useBucket(bucket) : this.client;
-      return client.signatureUrl(key, {
-        expires: expiresInSeconds,
-        method: 'PUT',
-        'Content-Type': contentType,
-        'x-oss-server-side-encryption': 'AES256',
-      });
+      return getSignedUrl(
+        this.client,
+        new PutObjectCommand({
+          Bucket: bucket ?? this.defaultBucket,
+          Key: key,
+          ContentType: contentType,
+        }),
+        { expiresIn: expiresInSeconds },
+      );
     } catch (error) {
-      this.logger.error(`OSS presigned upload URL failed for ${key}: ${error}`);
+      this.logger.error(`R2 presigned upload URL failed for ${key}: ${error}`);
       throw error;
     }
   }
 
   async deleteObject(key: string, bucket?: string): Promise<void> {
     try {
-      const client = bucket ? this.client.useBucket(bucket) : this.client;
-      await client.delete(key);
+      await this.client.send(
+        new DeleteObjectCommand({
+          Bucket: bucket ?? this.defaultBucket,
+          Key: key,
+        }),
+      );
     } catch (error) {
-      this.logger.error(`OSS delete failed for ${key}: ${error}`);
+      this.logger.error(`R2 delete failed for ${key}: ${error}`);
       throw error;
     }
   }

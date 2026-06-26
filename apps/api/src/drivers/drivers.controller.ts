@@ -1,10 +1,12 @@
 import { Controller, Post, Put, Body, Get, Query } from '@nestjs/common';
+import type { GetNearbyDriversResponse } from '@higo/shared-types';
 import { PresenceService } from '../realtime/presence.service';
 import { PostDriverLocationDto } from '../trips/dto/trip.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { AppException } from '../common/errors/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
+import { NearbyDriversQueryDto } from './dto/nearby-drivers-query.dto';
 
 @Controller('drivers')
 export class DriversController {
@@ -12,6 +14,18 @@ export class DriversController {
     private readonly presenceService: PresenceService,
     private readonly prisma: PrismaService,
   ) {}
+
+  @Get('nearby')
+  async getNearbyDrivers(
+    @Query() query: NearbyDriversQueryDto,
+  ): Promise<GetNearbyDriversResponse> {
+    const drivers = await this.presenceService.getNearbyOnlineDrivers(
+      query.lat,
+      query.lng,
+      query.radiusKm,
+    );
+    return { drivers };
+  }
 
   @Post('location')
   async updateLocation(
@@ -105,6 +119,7 @@ export class DriversController {
       vehiclePlate: driver.vehiclePlate,
       vehicleModel: driver.vehicleModel,
       vehicleColor: driver.vehicleColor,
+      vehicleYear: driver.vehicleYear,
       kycStatus: driver.kycStatus,
       isOnline: driver.isOnline,
       subscriptionTier: driver.subscriptionTier,
@@ -120,7 +135,16 @@ export class DriversController {
   @Put('me')
   async updateDriverProfile(
     @CurrentUser() user: AuthUser,
-    @Body() dto: { name?: string; vehiclePlate?: string; vehicleModel?: string; vehicleColor?: string; vehicleYear?: number },
+    @Body()
+    dto: {
+      name?: string;
+      vehiclePlate?: string;
+      vehicleModel?: string;
+      vehicleColor?: string;
+      vehicleYear?: number;
+      vehicleType?: string;
+      fcmToken?: string;
+    },
   ) {
     if (user.type !== 'driver') {
       throw new AppException('FORBIDDEN', undefined, 'Only drivers can update their profile');
@@ -134,6 +158,8 @@ export class DriversController {
         ...(dto.vehicleModel && { vehicleModel: dto.vehicleModel }),
         ...(dto.vehicleColor && { vehicleColor: dto.vehicleColor }),
         ...(dto.vehicleYear && { vehicleYear: dto.vehicleYear }),
+        ...(dto.vehicleType && { vehicleType: dto.vehicleType as any }),
+        ...(dto.fcmToken !== undefined && { fcmToken: dto.fcmToken }),
       },
     });
 
@@ -147,6 +173,7 @@ export class DriversController {
       vehiclePlate: driver.vehiclePlate,
       vehicleModel: driver.vehicleModel,
       vehicleColor: driver.vehicleColor,
+      vehicleYear: driver.vehicleYear,
       kycStatus: driver.kycStatus,
       isOnline: driver.isOnline,
       subscriptionTier: driver.subscriptionTier,

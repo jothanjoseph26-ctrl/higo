@@ -4,7 +4,7 @@ import { Text } from 'react-native';
 import { Home } from '../screens/home/Home';
 import { TripHistory } from '../screens/trip/TripHistory';
 import { Wallet } from '../screens/account/Wallet';
-import { Profile } from '../screens/account/Profile';
+import { Settings } from '../screens/account/Settings';
 import { theme } from '../theme';
 import type { MainTabParamList } from './types';
 
@@ -34,7 +34,7 @@ export function MainTab() {
           if (route.name === 'HomeTab') icon = '🛺';
           else if (route.name === 'TripHistoryTab') icon = '📜';
           else if (route.name === 'WalletTab') icon = '💳';
-          else if (route.name === 'ProfileTab') icon = '👤';
+          else if (route.name === 'ProfileTab') icon = '⚙️';
           return <Text style={{ color, fontSize: 20 }}>{icon}</Text>;
         },
       })}
@@ -42,7 +42,7 @@ export function MainTab() {
       <Tab.Screen name="HomeTab" component={Home} options={{ title: 'Home' }} />
       <Tab.Screen name="TripHistoryTab" component={TripHistory} options={{ title: 'History' }} />
       <Tab.Screen name="WalletTab" component={Wallet} options={{ title: 'Wallet' }} />
-      <Tab.Screen name="ProfileTab" component={Profile} options={{ title: 'Profile' }} />
+      <Tab.Screen name="ProfileTab" component={Settings} options={{ title: 'Settings' }} />
     </Tab.Navigator>
   );
 }

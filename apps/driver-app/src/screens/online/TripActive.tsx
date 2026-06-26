@@ -85,6 +85,11 @@ export function TripActive({ navigation }: Props) {
       </View>
 
       <View style={styles.actions}>
+        <Button
+          label="💬 Message Passenger"
+          onPress={() => navigation.navigate('TripChat', { tripId: activeTrip.id })}
+          variant="outline"
+        />
         {isEnRoute ? (
           <Button label="Start Ride" onPress={handleStart} />
         ) : (

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { RedisService } from '../redis/redis.service';
 import { GeoRepository } from '../matching/geo.repository';
-import { LatLng } from '@higo/shared-types';
+import { LatLng, NearbyDriver } from '@higo/shared-types';
 
 @Injectable()
 export class PresenceService {
@@ -94,5 +94,36 @@ export class PresenceService {
   async isDriverOnline(driverId: string): Promise<boolean> {
     const val = await this.redis.get(`presence:driver:${driverId}`);
     return val === 'online';
+  }
+
+  async getNearbyOnlineDrivers(
+    lat: number,
+    lng: number,
+    radiusKm: number,
+  ): Promise<NearbyDriver[]> {
+    const radiusMeters = radiusKm * 1000;
+    const candidates = await this.geoRepo.findNearbyOnlineDrivers(
+      { lat, lng },
+      radiusMeters,
+    );
+
+    const drivers: NearbyDriver[] = [];
+
+    for (const candidate of candidates) {
+      const isOnline = await this.isDriverOnline(candidate.id);
+      if (!isOnline) {
+        continue;
+      }
+
+      const redisLoc = await this.getDriverLocation(candidate.id);
+      drivers.push({
+        id: candidate.id,
+        lat: redisLoc?.lat ?? candidate.lat,
+        lng: redisLoc?.lng ?? candidate.lng,
+        bearing: redisLoc?.bearing,
+      });
+    }
+
+    return drivers;
   }
 }

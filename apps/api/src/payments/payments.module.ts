@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { PaymentsController } from './payments.controller';
 import { AdminFinancialController } from './admin-financial.controller';
+import { AdminFinanceController } from './admin-finance.controller';
+import { AdminFinanceService } from './admin-finance.service';
 import { PaymentService } from './payment.service';
 import { DisbursementService } from './disbursement.service';
 import { SubscriptionService } from './subscription.service';
@@ -14,8 +16,9 @@ import { CryptoModule } from '../common/crypto/crypto.module';
 
 @Module({
   imports: [PrismaModule, RedisModule, CryptoModule],
-  controllers: [PaymentsController, AdminFinancialController],
+  controllers: [PaymentsController, AdminFinancialController, AdminFinanceController],
   providers: [
+    AdminFinanceService,
     PaymentService,
     DisbursementService,
     SubscriptionService,
@@ -24,6 +27,6 @@ import { CryptoModule } from '../common/crypto/crypto.module';
     WebhookHandler,
     FinancialAuditService,
   ],
-  exports: [PaymentService, SubscriptionService, DisbursementService, EarningsService],
+  exports: [PaymentService, SubscriptionService, DisbursementService, EarningsService, AdminFinanceService],
 })
 export class PaymentsModule {}

@@ -47,6 +47,42 @@ export class GeoRepository {
     `;
   }
 
+  async findNearbyOnlineDrivers(
+    point: LatLng,
+    maxRadiusMeters = 5000,
+    limit = 50,
+  ): Promise<Array<{ id: string; lat: number; lng: number; distanceMeters: number }>> {
+    const rows = await this.prisma.$queryRaw<any[]>`
+      SELECT
+        id,
+        ST_Y(current_location::geometry) AS lat,
+        ST_X(current_location::geometry) AS lng,
+        ST_Distance(
+          current_location,
+          ST_SetSRID(ST_MakePoint(${point.lng}, ${point.lat}), 4326)::geography
+        ) AS dist
+      FROM drivers
+      WHERE is_online = true
+        AND kyc_status = 'approved'
+        AND is_suspended = false
+        AND current_location IS NOT NULL
+        AND ST_DWithin(
+          current_location,
+          ST_SetSRID(ST_MakePoint(${point.lng}, ${point.lat}), 4326)::geography,
+          ${maxRadiusMeters}
+        )
+      ORDER BY dist ASC
+      LIMIT ${limit};
+    `;
+
+    return rows.map((row) => ({
+      id: row.id,
+      lat: Number(row.lat),
+      lng: Number(row.lng),
+      distanceMeters: Number(row.dist),
+    }));
+  }
+
   async insertDriverLocationHistory(
     driverId: string,
     point: LatLng,

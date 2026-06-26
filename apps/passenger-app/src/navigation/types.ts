@@ -10,9 +10,15 @@ export type RootStackParamList = {
   DriverEnRoute: undefined;
   NaijaTrivia: undefined;
   TripActive: undefined;
+  TripChat: { tripId: string };
   TripComplete: undefined;
+  TripReceipt: undefined;
+  ActiveTrips: undefined;
   RateDriver: undefined;
   PaymentMethods: undefined;
+  Profile: undefined;
+  SavedPlaces: undefined;
+  Language: undefined;
   SOS: undefined;
   Notifications: undefined;
   HelpFAQ: undefined;
@@ -24,6 +30,8 @@ export type AuthStackParamList = {
   Onboard1: undefined;
   Onboard2: undefined;
   Onboard3: undefined;
+  LocationPermission: undefined;
+  NotificationPermission: undefined;
   Login: undefined;
   SignUp: undefined;
 };

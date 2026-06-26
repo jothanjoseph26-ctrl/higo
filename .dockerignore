@@ -1,0 +1,42 @@
+# Dependencies & build output (rebuilt inside image)
+node_modules
+**/node_modules
+dist
+**/dist
+.nx/cache
+coverage
+test-output
+*.tsbuildinfo
+
+# Git & IDE
+.git
+.github
+.idea
+.vscode
+.cursor
+
+# Environment & secrets (injected at deploy time)
+.env
+.env.*
+!.env.example
+
+# Mobile / web apps not needed for API image
+apps/passenger-app
+apps/driver-app
+apps/admin-dashboard
+apps/admin-dashboard-e2e
+
+# Docs, scripts, local tooling
+terminals
+agent-tools
+*.md
+!apps/api/README.md
+scripts
+
+# Firebase key files
+*-firebase-services-key.json
+hiconnect-firebase-services-key.json
+
+# OS junk
+.DS_Store
+Thumbs.db

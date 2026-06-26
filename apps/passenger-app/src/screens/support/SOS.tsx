@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Alert, ScrollView } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StyleSheet, Text, View, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ScreenShell } from '../../components/ScreenShell';
 import type { EmergencyContact } from '@higo/shared-types';
+import { getEmergencyContacts, setEmergencyContacts } from '../../services/api';
+import { useAuthStore } from '../../stores/authStore';
+import { persistSession } from '../../services/storage';
 
-const SOS_CONTACTS_KEY = '@higo/passenger/sosContacts';
+function padContactSlots(contacts: EmergencyContact[]): EmergencyContact[] {
+  const padded = [...contacts];
+  while (padded.length < 3) {
+    padded.push({ name: '', phone: '', relationship: 'Other' });
+  }
+  return padded.slice(0, 3);
+}
 
 export function SOS() {
   const { t } = useTranslation();
@@ -17,23 +25,19 @@ export function SOS() {
     { name: '', phone: '', relationship: 'Friend' },
     { name: '', phone: '', relationship: 'Other' },
   ]);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     void (async () => {
       try {
-        const saved = await AsyncStorage.getItem(SOS_CONTACTS_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved) as EmergencyContact[];
-          // Pad to ensure exactly 3 slots
-          const padded = [...parsed];
-          while (padded.length < 3) {
-            padded.push({ name: '', phone: '', relationship: 'Other' });
-          }
-          setContacts(padded.slice(0, 3));
-        }
+        const saved = await getEmergencyContacts();
+        setContacts(padContactSlots(saved));
       } catch (e) {
         console.warn('Failed to load emergency contacts', e);
+        Alert.alert('Error', 'Failed to load emergency contacts. Please try again.');
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
@@ -45,12 +49,20 @@ export function SOS() {
   };
 
   const handleSave = async () => {
-    // Filter out contacts with missing details
     const activeContacts = contacts.filter((c) => c.name.trim() !== '' && c.phone.trim() !== '');
-    
+
     setSaving(true);
     try {
-      await AsyncStorage.setItem(SOS_CONTACTS_KEY, JSON.stringify(activeContacts));
+      const saved = await setEmergencyContacts(activeContacts);
+      setContacts(padContactSlots(saved));
+
+      const user = useAuthStore.getState().user;
+      if (user) {
+        const updatedUser = { ...user, emergencyContacts: saved };
+        await persistSession(updatedUser);
+        useAuthStore.setState({ user: updatedUser });
+      }
+
       Alert.alert('Contacts Saved', 'Your emergency contacts have been updated successfully.');
     } catch (e) {
       Alert.alert('Error', 'Failed to save emergency contacts.');
@@ -59,12 +71,23 @@ export function SOS() {
     }
   };
 
+  if (loading) {
+    return (
+      <ScreenShell title={t('trip.sosTitle')} subtitle={t('trip.sosSubtitle')} scroll={false}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primaryGreen} />
+        </View>
+      </ScreenShell>
+    );
+  }
+
   return (
     <ScreenShell title={t('trip.sosTitle')} subtitle={t('trip.sosSubtitle')} scroll={true}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.warningCard}>
           <Text style={styles.warningText}>
-            SOS activations will trigger immediate distress messages containing your live GPS coordinates to these contacts.
+            SOS activations will trigger immediate distress messages containing your live GPS
+            coordinates to these contacts.
           </Text>
         </View>
 
@@ -103,6 +126,12 @@ export function SOS() {
 const styles = StyleSheet.create({
   container: {
     paddingBottom: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: theme.spacing.xl,
   },
   warningCard: {
     backgroundColor: 'rgba(220, 38, 38, 0.08)',

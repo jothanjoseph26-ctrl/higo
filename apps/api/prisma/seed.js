@@ -131,6 +131,93 @@ async function main() {
   } else {
     console.log(`Admin ${adminEmail} already exists, skipping`);
   }
+
+  // 4. Seed test promo code
+  const existingPromo = await prisma.promoCode.findUnique({
+    where: { code: 'WELCOME10' },
+  });
+  if (!existingPromo) {
+    const expiresAt = new Date();
+    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+    await prisma.promoCode.create({
+      data: {
+        code: 'WELCOME10',
+        discountType: 'percent',
+        discountValue: 1000,
+        maxUses: 10000,
+        expiresAt,
+        isActive: true,
+      },
+    });
+    console.log('Seeded promo code WELCOME10 (10% off)');
+  } else {
+    console.log('Promo WELCOME10 already exists, skipping');
+  }
+
+  // 5. Seed platform settings (singleton row)
+  const existingSettings = await prisma.platformSettings.findUnique({
+    where: { id: 'default' },
+  });
+  if (!existingSettings) {
+    await prisma.platformSettings.create({
+      data: {
+        id: 'default',
+        settings: {
+          googleMapsOriginRestriction: false,
+          smsGatewayChannel: 'firebase',
+          maintenanceMode: false,
+          platformCommissionRate: 0.10,
+          surgeEnabled: false,
+        },
+      },
+    });
+    console.log('Seeded platform_settings (default row)');
+  } else {
+    console.log('Platform settings already exist, skipping');
+  }
+
+  // 6. Seed landmark database (Abuja landmarks for HCE)
+  const landmarkCount = await prisma.$queryRaw`SELECT COUNT(*)::int as count FROM landmark_database`;
+  if (landmarkCount[0].count <= 1) {
+    const landmarks = [
+      { name: 'Apo Market', aliases: '["Apo Junction", "Apo Market"]', zone: 'Apo', lat: 9.0020, lng: 7.4830, type: 'market' },
+      { name: 'Galadimawa Roundabout', aliases: '["Galadima", "Galadimawa Junction"]', zone: 'Galadimawa', lat: 9.0250, lng: 7.4500, type: 'junction' },
+      { name: 'Lugbe Under Bridge', aliases: '["Lugbe Bridge", "Lugbe Junction"]', zone: 'Lugbe', lat: 8.9700, lng: 7.3700, type: 'junction' },
+      { name: 'Gwarimpa Estate Gate 1', aliases: '["Gwarimpa Gate", "Gwarimpa Main Gate"]', zone: 'Gwarimpa', lat: 9.1100, lng: 7.4100, type: 'estate_gate' },
+      { name: 'Kubwa Market', aliases: '["Kubwa Junction", "Kubwa"]', zone: 'Kubwa', lat: 9.1300, lng: 7.3900, type: 'market' },
+      { name: 'Nyanya Market', aliases: '["Nyanya Junction", "Nyanya"]', zone: 'Nyanya', lat: 9.0600, lng: 7.5100, type: 'market' },
+      { name: 'Karu Market', aliases: '["Karu Junction"]', zone: 'Karu', lat: 9.0400, lng: 7.5200, type: 'market' },
+      { name: 'Lokogoma Junction', aliases: '["Lokogoma Roundabout"]', zone: 'Lokogoma', lat: 9.0000, lng: 7.4300, type: 'junction' },
+      { name: 'Wuse Market', aliases: '["Wuse Phase 1 Market"]', zone: 'Wuse', lat: 9.0700, lng: 7.4650, type: 'market' },
+      { name: 'Gaduwa Estate', aliases: '["Gaduwa Gate"]', zone: 'Gaduwa', lat: 9.0150, lng: 7.4400, type: 'estate_gate' },
+      { name: 'National Mosque', aliases: '["Abuja National Mosque", "Central Mosque"]', zone: 'Central Area', lat: 9.0600, lng: 7.4900, type: 'mosque' },
+      { name: 'National Hospital', aliases: '["National Hospital Abuja"]', zone: 'Central Area', lat: 9.0550, lng: 7.4850, type: 'hospital' },
+      { name: 'Bwari Junction', aliases: '["Bwari Market"]', zone: 'Bwari', lat: 9.2200, lng: 7.3800, type: 'junction' },
+      { name: 'Dawaki Junction', aliases: '["Dawaki Market"]', zone: 'Dawaki', lat: 9.1400, lng: 7.4000, type: 'junction' },
+    ];
+
+    for (const lm of landmarks) {
+      await prisma.$executeRaw`
+        INSERT INTO landmark_database (id, name, aliases, zone, lat, lng, landmark_type, verified, usage_count, created_at)
+        VALUES (
+          gen_random_uuid(),
+          ${lm.name},
+          ${lm.aliases}::jsonb,
+          ${lm.zone},
+          ${lm.lat},
+          ${lm.lng},
+          ${lm.type},
+          true,
+          0,
+          NOW()
+        )
+      `;
+    }
+    console.log(`Seeded ${landmarks.length} Abuja landmarks`);
+  } else {
+    console.log('Landmark database already has data, skipping');
+  }
 }
 
 main()

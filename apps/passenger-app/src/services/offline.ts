@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import { API_BASE_URL } from '../config';
 import { api } from './api';
 
 const OFFLINE_QUEUE_KEY = '@higo/passenger/offlineQueue';
@@ -10,18 +12,50 @@ interface QueuedRequest {
   attempts: number;
 }
 
+const HEALTH_CHECK_INTERVAL_MS = 15_000;
+
 export class OfflineManager {
   private static isConnected = true;
   private static listeners: Array<(connected: boolean) => void> = [];
+  private static monitorTimer: ReturnType<typeof setInterval> | null = null;
+  private static monitoring = false;
 
   static init(onStatusChange?: (connected: boolean) => void) {
     if (onStatusChange) {
       this.listeners.push(onStatusChange);
     }
-    
-    // Default online. In native, we use @react-native-community/netinfo.
-    // For local fallback, we poll connection or mock.
-    this.isConnected = true;
+
+    if (this.monitoring) return;
+    this.monitoring = true;
+
+    void this.checkConnection();
+
+    this.monitorTimer = setInterval(() => {
+      void this.checkConnection();
+    }, HEALTH_CHECK_INTERVAL_MS);
+  }
+
+  static async checkConnection(): Promise<boolean> {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && !navigator.onLine) {
+      this.setConnectionStatus(false);
+      return false;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5_000);
+      const response = await fetch(`${API_BASE_URL}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      const connected = response.ok;
+      this.setConnectionStatus(connected);
+      return connected;
+    } catch {
+      this.setConnectionStatus(false);
+      return false;
+    }
   }
 
   static setConnectionStatus(connected: boolean) {

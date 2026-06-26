@@ -13,6 +13,11 @@ import Disputes from '../pages/Disputes';
 import ZonesGeofencing from '../pages/ZonesGeofencing';
 import Notifications from '../pages/Notifications';
 import Settings from '../pages/Settings';
+import Promotions from '../pages/Promotions';
+import TransactionLogs from '../pages/TransactionLogs';
+import RefundManagement from '../pages/RefundManagement';
+import ComplaintsInbox from '../pages/ComplaintsInbox';
+import ActiveTrips from '../pages/ActiveTrips';
 import Login from '../pages/Login';
 import Unauthorized from '../pages/Unauthorized';
 
@@ -40,6 +45,10 @@ export const router = createBrowserRouter([
             element: <OperationsMap />,
           },
           {
+            path: '/active-trips',
+            element: <ActiveTrips />,
+          },
+          {
             path: '/drivers',
             element: <DriverManagement />,
           },
@@ -52,8 +61,24 @@ export const router = createBrowserRouter([
             element: <PricingConfig />,
           },
           {
+            path: '/promotions',
+            element: <Promotions />,
+          },
+          {
             path: '/financial-reports',
             element: <FinancialReports />,
+          },
+          {
+            path: '/transaction-logs',
+            element: <TransactionLogs />,
+          },
+          {
+            path: '/refund-management',
+            element: <RefundManagement />,
+          },
+          {
+            path: '/complaints-inbox',
+            element: <ComplaintsInbox />,
           },
           {
             path: '/disputes',

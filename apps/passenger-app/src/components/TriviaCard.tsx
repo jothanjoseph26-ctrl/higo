@@ -45,8 +45,8 @@ export function TriviaCard({ question, onAnswer, onNext }: TriviaCardProps) {
 
       <View style={styles.optionsContainer}>
         {question.options.map((option, idx) => {
-          let optionStyle = styles.optionBtn;
-          let textStyle = styles.optionText;
+          let optionStyle: any = styles.optionBtn;
+          let textStyle: any = styles.optionText;
 
           if (answered) {
             if (idx === question.answerIndex) {

@@ -24,8 +24,12 @@ import {
   DriverTripStartedPayload,
   DriverTripCompletedPayload,
   LatLng,
+  TripMessage,
   TripStatus,
+  TripMessageNewPayload,
 } from '@higo/shared-types';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { Redis } from 'ioredis';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from './presence.service';
@@ -56,7 +60,29 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
     private readonly matchingService: MatchingService,
   ) {}
 
-  afterInit(server: Server): void {
+  afterInit(server: any): void {
+    try {
+      const redisUrl = this.config.getOrThrow<string>('REDIS_URL');
+      const pubClient = new Redis(redisUrl);
+      const subClient = pubClient.duplicate();
+
+      pubClient.on('error', (err) => {
+        this.logger.error('Socket.IO Redis pub client error', err);
+      });
+      subClient.on('error', (err) => {
+        this.logger.error('Socket.IO Redis sub client error', err);
+      });
+
+      if (typeof server.adapter === 'function') {
+        server.adapter(createAdapter(pubClient, subClient));
+        this.logger.log('Socket.IO Redis adapter enabled');
+      } else {
+        this.logger.warn('Socket.IO server.adapter not available — running without Redis adapter');
+      }
+    } catch (err) {
+      this.logger.warn(`Redis adapter setup skipped: ${err instanceof Error ? err.message : err}`);
+    }
+
     server.use(async (socket, next) => {
       try {
         const token =
@@ -301,6 +327,16 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
         pSock.leave(`trip:${payload.tripId}`);
       }
     }
+  }
+
+  emitTripMessageNew(tripId: string, message: TripMessage): void {
+    const payload: TripMessageNewPayload = {
+      tripId,
+      message,
+    };
+    this.server
+      .to(`trip:${tripId}`)
+      .emit(SOCKET_EVENTS.MESSAGE_NEW, payload);
   }
 
   private extractBearer(header?: string): string | undefined {

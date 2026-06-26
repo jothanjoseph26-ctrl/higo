@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View, Pressable, Linking, Image, Alert } from 'react-native';
+import { StyleSheet, Text, View, Pressable, Linking, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { MapView } from '../../components/MapView';
+import { useRouteDirections } from '../../hooks/useRouteDirections';
 import { Button } from '../../components/Button';
 import { useTripStore } from '../../stores/tripStore';
 import { useLocationStore } from '../../stores/locationStore';
@@ -15,13 +16,28 @@ type Props = NativeStackScreenProps<RootStackParamList, 'DriverEnRoute'>;
 export function DriverEnRoute({ navigation }: Props) {
   const { t } = useTranslation();
   const { userLocation } = useLocationStore();
-  const { driverDetails, driverLocation, eta, status } = useTripStore();
+  const { driverDetails, driverLocation, eta, status, tripError, clearTripState } = useTripStore();
+  const routePolyline = useRouteDirections(driverLocation, userLocation);
 
   useEffect(() => {
     if (status === TripStatus.ACTIVE) {
       navigation.replace('TripActive');
     }
   }, [status, navigation]);
+
+  useEffect(() => {
+    if (status === TripStatus.CANCELLED) {
+      Alert.alert('Ride Cancelled', tripError || 'Your trip was cancelled.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            clearTripState();
+            navigation.navigate('Main', { screen: 'HomeTab' });
+          },
+        },
+      ]);
+    }
+  }, [status, tripError, navigation, clearTripState]);
 
   const handleWhatsApp = () => {
     if (!driverDetails?.phone) {
@@ -51,11 +67,14 @@ export function DriverEnRoute({ navigation }: Props) {
       <MapView
         pickup={userLocation}
         driverLocation={driverLocation}
+        routePolyline={routePolyline}
       />
 
       <View style={styles.sheet}>
         <View style={styles.header}>
-          <Text style={styles.title}>{t('trip.driverEnRoute')}</Text>
+          <Text style={styles.title}>
+            {status === TripStatus.EN_ROUTE ? 'Driver has arrived' : t('trip.driverEnRoute')}
+          </Text>
           <Text style={styles.eta}>{t('trip.etaMinutes', { eta: eta ?? 5 })}</Text>
         </View>
 
@@ -66,14 +85,25 @@ export function DriverEnRoute({ navigation }: Props) {
             <Text style={styles.vehicle}>
               {driverDetails?.vehicleColor} {driverDetails?.vehicleModel} · {driverDetails?.vehiclePlate}
             </Text>
-            <Text style={styles.rating}>★ {driverDetails?.rating?.toFixed(1) || '5.0'}</Text>
+            <Text style={styles.rating}>★ {driverDetails?.ratingAvg?.toFixed(1) || '5.0'}</Text>
           </View>
         </View>
 
         <View style={styles.actions}>
           <Button
-            label="💬 Chat on WhatsApp"
+            label="💬 In-App Chat"
+            onPress={() => {
+              const tripId = useTripStore.getState().currentTrip?.id;
+              if (tripId) {
+                navigation.navigate('TripChat', { tripId });
+              }
+            }}
+            style={styles.actionBtn}
+          />
+          <Button
+            label="WhatsApp"
             onPress={handleWhatsApp}
+            variant="outline"
             style={styles.actionBtn}
           />
           <Pressable onPress={handleCall} style={styles.callBtn}>

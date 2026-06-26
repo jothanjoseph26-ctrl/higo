@@ -5,7 +5,6 @@ import { theme } from '../../theme';
 import { Button } from '../../components/Button';
 import { ScreenShell } from '../../components/ScreenShell';
 import { useTripStore } from '../../stores/tripStore';
-import { api } from '../../services/api';
 import { initializePayment, pollPaymentStatus } from '../../services/paystack';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -23,8 +22,9 @@ export function ConfirmRide({ navigation }: Props) {
     isShared,
     estimate,
     setPaymentMethod,
-    setCurrentTrip,
+    setEstimate,
     setStatus,
+    requestTrip,
   } = useTripStore();
 
   const [booking, setBooking] = useState(false);
@@ -48,18 +48,9 @@ export function ConfirmRide({ navigation }: Props) {
         // Request booking pre-allocation or create first to get a trip ID
         // To be safe, we create the trip first or estimate.
         // Let's create the trip request to get the trip ID.
-        const response = await api.requestTrip({
-          pickup: { lat: pickup.lat, lng: pickup.lng },
-          pickupAddress: pickup.address,
-          destination: { lat: destination.lat, lng: destination.lng },
-          destinationAddress: destination.address,
-          vehicleType,
-          paymentMethod,
-          isShared,
-        });
-
+        const response = await requestTrip();
         const trip = response.trip;
-        setCurrentTrip(trip);
+        setEstimate(response.estimate);
 
         // Call Paystack initializer
         const payInit = await initializePayment({
@@ -96,17 +87,8 @@ export function ConfirmRide({ navigation }: Props) {
         );
       } else {
         // Cash payment flow - straight to request creation
-        const response = await api.requestTrip({
-          pickup: { lat: pickup.lat, lng: pickup.lng },
-          pickupAddress: pickup.address,
-          destination: { lat: destination.lat, lng: destination.lng },
-          destinationAddress: destination.address,
-          vehicleType,
-          paymentMethod,
-          isShared,
-        });
-
-        setCurrentTrip(response.trip);
+        const response = await requestTrip();
+        setEstimate(response.estimate);
         setStatus(TripStatus.REQUESTED);
         setBooking(false);
         navigation.navigate('FindingDriver');

@@ -1,7 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, View, Image, ActivityIndicator, Platform } from 'react-native';
+import { StyleSheet, Text, View, Platform } from 'react-native';
 import { theme } from '../theme';
-import type { LatLng } from '@higo/shared-types';
+import type { LatLng, NearbyDriver } from '@higo/shared-types';
 import NativeMapView, { Marker, Polyline } from 'react-native-maps';
 
 interface MapViewProps {
@@ -9,6 +9,20 @@ interface MapViewProps {
   destination?: LatLng | null;
   driverLocation?: LatLng | null;
   driverBearing?: number;
+  routePolyline?: LatLng[];
+  nearbyDrivers?: NearbyDriver[];
+}
+
+function useMapsMock(): boolean {
+  if (Platform.OS === 'web') return true;
+  return process.env.EXPO_PUBLIC_MAPS_MOCK === 'true';
+}
+
+function toMapCoords(points: LatLng[]) {
+  return points.map((point) => ({
+    latitude: point.lat,
+    longitude: point.lng,
+  }));
 }
 
 export function MapView({
@@ -16,8 +30,12 @@ export function MapView({
   destination,
   driverLocation,
   driverBearing = 0,
+  routePolyline,
+  nearbyDrivers = [],
 }: MapViewProps) {
-  const isMock = Platform.OS === 'web';
+  const isMock = useMapsMock();
+  const hasTripRoute = Boolean(pickup && destination);
+  const hasDriverRoute = Boolean(driverLocation && pickup && !hasTripRoute);
 
   if (isMock) {
     return (
@@ -39,18 +57,41 @@ export function MapView({
               🛺 Driver (Keke): {driverLocation.lat.toFixed(4)}, {driverLocation.lng.toFixed(4)} (bearing: {driverBearing}°)
             </Text>
           )}
+          {routePolyline && routePolyline.length >= 2 && (
+            <Text style={styles.mockMarkerText}>
+              Route points: {routePolyline.length}
+            </Text>
+          )}
+          {nearbyDrivers.length > 0 && (
+            <Text style={styles.mockMarkerText}>
+              Nearby drivers: {nearbyDrivers.length}
+            </Text>
+          )}
         </View>
       </View>
     );
   }
 
-  // Center on pickup, driver, or default Abuja
   const initialRegion = {
-    latitude: pickup?.lat ?? 9.0765,
-    longitude: pickup?.lng ?? 7.3986,
+    latitude: pickup?.lat ?? driverLocation?.lat ?? 9.0765,
+    longitude: pickup?.lng ?? driverLocation?.lng ?? 7.3986,
     latitudeDelta: 0.05,
     longitudeDelta: 0.05,
   };
+
+  const tripRouteCoords =
+    routePolyline && routePolyline.length >= 2
+      ? toMapCoords(routePolyline)
+      : pickup && destination
+        ? toMapCoords([pickup, destination])
+        : [];
+
+  const driverRouteCoords =
+    routePolyline && routePolyline.length >= 2
+      ? toMapCoords(routePolyline)
+      : driverLocation && pickup
+        ? toMapCoords([driverLocation, pickup])
+        : [];
 
   return (
     <NativeMapView
@@ -75,6 +116,20 @@ export function MapView({
         />
       )}
 
+      {nearbyDrivers.map((driver) => (
+        <Marker
+          key={driver.id}
+          coordinate={{ latitude: driver.lat, longitude: driver.lng }}
+          title="Nearby Driver"
+          rotation={driver.bearing ?? 0}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          <View style={styles.nearbyKekeMarkerContainer}>
+            <Text style={styles.kekeEmoji}>🛺</Text>
+          </View>
+        </Marker>
+      ))}
+
       {driverLocation && (
         <Marker
           coordinate={{ latitude: driverLocation.lat, longitude: driverLocation.lng }}
@@ -88,23 +143,17 @@ export function MapView({
         </Marker>
       )}
 
-      {pickup && destination && (
+      {hasTripRoute && tripRouteCoords.length >= 2 && (
         <Polyline
-          coordinates={[
-            { latitude: pickup.lat, longitude: pickup.lng },
-            { latitude: destination.lat, longitude: destination.lng },
-          ]}
+          coordinates={tripRouteCoords}
           strokeColor={theme.colors.primaryGreen}
           strokeWidth={4}
         />
       )}
 
-      {driverLocation && pickup && (
+      {hasDriverRoute && driverRouteCoords.length >= 2 && (
         <Polyline
-          coordinates={[
-            { latitude: driverLocation.lat, longitude: driverLocation.lng },
-            { latitude: pickup.lat, longitude: pickup.lng },
-          ]}
+          coordinates={driverRouteCoords}
           strokeColor={theme.colors.accentOrange}
           strokeWidth={3}
           lineDashPattern={[5, 5]}
@@ -160,6 +209,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  nearbyKekeMarkerContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 4,
+    borderWidth: 1.5,
+    borderColor: theme.colors.primaryGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.9,
   },
   kekeEmoji: {
     fontSize: 18,

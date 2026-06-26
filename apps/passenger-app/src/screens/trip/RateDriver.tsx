@@ -7,7 +7,6 @@ import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ScreenShell } from '../../components/ScreenShell';
 import { useTripStore } from '../../stores/tripStore';
-import { api } from '../../services/api';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -15,7 +14,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'RateDriver'>;
 
 export function RateDriver({ navigation }: Props) {
   const { t } = useTranslation();
-  const { currentTrip, clearTripState } = useTripStore();
+  const { currentTrip, clearTripState, rateTrip } = useTripStore();
   
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
@@ -30,7 +29,7 @@ export function RateDriver({ navigation }: Props) {
 
     setSubmitting(true);
     try {
-      await api.rateDriver(currentTrip.id, { rating, comment });
+      await rateTrip(rating, comment);
       Alert.alert('Thank You!', 'Your rating has been recorded successfully.', [
         {
           text: 'Proceed to Home',

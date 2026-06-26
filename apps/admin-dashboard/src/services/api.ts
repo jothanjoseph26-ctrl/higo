@@ -30,8 +30,62 @@ import {
   ReviewKycRequest,
   ReviewKycResponse,
   ApiResponse,
-  PaginationQuery
+  PaginationQuery,
+  AdminListPromosQuery,
+  AdminListPromosResponse,
+  CreatePromoRequest,
+  PromoCode,
+  UpdatePromoRequest,
+  DeletePromoResponse,
+  TransactionEntry,
+  PaymentStatus,
 } from '@higo/shared-types';
+
+export interface RefundEligibleItem {
+  tripId: string;
+  paystackReference: string;
+  totalFare: number;
+  paymentStatus: PaymentStatus;
+  paymentMethod: string | null;
+  passengerId: string;
+  passengerName: string | null;
+  passengerPhone: string;
+  tripStatus: string;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export interface ProcessRefundRequest {
+  reference: string;
+  amount?: number;
+  reason?: string;
+}
+
+export interface ProcessRefundResponse {
+  tripId: string;
+  reference: string;
+  refundReference: string;
+  amount: number;
+  paymentStatus: PaymentStatus;
+}
+
+export interface AdminListTransactionsQuery extends PaginationQuery {
+  type?: TransactionEntry['type'];
+  status?: string;
+}
+
+export interface AdminListComplaintsQuery extends PaginationQuery {
+  status?: string;
+}
+
+export interface PlatformSettings {
+  googleMapsOriginRestriction: string;
+  smsGatewayChannel: 'termii' | 'africastalking';
+  fcmServerKey: string;
+  maintenanceMode: boolean;
+}
+
+export type UpdatePlatformSettingsRequest = Partial<PlatformSettings>;
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
@@ -91,7 +145,7 @@ api.interceptors.response.use(
       !originalRequest._retry &&
       !originalRequest.url?.includes('/auth/refresh') &&
       !originalRequest.url?.includes('/auth/login') &&
-      !originalRequest.url?.includes('/admin/auth/login')
+      !originalRequest.url?.includes('/auth/admin/login')
     ) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -155,11 +209,51 @@ function unwrap<T>(res: { data: ApiResponse<T> }): T {
   return res.data.data;
 }
 
+function offsetFromCursor(cursor?: string): number {
+  if (!cursor) return 0;
+  const parsed = Number.parseInt(cursor, 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function toPaginatedResponse<T>(
+  items: T[],
+  total: number,
+  limit: number,
+  offset: number
+) {
+  const nextOffset = offset + limit;
+  return {
+    items,
+    pageInfo: {
+      nextCursor: nextOffset < total ? String(nextOffset) : null,
+      hasNextPage: nextOffset < total,
+      count: items.length,
+    },
+  };
+}
+
 export const apiService = {
   async login(dto: AdminLoginRequest): Promise<AdminLoginResponse> {
-    const res = await api.post<ApiResponse<AdminLoginResponse>>('/admin/auth/login', dto);
-    // fallback if admin endpoints are not set up on backend yet: try mock or direct auth
-    return unwrap(res);
+    const res = await api.post<ApiResponse<{
+      response?: { accessToken: string; accessTokenExpiresIn?: number };
+      user?: AdminLoginResponse['admin'];
+      admin?: AdminLoginResponse['admin'];
+      accessToken?: string;
+      accessTokenExpiresIn?: number;
+    }>>('/auth/admin/login', dto);
+    const data = unwrap(res);
+    const accessToken = data.response?.accessToken ?? data.accessToken;
+    const admin = data.user ?? data.admin;
+
+    if (!accessToken || !admin) {
+      throw new Error('Invalid login response from server');
+    }
+
+    return {
+      accessToken,
+      accessTokenExpiresIn: data.response?.accessTokenExpiresIn ?? data.accessTokenExpiresIn ?? 0,
+      admin,
+    };
   },
 
   async logout(): Promise<void> {
@@ -173,8 +267,25 @@ export const apiService = {
   },
 
   async getDrivers(query: AdminListDriversQuery): Promise<AdminListDriversResponse> {
-    const res = await api.get<ApiResponse<AdminListDriversResponse>>('/admin/drivers', { params: query });
-    return unwrap(res);
+    const limit = query.limit ?? 10;
+    const offset = offsetFromCursor(query.cursor);
+    const res = await api.get<ApiResponse<{
+      drivers: AdminListDriversResponse['items'];
+      total: number;
+      limit: number;
+      offset: number;
+    }>>('/admin/drivers', {
+      params: {
+        limit,
+        offset,
+        kycStatus: query.kycStatus,
+        isOnline: query.isOnline,
+        isSuspended: query.isSuspended,
+        search: query.search,
+      },
+    });
+    const data = unwrap(res);
+    return toPaginatedResponse(data.drivers, data.total, limit, offset);
   },
 
   async suspendDriver(driverId: string, reason: string): Promise<SuspendDriverResponse> {
@@ -188,8 +299,31 @@ export const apiService = {
   },
 
   async getPassengers(query: AdminListPassengersQuery): Promise<AdminListPassengersResponse> {
-    const res = await api.get<ApiResponse<AdminListPassengersResponse>>('/admin/passengers', { params: query });
-    return unwrap(res);
+    const limit = query.limit ?? 10;
+    const offset = offsetFromCursor(query.cursor);
+    const res = await api.get<ApiResponse<{
+      users: AdminListPassengersResponse['items'];
+      total: number;
+      limit: number;
+      offset: number;
+    }>>('/admin/users', {
+      params: {
+        limit,
+        offset,
+        search: query.search,
+        isBlocked: query.isBlocked,
+      },
+    });
+    const data = unwrap(res);
+    return toPaginatedResponse(data.users, data.total, limit, offset);
+  },
+
+  async blockPassenger(passengerId: string): Promise<void> {
+    await api.put(`/admin/users/${passengerId}/block`);
+  },
+
+  async unblockPassenger(passengerId: string): Promise<void> {
+    await api.put(`/admin/users/${passengerId}/unblock`);
   },
 
   async getLiveTrips(): Promise<GetLiveTripsResponse> {
@@ -198,12 +332,26 @@ export const apiService = {
   },
 
   async getDisputes(query: AdminListDisputesQuery): Promise<AdminListDisputesResponse> {
-    const res = await api.get<ApiResponse<AdminListDisputesResponse>>('/admin/disputes', { params: query });
-    return unwrap(res);
+    const limit = query.limit ?? 10;
+    const offset = offsetFromCursor(query.cursor);
+    const res = await api.get<ApiResponse<{
+      disputes: AdminListDisputesResponse['items'];
+      total: number;
+      limit: number;
+      offset: number;
+    }>>('/admin/disputes', {
+      params: {
+        limit,
+        offset,
+        status: query.status,
+      },
+    });
+    const data = unwrap(res);
+    return toPaginatedResponse(data.disputes, data.total, limit, offset);
   },
 
   async resolveDispute(disputeId: string, dto: ResolveDisputeRequest): Promise<ResolveDisputeResponse> {
-    const res = await api.put<ApiResponse<ResolveDisputeResponse>>(`/admin/disputes/${disputeId}/resolve`, dto);
+    const res = await api.put<ApiResponse<ResolveDisputeResponse>>(`/admin/disputes/${disputeId}`, dto);
     return unwrap(res);
   },
 
@@ -218,7 +366,6 @@ export const apiService = {
   },
 
   async getZones(): Promise<ZoneResponse[]> {
-    // Assuming backend returns a list of zones
     const res = await api.get<ApiResponse<ZoneResponse[]>>('/admin/zones');
     return unwrap(res);
   },
@@ -244,12 +391,119 @@ export const apiService = {
   },
 
   async getNotifications(query: PaginationQuery): Promise<GetNotificationsResponse> {
-    const res = await api.get<ApiResponse<GetNotificationsResponse>>('/admin/notifications', { params: query });
-    return unwrap(res);
+    const limit = query.limit ?? 10;
+    const offset = offsetFromCursor(query.cursor);
+    const res = await api.get<ApiResponse<{
+      notifications: GetNotificationsResponse['items'];
+      total: number;
+      limit: number;
+      offset: number;
+    }>>('/admin/notifications', {
+      params: { limit, offset },
+    });
+    const data = unwrap(res);
+    return toPaginatedResponse(data.notifications, data.total, limit, offset);
   },
 
   async reviewKyc(driverId: string, dto: ReviewKycRequest): Promise<ReviewKycResponse> {
     const res = await api.put<ApiResponse<ReviewKycResponse>>(`/kyc/${driverId}/review`, dto);
     return unwrap(res);
+  },
+
+  async getSettings(): Promise<PlatformSettings> {
+    const res = await api.get<ApiResponse<PlatformSettings>>('/admin/settings');
+    return unwrap(res);
+  },
+
+  async updateSettings(dto: UpdatePlatformSettingsRequest): Promise<PlatformSettings> {
+    const res = await api.put<ApiResponse<PlatformSettings>>('/admin/settings', dto);
+    return unwrap(res);
+  },
+
+  async getPromos(query: AdminListPromosQuery = {}): Promise<AdminListPromosResponse> {
+    const limit = query.limit ?? 50;
+    const offset = offsetFromCursor(query.cursor);
+    const res = await api.get<ApiResponse<{
+      promos: PromoCode[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>>('/admin/promos', { params: { limit, offset } });
+    const data = unwrap(res);
+    return toPaginatedResponse(data.promos, data.total, limit, offset);
+  },
+
+  async createPromo(dto: CreatePromoRequest): Promise<PromoCode> {
+    const res = await api.post<ApiResponse<PromoCode>>('/admin/promos', dto);
+    return unwrap(res);
+  },
+
+  async updatePromo(promoId: string, dto: UpdatePromoRequest): Promise<PromoCode> {
+    const res = await api.put<ApiResponse<PromoCode>>(`/admin/promos/${promoId}`, dto);
+    return unwrap(res);
+  },
+
+  async deletePromo(promoId: string): Promise<DeletePromoResponse> {
+    const res = await api.delete<ApiResponse<DeletePromoResponse>>(`/admin/promos/${promoId}`);
+    return unwrap(res);
+  },
+
+  async getTransactions(query: AdminListTransactionsQuery) {
+    const limit = query.limit ?? 20;
+    const offset = offsetFromCursor(query.cursor);
+    const res = await api.get<ApiResponse<{
+      transactions: TransactionEntry[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>>('/admin/finance/transactions', {
+      params: {
+        limit,
+        offset,
+        type: query.type,
+        status: query.status,
+      },
+    });
+    const data = unwrap(res);
+    return toPaginatedResponse(data.transactions, data.total, limit, offset);
+  },
+
+  async getRefundEligible(query: PaginationQuery = {}) {
+    const limit = query.limit ?? 15;
+    const offset = offsetFromCursor(query.cursor);
+    const res = await api.get<ApiResponse<{
+      items: RefundEligibleItem[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>>('/admin/finance/refunds/eligible', {
+      params: { limit, offset },
+    });
+    const data = unwrap(res);
+    return toPaginatedResponse(data.items, data.total, limit, offset);
+  },
+
+  async processRefund(dto: ProcessRefundRequest): Promise<ProcessRefundResponse> {
+    const res = await api.post<ApiResponse<ProcessRefundResponse>>('/admin/finance/refunds', dto);
+    return unwrap(res);
+  },
+
+  async getComplaints(query: AdminListComplaintsQuery = {}) {
+    const limit = query.limit ?? 10;
+    const offset = offsetFromCursor(query.cursor);
+    const res = await api.get<ApiResponse<{
+      complaints: AdminListDisputesResponse['items'];
+      total: number;
+      limit: number;
+      offset: number;
+    }>>('/admin/finance/complaints', {
+      params: {
+        limit,
+        offset,
+        status: query.status || undefined,
+      },
+    });
+    const data = unwrap(res);
+    return toPaginatedResponse(data.complaints, data.total, limit, offset);
   },
 };

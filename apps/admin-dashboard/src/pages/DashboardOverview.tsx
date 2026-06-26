@@ -21,10 +21,11 @@ import {
   Users,
   ShieldCheck,
   TrendingUp,
-  MapPin,
   AlertTriangle,
   ClipboardList,
   Loader2,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 
 const COLORS = ['#0B6E4F', '#FF7A00', '#0A2540', '#16A34A', '#F59E0B', '#DC2626'];
@@ -32,51 +33,17 @@ const COLORS = ['#0B6E4F', '#FF7A00', '#0A2540', '#16A34A', '#F59E0B', '#DC2626'
 export const DashboardOverview: React.FC = () => {
   const [data, setData] = useState<DashboardOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchOverview = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await apiService.getDashboardOverview();
       setData(res);
-    } catch (err) {
-      console.warn('Backend overview endpoint failed, using mock data for frontend verification:', err);
-      // Fallback Mock Data matching the interface
-      setData({
-        activeTrips: 12,
-        onlineDrivers: 45,
-        totalDriversApproved: 180,
-        totalPassengers: 1240,
-        tripsToday: 154,
-        grossRevenueToday: 24500000, // 245,000 NGN in Kobo
-        platformFeeToday: 1225000,   // 5% commission of 245k = 12,250 NGN in Kobo
-        openDisputes: 3,
-        pendingKyc: 14,
-        tripTrend: [
-          { date: '2026-06-15', trips: 110 },
-          { date: '2026-06-16', trips: 125 },
-          { date: '2026-06-17', trips: 140 },
-          { date: '2026-06-18', trips: 130 },
-          { date: '2026-06-19', trips: 165 },
-          { date: '2026-06-20', trips: 180 },
-          { date: '2026-06-21', trips: 154 },
-        ],
-        earningsTrend: [
-          { date: '2026-06-15', gross: 18000000, fee: 900000 },
-          { date: '2026-06-16', gross: 20000000, fee: 1000000 },
-          { date: '2026-06-17', gross: 22000000, fee: 1100000 },
-          { date: '2026-06-18', gross: 21000000, fee: 1050000 },
-          { date: '2026-06-19', gross: 25000000, fee: 1250000 },
-          { date: '2026-06-20', gross: 28000000, fee: 1400000 },
-          { date: '2026-06-21', gross: 24500000, fee: 1225000 },
-        ],
-        zoneDistribution: [
-          { zoneName: 'Wuse', trips: 45 },
-          { zoneName: 'Utako', trips: 35 },
-          { zoneName: 'Gwarimpa', trips: 30 },
-          { zoneName: 'Lugbe', trips: 24 },
-          { zoneName: 'Apo', trips: 20 },
-        ],
-      });
+    } catch (err: any) {
+      setData(null);
+      setError(err?.message || 'Failed to load dashboard overview.');
     } finally {
       setLoading(false);
     }
@@ -86,10 +53,28 @@ export const DashboardOverview: React.FC = () => {
     fetchOverview();
   }, []);
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
         <Loader2 className="animate-spin text-primaryGreen" size={40} />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[500px] gap-4">
+        <div className="p-4 bg-red-50 border border-red-200 rounded-card text-error text-sm flex items-center gap-2 max-w-md">
+          <AlertCircle size={20} />
+          <span>{error || 'Unable to load dashboard data.'}</span>
+        </div>
+        <button
+          onClick={fetchOverview}
+          className="px-4 py-2 bg-primaryGreen text-white rounded-button text-xs font-semibold hover:bg-opacity-95 flex items-center gap-2"
+        >
+          <RefreshCw size={14} />
+          Retry
+        </button>
       </div>
     );
   }

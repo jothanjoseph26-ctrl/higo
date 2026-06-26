@@ -8,6 +8,7 @@ import { GeoRepository } from './geo.repository';
 import { CtsService, CtsContext } from './cts.service';
 import { TripService } from '../trips/trips.service';
 import { EventsGateway } from '../realtime/events.gateway';
+import { PushService } from '../push/push.service';
 import {
   CompositeTrustScore,
   LatLng,
@@ -29,6 +30,7 @@ export class MatchingService {
     @Inject(forwardRef(() => TripService))
     private readonly tripService: TripService,
     private readonly eventsGateway: EventsGateway,
+    private readonly pushService: PushService,
     @InjectQueue('dispatch')
     private readonly dispatchQueue: Queue,
   ) {}
@@ -144,6 +146,15 @@ export class MatchingService {
       SOCKET_EVENTS.TRIP_NEW_REQUEST,
       payload
     );
+
+    void this.pushService.sendToDriver(nextCandidate.driverId, {
+      title: 'New ride request',
+      body: `Pickup at ${trip.pickupAddress}`,
+      data: {
+        type: 'trip:new_request',
+        tripId,
+      },
+    });
   }
 
   async acceptOffer(driverId: string, tripId: string): Promise<void> {

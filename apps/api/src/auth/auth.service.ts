@@ -17,8 +17,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { SmsService } from '../sms/sms.service';
+import { FirebaseService } from '../firebase/firebase.service';
 import { AppException } from '../common/errors/app.exception';
 import { OtpService } from './otp.service';
+import { VerifyFirebasePhoneDto } from './dto/auth.dto';
 import { mapDriver, mapUser } from './auth.mappers';
 import { JwtPayload } from './jwt.strategy';
 import { AdminLoginDto } from './dto/auth.dto';
@@ -34,6 +36,7 @@ export class AuthService {
     private readonly redis: RedisService,
     private readonly sms: SmsService,
     private readonly otp: OtpService,
+    private readonly firebase: FirebaseService,
   ) {
     this.googleClient = new OAuth2Client(
       config.getOrThrow<string>('GOOGLE_OAUTH_CLIENT_ID'),
@@ -47,17 +50,47 @@ export class AuthService {
     return { sent: true, expiresInSeconds: 300, channel };
   }
 
+  async verifyFirebasePhone(
+    dto: VerifyFirebasePhoneDto,
+  ): Promise<VerifyOtpResponse> {
+    if (!this.firebase.isEnabled()) {
+      throw new AppException(
+        'SERVICE_UNAVAILABLE',
+        undefined,
+        'Firebase authentication is not configured',
+      );
+    }
+
+    const decoded = await this.firebase.verifyIdToken(dto.idToken);
+    const phone = decoded.phone_number;
+    if (!phone) {
+      throw new AppException(
+        'UNAUTHORIZED',
+        undefined,
+        'Firebase token missing phone_number claim',
+      );
+    }
+
+    return this.issueAuthForPhone(phone, dto.userType);
+  }
+
   async verifyOtp(dto: VerifyOtpRequest): Promise<VerifyOtpResponse> {
     await this.otp.verifyOtp(dto.phone, dto.code);
+    return this.issueAuthForPhone(dto.phone, dto.userType);
+  }
 
-    if (dto.userType === 'passenger') {
+  private async issueAuthForPhone(
+    phone: string,
+    userType: 'passenger' | 'driver',
+  ): Promise<VerifyOtpResponse> {
+    if (userType === 'passenger') {
       let user = await this.prisma.user.findUnique({
-        where: { phone: dto.phone },
+        where: { phone },
       });
       const isNewUser = !user;
       if (!user) {
         user = await this.prisma.user.create({
-          data: { phone: dto.phone },
+          data: { phone },
         });
       }
       const tokens = await this.issueTokens({
@@ -72,13 +105,13 @@ export class AuthService {
     }
 
     let driver = await this.prisma.driver.findUnique({
-      where: { phone: dto.phone },
+      where: { phone },
     });
     const isNewUser = !driver;
     if (!driver) {
       driver = await this.prisma.driver.create({
         data: {
-          phone: dto.phone,
+          phone,
           name: 'Driver',
           vehiclePlate: 'PENDING',
         },

@@ -1,8 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { LatLng } from '@higo/shared-types';
 import { useTripStore } from '../../stores/tripStore';
 import { Button } from '../../components/Button';
+import { MapView } from '../../components/MapView';
+import { useRouteDirections } from '../../hooks/useRouteDirections';
 import { ScreenShell } from '../../components/ScreenShell';
 import { theme } from '../../theme';
 import type { DriverMainStackParamList } from '../../navigation/types';
@@ -11,6 +15,40 @@ type Props = NativeStackScreenProps<DriverMainStackParamList, 'Navigation'>;
 
 export function Navigation({ navigation }: Props) {
   const { activeTrip, arriveAtPickup } = useTripStore();
+  const [driverLocation, setDriverLocation] = useState<LatLng | null>(null);
+  const [driverBearing, setDriverBearing] = useState(0);
+  const routePolyline = useRouteDirections(
+    driverLocation,
+    activeTrip?.pickupLocation ?? null,
+  );
+
+  useEffect(() => {
+    let subscription: Location.LocationSubscription | null = null;
+
+    void (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+
+      subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          distanceInterval: 5,
+          timeInterval: 3000,
+        },
+        (loc) => {
+          setDriverLocation({
+            lat: loc.coords.latitude,
+            lng: loc.coords.longitude,
+          });
+          setDriverBearing(loc.coords.heading ?? 0);
+        }
+      );
+    })();
+
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
 
   const handleArrived = async () => {
     if (activeTrip) {
@@ -28,12 +66,20 @@ export function Navigation({ navigation }: Props) {
   }
 
   return (
-    <ScreenShell title="Navigating to Pickup" subtitle="Head towards the pickup location">
-      <View style={styles.mapMock}>
-        <Text style={styles.mapText}>[ Map View Showing Route to Pickup ]</Text>
-        <Text style={styles.gpsCoords}>
-          Target: {activeTrip.pickupLocation?.lat?.toFixed(5)}, {activeTrip.pickupLocation?.lng?.toFixed(5)}
-        </Text>
+    <ScreenShell
+      title="Navigating to Pickup"
+      subtitle="Head towards the pickup location"
+      scroll={false}
+      contentStyle={styles.shell}
+    >
+      <View style={styles.mapContainer}>
+        <MapView
+          pickup={activeTrip.pickupLocation}
+          driverLocation={driverLocation}
+          driverBearing={driverBearing}
+          routePolyline={routePolyline}
+          style={styles.map}
+        />
       </View>
 
       <View style={styles.card}>
@@ -50,25 +96,20 @@ export function Navigation({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  mapMock: {
+  shell: {
+    flex: 1,
+    padding: theme.spacing.lg,
+  },
+  mapContainer: {
     height: 250,
-    backgroundColor: '#E5E7EB',
     borderRadius: theme.radius.card,
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
     marginBottom: theme.spacing.md,
     borderWidth: 1,
     borderColor: '#D1D5DB',
   },
-  mapText: {
-    color: '#4B5563',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  gpsCoords: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 4,
+  map: {
+    ...StyleSheet.absoluteFillObject,
   },
   card: {
     backgroundColor: '#fff',

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCursorTable } from '../hooks/useCursorTable';
-import { apiService, api } from '../services/api';
+import { apiService } from '../services/api';
 import { User } from '@higo/shared-types';
 import DataTable from '../components/DataTable';
 import { useUiStore } from '../stores/uiStore';
@@ -43,16 +43,15 @@ export const PassengerManagement: React.FC = () => {
     if (!window.confirm(`Are you sure you want to ${action} this passenger?`)) return;
 
     try {
-      // Direct call to block endpoint
-      await api.put(`/admin/passengers/${passengerId}/block`, {
-        isBlocked: !currentlyBlocked,
-      });
+      if (currentlyBlocked) {
+        await apiService.unblockPassenger(passengerId);
+      } else {
+        await apiService.blockPassenger(passengerId);
+      }
       addToast(`Passenger successfully ${currentlyBlocked ? 'unblocked' : 'blocked'}`, 'success');
       refresh();
     } catch (err: any) {
-      console.warn('Backend endpoint failed, simulating block state update in frontend:', err);
-      addToast(`Passenger successfully ${currentlyBlocked ? 'unblocked' : 'blocked'}`, 'success');
-      refresh();
+      addToast(err?.message || `Failed to ${action} passenger`, 'error');
     }
   };
 

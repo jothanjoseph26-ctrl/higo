@@ -133,7 +133,11 @@ export class PaymentService {
   /**
    * Refunding a payment transaction reference.
    */
-  async refund(reference: string, amount?: Kobo): Promise<{ refundReference: string }> {
+  async refund(
+    reference: string,
+    amount?: Kobo,
+    options?: { actorId?: string; actorType?: 'passenger' | 'driver' | 'admin' },
+  ): Promise<{ refundReference: string }> {
     const trip = await this.prisma.trip.findUnique({
       where: { paystackReference: reference },
     });
@@ -152,8 +156,8 @@ export class PaymentService {
 
     await this.audit.logEvent({
       action: 'refund.processed',
-      actorId: trip.passengerId,
-      actorType: 'passenger',
+      actorId: options?.actorId ?? trip.passengerId,
+      actorType: options?.actorType ?? 'passenger',
       reference,
       amount: amount || trip.totalFare,
       beforeStatus: trip.paymentStatus,

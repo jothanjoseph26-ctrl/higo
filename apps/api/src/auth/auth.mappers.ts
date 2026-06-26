@@ -16,6 +16,7 @@ export function mapUser(record: PrismaUser): User {
     isVerified: record.isVerified,
     isBlocked: record.isBlocked,
     emergencyContacts: (record.emergencyContacts as User['emergencyContacts']) ?? null,
+    savedPlaces: (record.savedPlaces as User['savedPlaces']) ?? null,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
   };

@@ -93,8 +93,18 @@ export function DriverProfile({ navigation }: { navigation: any }) {
           variant="outline"
         />
         <Button
+          label="⭐ Ratings & Performance"
+          onPress={() => navigation.navigate('RatingsPerformance')}
+          variant="outline"
+        />
+        <Button
           label="📚 Safety & Training Module"
           onPress={() => navigation.navigate('TrainingModule')}
+          variant="outline"
+        />
+        <Button
+          label="📡 Offline Sync Queue"
+          onPress={() => navigation.navigate('OfflineQueueScreen')}
           variant="outline"
         />
         <Button

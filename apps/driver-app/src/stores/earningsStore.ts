@@ -1,23 +1,13 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { EarningEntry, GetEarningsSummaryResponse } from '@higo/shared-types';
 import { api } from '../services/api';
 
 const EARNINGS_CACHE_KEY = '@higo/driver/earnings_summary';
 
-export interface EarningsDaily {
-  date: string;
-  amount: number; // in kobo
-}
-
-export interface EarningsSummary {
-  summary: string; // Pidgin voice summary
-  totals: number; // in kobo
-  daily: EarningsDaily[];
-}
-
 interface EarningsState {
-  summary: EarningsSummary | null;
-  history: any[] | null;
+  summary: GetEarningsSummaryResponse | null;
+  history: EarningEntry[];
   isLoading: boolean;
   error: string | null;
 
@@ -28,20 +18,19 @@ interface EarningsState {
 
 export const useEarningsStore = create<EarningsState>((set) => ({
   summary: null,
-  history: null,
+  history: [],
   isLoading: false,
   error: null,
 
   async fetchSummary() {
     set({ isLoading: true, error: null });
     try {
-      // Load cache first in case of offline / 3G slow load
       const cacheRaw = await AsyncStorage.getItem(EARNINGS_CACHE_KEY);
       if (cacheRaw) {
-        set({ summary: JSON.parse(cacheRaw) });
+        set({ summary: JSON.parse(cacheRaw) as GetEarningsSummaryResponse });
       }
 
-      const response = await api.request<EarningsSummary>({
+      const response = await api.request<GetEarningsSummaryResponse>({
         method: 'GET',
         url: '/payments/earnings/summary',
         params: { date: 'today' },
@@ -49,10 +38,11 @@ export const useEarningsStore = create<EarningsState>((set) => ({
 
       await AsyncStorage.setItem(EARNINGS_CACHE_KEY, JSON.stringify(response));
       set({ summary: response });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to fetch earnings summary:', err);
-      // If we failed but have cached data, don't clear it
-      set({ error: err.message || 'Failed to load earnings summary' });
+      set({
+        error: err instanceof Error ? err.message : 'Failed to load earnings summary',
+      });
     } finally {
       set({ isLoading: false });
     }
@@ -61,16 +51,17 @@ export const useEarningsStore = create<EarningsState>((set) => ({
   async fetchHistory() {
     set({ isLoading: true, error: null });
     try {
-      const response = await api.request<{ earnings: any[] }>({
+      const response = await api.request<{ items: EarningEntry[] }>({
         method: 'GET',
         url: '/payments/earnings',
+        params: { limit: 20 },
       });
-      // Handle response correctly
-      const earningsList = Array.isArray(response) ? response : response.earnings || [];
-      set({ history: earningsList });
-    } catch (err: any) {
+      set({ history: response.items || [] });
+    } catch (err: unknown) {
       console.error('Failed to fetch history:', err);
-      set({ error: err.message || 'Failed to load history' });
+      set({
+        error: err instanceof Error ? err.message : 'Failed to load history',
+      });
     } finally {
       set({ isLoading: false });
     }
@@ -84,9 +75,11 @@ export const useEarningsStore = create<EarningsState>((set) => ({
         url: '/payments/withdraw',
         data: { amount: amountKobo },
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Withdrawal failed:', err);
-      set({ error: err.message || 'Withdrawal failed' });
+      set({
+        error: err instanceof Error ? err.message : 'Withdrawal failed',
+      });
       throw err;
     } finally {
       set({ isLoading: false });

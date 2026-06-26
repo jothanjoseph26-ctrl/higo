@@ -1,0 +1,1285 @@
+---
+## ⚡ OPUS PROMPT — READ THIS FIRST
+
+```
+You are the Lead Architect for the HiGo platform.
+Read this entire brief in full before responding.
+Your first task is to produce TWO artefacts only:
+
+  1. The shared-types package
+     - packages/shared-types/src/domain.types.ts   (all domain entities)
+     - packages/shared-types/src/api.types.ts       (all request/response DTOs)
+     - packages/shared-types/src/socket.types.ts    (all WebSocket event payloads)
+     - packages/shared-types/src/enums.ts           (all enums)
+     - packages/shared-types/src/index.ts           (barrel export)
+
+  2. The complete Prisma schema
+     - apps/api/prisma/schema.prisma
+     - Include ALL tables from the DATABASE SCHEMA section
+     - Use correct PostGIS type: Unsupported("geography(Point,4326)")
+     - Include all relations, indices, and constraints
+     - Include seed data stubs for pricing_config and zones tables
+
+Do NOT produce the ADR, agent instruction files, or any application code yet.
+These two artefacts are reviewed first. Schema errors caught here cost nothing.
+Schema errors caught after 7 agent briefs reference them cost hours.
+```
+
+---
+
+# HIGO ABUJA — MASTER PROJECT BRIEF
+## For: Claude Opus 4.7 / 4.8 — Lead Architect
+## From: Jetech Limited — Project Management Office
+## Date: June 2026  |  Version: 1.1 (Gaps patched: NotificationService ownership + Admin API ownership)
+## Classification: Internal Technical Brief — Confidential
+
+---
+
+## YOUR ROLE
+
+You are the **Lead Software Architect** for the HiGo Abuja ride-hailing platform.  
+Your immediate task is to:
+
+1. Design the **complete technical architecture** for the HiGo platform
+2. Create the **project frame** — repository structure, environment setup, coding standards, shared utilities
+3. Write **precise instructions for 7 concurrent AI coding agents** who will build the platform simultaneously
+4. Ensure every agent has zero ambiguity about their scope, interfaces, and handoff points
+
+You do NOT write application code in this task. You write the architecture, the contracts between agents, and the agent instruction files.
+
+---
+
+## BUSINESS CONTEXT (Critical — Read Every Word)
+
+### The Client
+**Hiconnect Global Services** — a Nigerian technology company building a ride-hailing Super App ecosystem.
+
+### The Product
+**HiGo** — a keke napep (motorised tricycle) ride-hailing app for Abuja, FCT Nigeria.  
+Tagline: *"Moving Abuja Smarter"*  
+Brand: *"Powered by Hiconnect"*
+
+### Why This Matters for Architecture
+- **Nigeria-first design**: offline-capable, low-data, USSD fallback, Nigerian Pidgin/Hausa/Yoruba support
+- **Keke napep specific**: tricycles, not cars — different vehicle types, different zone restrictions
+- **FCTA regulatory compliance**: keke banned in Maitama, Asokoro, Guzape and from expressways — geofencing is NOT optional, it is legally required
+- **Paystack primary payment**: Nigeria's dominant payment processor — not Stripe
+- **Google Maps**: Nigerian road data is on Google Maps, not Mapbox
+- **Phase 1**: Android only. iOS comes in Phase 2 (Option B). Architecture must support both from day one.
+- **This is a module**: HiGo is the Mobility module of the broader Hiconnect Super App. Architecture must support future integration without a rebuild.
+
+### The Ecosystem Roadmap (Architecture Must Accommodate)
+```
+Hiconnect Super App (Future)
+├── HiGo Ride        ← YOU ARE BUILDING THIS NOW
+├── HiGo Delivery    (Phase 3)
+├── HiGo Logistics   (Phase 4)
+├── Hiconnect Services Marketplace  (Separate contract)
+├── Hiconnect Social Feed           (Separate contract)
+└── Hiconnect Pay (Wallet/Fintech)  (Future)
+```
+
+---
+
+## COMPLETE FEATURE SPECIFICATION
+
+### Three Applications in This Build
+
+```
+HiGo Platform
+├── 1. Passenger App (React Native — Android Phase 1, iOS Phase 2)
+├── 2. Driver App    (React Native — Android Phase 1, iOS Phase 2)
+└── 3. Admin Dashboard (React.js Web Application)
+    └── Shared: Backend API (NestJS) + Database (PostgreSQL + PostGIS)
+```
+
+---
+
+### APPLICATION 1: PASSENGER APP — ALL SCREENS
+
+Confirmed from Figma (Dev Ready v2.0):
+
+```
+Authentication Flow:
+- SplashScreen (HiGo logo, green gradient, "Moving Abuja Smarter")
+- Onboarding 1 (Ride Abuja Smarter — illustrated Nigerian woman + keke)
+- Onboarding 2 (Track Every Ride — live map visual)
+- Onboarding 3 (Safety First — SOS shield, verified drivers)
+- Login Screen (email/phone + password, social login: Google, Instagram, TikTok)
+- Sign Up Screen (name, email, phone, password)
+
+Core Booking Flow:
+- Home Screen (map with nearby kekes, "Where to?" search bar, ride type selector)
+- Booking Screen (set pickup + destination, route preview)
+- Ride Options (Keke ₦850, Ride Share ₦450, Car ₦2,400 — price cards)
+- Confirm Ride (fare locked, payment method, confirm button)
+- Finding Driver (animated ripple, driver count, ETA)
+- Driver En Route (live map, driver card: name/rating/photo/plate, Call/Chat/Share Trip)
+- Naija Trivia (entertainment during wait — Nigerian general knowledge quiz, earns HiGo points)
+- Trip Active (live tracking, driver info bar at bottom)
+- Trip Complete / Summary (fare breakdown, payment confirmation)
+- Rate Driver (1-5 stars, quick tags: Fast/Friendly/Clean/Quiet/On time, comment)
+
+Additional Screens:
+- Trip History (date-grouped cards, rebook option)
+- Profile (avatar, stats: trips/rating/HiGo points, account settings)
+- Payment Methods (add card via Paystack, USSD option)
+- Wallet (HiGo points balance, transaction history)
+- SOS Screen (RED full-screen emergency, 3 pre-set contacts + HiGo Safety Team, location share)
+- Notifications
+- Help & FAQ
+- Chat Support (in-app)
+```
+
+**Key Passenger Features:**
+- Phone OTP login (Termii or AfricasTalking SMS gateway)
+- Google SSO
+- Real-time driver tracking on Google Maps
+- Fare estimate before confirmation (no surprises)
+- Ride sharing (split fare with second passenger)
+- Share trip link via WhatsApp (safety feature)
+- SOS: sends GPS + driver details to 3 emergency contacts + HiGo ops
+- Naija Trivia during wait time (earns loyalty points)
+- USSD payment option via Paystack (for users without data)
+- Multilingual AI interface (English primary, Pidgin/Hausa/Yoruba via AI layer)
+- Offline graceful degradation (cached last known location, queue retry)
+
+---
+
+### APPLICATION 2: DRIVER APP — ALL SCREENS
+
+Confirmed from Figma (Driver App, Dev Ready v2.0):
+
+```
+Authentication & Onboarding:
+- Driver Splash (HiGo logo, dark navy variant)
+- Driver Login (email + password, social: Facebook/Instagram/TikTok)
+- KYC Upload Screen (document upload: NIN/licence/vehicle reg/insurance/road worthiness)
+- Document Verification Status (pending/approved/rejected per document)
+- Profile Setup
+
+Core Operations:
+- Go Online / Home (map, large GO ONLINE button, driver location pin)
+- Trip Request Screen (Accept / Decline — 15 second countdown timer)
+  - Shows: Pickup point, Destination, Estimated Payout ₦500, Vehicle Type: Keke
+- Navigation Screen (turn-by-turn, bold direction display, "2 mins | 0.8km")
+  - Shows passenger info: Chidinma K. · to Grand Square
+  - CONFIRM ARRIVAL button
+- Trip Active Screen (route map, passenger details, TRIP ACTIVE status)
+- Trip Complete / Summary
+  - Fare: ₦615 (shown prominently in orange)
+  - Trip details: Fare ₦615, Distance 3.2km, Time 12 min
+  - RATE PASSENGER (stars)
+
+Financial Screens:
+- Earnings Dashboard
+  - Tabs: Daily / Weekly / Monthly
+  - Bar chart showing earnings trend
+  - Stats: Trip Count (210), Payout ₦53,500
+  - Payout Details: Govt Goal ₦55, Total Payout ₦53,640
+  - WITHDRAW button
+- Subscription Screen
+  - Daily Commuter / Weekly Pro / Monthly Pro tabs
+  - Daily: ₦2,500 | Weekly: ₦3,000 | Monthly: ₦3,000
+  - Features list per tier
+  - RENEW button
+
+Profile & Support:
+- Profile (Musa Ibrahim, 4.9★, verified, Keke ABJ-123-XTZ)
+  - Account Settings, Trip History, HiConnect Pay
+  - Direct Emergency button
+- Support Screen
+  - Help Center / FAQs
+  - Chat with Support
+  - Report an Issue
+  - SOS (red button — same emergency system as passenger)
+```
+
+**Key Driver Features:**
+- Offline-first job queue (jobs cached locally, sync when connectivity restored)
+- USSD fallback for trip notifications (SMS if no data)
+- Voice-guided navigation (accessibility for lower literacy)
+- Voice confirmation option ("say YES to accept trip")
+- AI earnings summary in Pidgin at end of day ("Emeka, you do 12 trips today...")
+- Document OCR at upload (AI reads NIN/licence, auto-fills fields)
+- Subscription management (auto-renew via Paystack recurring billing)
+- Training module (short videos, AI-personalised sequence)
+- Geofencing alerts when entering restricted zones (Maitama/Asokoro/expressways)
+
+---
+
+### APPLICATION 3: ADMIN DASHBOARD — ALL SCREENS
+
+Confirmed from Figma (Admin v1.0):
+
+```
+Main Navigation:
+- Dashboard Overview (KPI cards + charts)
+- Operations Map (live)
+- Driver Management
+- Passenger Management
+- Pricing Configuration
+- Financial Reports
+- Disputes
+- Zones / Geofencing
+- Notifications
+- Settings / Global Admin
+
+DASHBOARD OVERVIEW:
+- Active Trips: 2,150 (keke icon)
+- Revenue Today: ₦4,2M
+- Driver Online Status: 410 (Ride)
+- Driver Online Status bar chart (Galadimawa / Apo / Lugbe breakdown)
+- Trip Trends chart (line graph)
+- Quick stats summary
+
+OPERATIONS MAP:
+- Live map showing all active drivers (green dots)
+- Active trips (route lines)
+- Zone overlays (permitted/restricted)
+- Filter panel: Routes / Permits / Traffic / Zones / Others
+- Create Zone button
+- Real-time update (WebSocket)
+
+DRIVER MANAGEMENT:
+- Search + filter (Name / Type / Status / Active / Action)
+- Table: Name | Type | Status | Active | Action | Details
+- Driver rows: Musa Ibrahim (verified/active), etc.
+- Actions: Approve / Suspend / View Profile / Trip History
+- KYC review queue (document preview, approve/reject)
+
+PASSENGER MANAGEMENT:
+- Search + filter (Name / Validatipon / No Inputs / Action)
+- Similar table structure
+- View profile, trip history, block user
+
+PRICING:
+- Base Fare configuration by vehicle type
+  - Keke: ₦100 base | Car: ₦200 base | Ride Share: ₦50
+- Distance (per km) configuration
+- Surge Pricing multiplier table
+  - Time bands (7-9am, 5-7pm etc)
+  - Surge multiplier per zone
+
+FINANCIAL REPORTS:
+- Revenue: ₦4,2M (today's total)
+- Average Trip Value: ₦415
+- Driver Payouts chart
+- Commissions chart (bar chart, trend line)
+- Cash Wallet section
+- Export button
+
+DISPUTES:
+- Table: Name | Type | Passenger | Driver | Resolution | Date | Action
+- Dispute detail panel (overlay)
+  - Overview status, Evidence section
+  - Musa Ibrahim details
+  - Photo evidence upload area
+  - Resolution buttons (Refund / Dismiss / Escalate)
+- Status filters
+
+ZONES / GEOFENCING:
+- Map-based zone editor
+- Zone list (Galadimawa, Abuja City District, Service area)
+- Toggle: Passenger / Connector
+- Zone types: Permitted / Restricted / Surge
+- Draw zone tool
+- Save / Delete zone
+
+NOTIFICATIONS:
+- Driver updates section
+- Stranger updates
+- Emergency alerts
+- Automated trip messages
+- Toggle on/off per category
+- Broadcast message composer
+
+SETTINGS / GLOBAL ADMIN:
+- Account management
+- HiConnect Pay settings
+- API keys (show/hide toggle)
+- Account API onboarding
+```
+
+---
+
+## TECHNICAL STACK — CONFIRMED
+
+```
+Frontend (Mobile):
+  Framework:     React Native (Expo managed workflow)
+  Language:      TypeScript
+  State:         Zustand (lightweight, mobile-performant)
+  Navigation:    React Navigation v6
+  Maps:          react-native-maps + Google Maps SDK
+  HTTP:          Axios with interceptors
+  Storage:       AsyncStorage (offline cache)
+  Push:          Firebase Cloud Messaging (FCM)
+  Payments:      Paystack React Native SDK
+  Animation:     React Native Reanimated 3
+  Forms:         React Hook Form + Zod validation
+  Platform:      Android (Phase 1) + iOS (Phase 2, same codebase)
+
+Frontend (Admin Dashboard):
+  Framework:     React.js 18 + Vite
+  Language:      TypeScript
+  Styling:       TailwindCSS
+  Charts:        Recharts
+  Maps:          Google Maps JS API + @vis.gl/react-google-maps
+  State:         Zustand
+  HTTP:          Axios
+  Forms:         React Hook Form
+
+Backend:
+  Framework:     NestJS (Node.js, TypeScript)
+  Architecture:  Modular monolith (microservices-ready boundaries)
+  API:           REST + WebSocket (Socket.io)
+  Language:      TypeScript
+  Validation:    class-validator + class-transformer
+
+Database:
+  Primary:       PostgreSQL 15 + PostGIS extension (geospatial queries)
+  Cache/Session: Redis
+  ORM:           Prisma
+
+Infrastructure:
+  Cloud:         AWS (EC2 / RDS / ElastiCache / S3 / CloudFront)
+  SMS/OTP:       Termii (Nigerian gateway, primary) + AfricasTalking (fallback)
+  Maps:          Google Maps Platform (Maps, Directions, Geocoding, Distance Matrix)
+  Payments:      Paystack (collect, transfer, recurring billing, escrow)
+  File Storage:  AWS S3 (KYC docs, profile photos, evidence)
+  Email:         SendGrid
+  Push:          Firebase Cloud Messaging
+  Monitoring:    Sentry (errors) + Datadog (performance)
+
+AI/ML Layer:
+  Voice:         Google Speech-to-Text API (Nigerian English, Hausa, Yoruba, Pidgin)
+  Translation:   Google Translate API
+  OCR:           AWS Textract (document auto-fill at KYC upload)
+  Recommendations: Custom logic (Phase 2 — vector search)
+
+DevOps:
+  CI/CD:         GitHub Actions
+  Containers:    Docker + Docker Compose
+  Repo:          Monorepo (Nx or Turborepo)
+  Environments:  dev / staging / production
+```
+
+---
+
+## BRAND & DESIGN TOKENS
+
+```
+Primary Green:    #0B6E4F  (trust, Nigeria, safety)
+Dark Navy:        #0A2540  (technology, enterprise)
+Accent Orange:    #FF7A00  (visibility, action, driver jackets/stickers)
+Light Grey:       #F2F4F7  (backgrounds)
+Dark:             #222222  (text)
+Success:          #16A34A
+Error:            #DC2626
+Warning:          #F59E0B
+
+Typography:       Poppins (Bold 700 / SemiBold 600 / Medium 500 / Regular 400)
+Border Radius:    16px (cards), 12px (inputs), 28px (buttons), 50% (avatars)
+Shadow:           0 4px 24px rgba(10,37,64,0.13)
+
+Logo:             HiGo wordmark — "Hi" in #0A2540 (navy), "Go" in #FF7A00 (orange)
+                  Icon: chat bubble transitioning to forward arrow
+Sub-brand:        "Powered by Hiconnect" in smaller text below logo
+App Icon:         Green rounded square (#0B6E4F) with white HiGo icon
+Tagline:          "Moving Abuja Smarter"
+```
+
+---
+
+## DATABASE SCHEMA — CORE TABLES
+
+```sql
+-- Users (passengers)
+users: id, phone, email, name, avatar_url, fcm_token, preferred_language,
+       higo_points, rating_avg, total_trips, is_verified, is_blocked,
+       emergency_contacts (JSONB), created_at, updated_at
+
+-- Drivers
+drivers: id, user_id (FK), name, phone, email, avatar_url, fcm_token,
+         vehicle_type, vehicle_plate, vehicle_model, vehicle_year, vehicle_color,
+         kyc_status (pending/approved/rejected), kyc_documents (JSONB),
+         rating_avg, total_trips, is_online, is_active, is_suspended,
+         subscription_tier, subscription_expires_at,
+         current_location (GEOGRAPHY POINT), created_at, updated_at
+
+-- Trips
+trips: id, passenger_id (FK), driver_id (FK),
+       pickup_location (GEOGRAPHY POINT), pickup_address,
+       destination_location (GEOGRAPHY POINT), destination_address,
+       route_polyline, distance_km, duration_min,
+       vehicle_type, status (requested/matched/en_route/active/completed/cancelled),
+       base_fare, distance_fare, time_fare, surge_multiplier, total_fare,
+       payment_method, payment_status, paystack_reference,
+       passenger_rating, driver_rating,
+       ride_share_partner_id, is_shared,
+       started_at, completed_at, cancelled_at, created_at
+
+-- Driver Locations (real-time, high write volume)
+driver_locations: id, driver_id (FK), location (GEOGRAPHY POINT),
+                  bearing, speed, accuracy, recorded_at
+
+-- Zones (geofencing)
+zones: id, name, zone_type (permitted/restricted/surge),
+       boundary (GEOGRAPHY POLYGON), surge_multiplier,
+       is_active, created_at
+
+-- Pricing
+pricing_config: id, vehicle_type, base_fare, per_km_fare, per_min_fare,
+                min_fare, currency (NGN), is_active, updated_at
+
+-- Surge Pricing Rules
+surge_rules: id, zone_id (FK), day_of_week, start_time, end_time,
+             multiplier, is_active
+
+-- Subscriptions
+subscriptions: id, driver_id (FK), tier (daily/weekly/monthly),
+               amount, paystack_subscription_code,
+               started_at, expires_at, is_active, auto_renew
+
+-- Disputes
+disputes: id, trip_id (FK), raised_by (passenger/driver/admin),
+          type, description, evidence_urls (JSONB),
+          status (open/investigating/resolved/dismissed),
+          resolution, resolved_by, created_at, updated_at
+
+-- Notifications
+notifications: id, user_id, user_type (passenger/driver),
+               title, body, type, data (JSONB),
+               is_read, sent_at, created_at
+
+-- Admin Users
+admin_users: id, name, email, password_hash, role (super_admin/admin/moderator),
+             is_active, last_login, created_at
+```
+
+---
+
+## THE 7 AGENTS — SCOPE DEFINITION
+
+This is the core of your task. Define these 7 agents so they can work concurrently without conflicts.
+
+### AGENT 1 — BACKEND FOUNDATION
+**Scope:** NestJS project setup + core infrastructure + shared modules
+**Delivers:**
+- Monorepo setup (Nx/Turborepo)
+- NestJS app scaffolding with modular architecture
+- Prisma ORM + PostgreSQL + PostGIS setup and migration
+- Redis connection (ioredis)
+- Authentication module (JWT + refresh tokens + phone OTP via Termii)
+- File upload module (AWS S3 integration)
+- Global exception filter, validation pipes, interceptors
+- Environment configuration (ConfigModule)
+- Swagger API documentation setup
+- Base DTO classes and shared types
+- Health check endpoints
+
+**Delivers to other agents:** AppModule, PrismaService, AuthGuard, S3Service, shared DTOs, environment schema, **NotificationService**
+
+> **NotificationService contract (Agent 1 builds, all others call):**
+> ```typescript
+> class NotificationService {
+>   sendPush(userId: string, title: string, body: string, data?: object): Promise<void>
+>   sendSMS(phone: string, message: string): Promise<void>
+>   sendTripRequest(driverId: string, tripPayload: TripRequestNotification): Promise<void>
+>   sendTripUpdate(passengerId: string, event: TripEvent, data: object): Promise<void>
+>   broadcast(userIds: string[], title: string, body: string): Promise<void>
+> }
+> ```
+> Agent 2 calls `notificationService.sendTripRequest()` — it does NOT import FCM directly.
+> Agent 3 calls `notificationService.sendPush()` for payment confirmations — never Termii directly.
+> Agent 4 calls `notificationService.sendSMS()` for KYC status updates — never Termii directly.
+
+---
+
+### AGENT 2 — REAL-TIME ENGINE & MATCHING
+**Scope:** The core of the ride-hailing product — location, matching, WebSocket
+**Depends on:** Agent 1 (PrismaService, AuthGuard)
+**Delivers:**
+- WebSocket gateway (Socket.io) with authenticated rooms
+  - Rooms: `driver:{id}`, `passenger:{id}`, `trip:{id}`, `admin:ops`
+  - Events: `location:update`, `trip:request`, `trip:accept`, `trip:decline`,
+            `trip:driver_arrived`, `trip:started`, `trip:completed`,
+            `driver:online`, `driver:offline`
+- Driver location ingestion endpoint (POST /drivers/location — high frequency)
+- PostGIS nearest-driver query (finds N nearest available verified drivers within radius)
+- Composite Trust Score algorithm:
+  ```
+  CTS = (referral_proximity × 0.25) +
+        (estate_endorsement × 0.20) +
+        (completion_rate × 0.15) +
+        (recency_activity × 0.10) +
+        (rating_score × 0.10) +
+        (geo_proximity × 0.10) +
+        (verification_tier × 0.05) +
+        (job_volume_signal × 0.05)
+  ```
+- Trip lifecycle state machine (requested → matched → en_route → active → completed)
+- Anti-disintermediation logic (on-platform booking rewards)
+- Surge pricing engine (zone + time band lookup)
+- Geofencing validation (block trips starting/ending in restricted zones)
+- Trip request dispatch with 15-second driver timeout + re-dispatch
+
+**Delivers to other agents:** TripService, MatchingService, WebSocketGateway events specification
+
+---
+
+### AGENT 3 — PAYMENTS & FINANCIAL
+**Scope:** All money flows — Paystack integration, subscriptions, disbursements
+**Depends on:** Agent 1 (PrismaService), Agent 2 (TripService for fare data)
+**Delivers:**
+- Paystack integration module
+  - Collect payment (card/bank transfer/USSD via Paystack)
+  - Paystack webhook handler (verify + process payment events)
+  - Escrow hold (charge passenger at booking, release to driver at completion)
+  - Driver disbursement (Paystack Transfer API to driver's bank account)
+  - Subscription recurring billing (Paystack Subscription API)
+  - Refund management
+- Subscription management service (create, renew, cancel, tier upgrade)
+- Earnings calculation service (gross earnings - platform fee = driver payout)
+- Financial reporting queries (revenue by day/week/month, driver payout reports)
+- Revenue tracking and audit log
+- Webhook security (Paystack signature verification)
+
+**Delivers to other agents:** PaymentService, SubscriptionService, EarningsService
+
+---
+
+### AGENT 4 — KYC, VERIFICATION & COMPLIANCE
+**Scope:** Driver onboarding, document verification, regulatory compliance
+**Depends on:** Agent 1 (S3Service, PrismaService)
+**Delivers:**
+- KYC document upload flow (multipart upload → S3 → metadata stored)
+- Document types: NIN slip, Driver's Licence, Vehicle Registration,
+  Road Worthiness Certificate, Third-Party Insurance
+- AWS Textract integration (OCR: extract name/number from uploaded documents, auto-fill fields)
+- Admin KYC review API (approve/reject per document, per driver)
+- KYC status machine (pending → under_review → approved/rejected)
+- Verification tier assignment (Tier 1/2/3 based on documents submitted)
+- FCTA compliance logging (which zones driver operates in)
+- NDPA data handling (encryption at rest for sensitive documents)
+- Background check webhook stub (for future integration with NIBSS or VeriFind)
+- Driver suspension/reinstatement API
+
+**Delivers to other agents:** KYCService, VerificationStatus types, document URL resolvers
+
+---
+
+### AGENT 5 — PASSENGER APP (React Native)
+**Scope:** Complete passenger mobile application
+**Depends on:** Agent 1 API spec, Agent 2 WebSocket events, Agent 3 Paystack SDK
+**Delivers:**
+All screens listed in APPLICATION 1 section above, with:
+- React Native Expo project setup (TypeScript)
+- Navigation structure (React Navigation: Stack + Tab + Modal)
+- Google Maps integration (react-native-maps)
+- WebSocket client (socket.io-client) with reconnection logic
+- Paystack payment sheet integration
+- FCM push notification handling
+- Offline detection + graceful degradation
+- AsyncStorage caching (last known location, trip in progress)
+- Share trip WhatsApp deep link generation
+- SOS: background location + multi-contact SMS + ops alert
+- Naija Trivia game component (question bank, scoring, HiGo points)
+- Multilingual support (i18next: English/Pidgin/Hausa/Yoruba)
+- Accessibility: large touch targets, screen reader support
+
+**Screen list (exact):** Splash, Onboard1, Onboard2, Onboard3, Login, SignUp,
+Home, Booking, RideOptions, ConfirmRide, FindingDriver, DriverEnRoute,
+NaijaTrivia, TripActive, TripComplete, RateDriver, TripHistory, Profile,
+PaymentMethods, Wallet, SOS, Notifications, HelpFAQ, ChatSupport
+
+---
+
+### AGENT 6 — DRIVER APP (React Native)
+**Scope:** Complete driver mobile application
+**Depends on:** Agent 1 API spec, Agent 2 WebSocket events, Agent 3 subscription SDK
+**Delivers:**
+All screens listed in APPLICATION 2 section above, with:
+- React Native Expo project setup (TypeScript) — SHARED base with Agent 5 where possible
+- Offline-first job queue (NetInfo + queue library)
+- Background location tracking (expo-location background mode)
+- USSD fallback notification (SMS trigger when no data)
+- Voice trip confirmation (expo-speech + Speech-to-Text)
+- AI earnings daily summary (call backend endpoint that generates Pidgin summary)
+- Document OCR feedback UI (show auto-filled fields from Textract)
+- Geofencing alert system (warn when entering restricted zone)
+- Google Maps turn-by-turn navigation integration
+- Subscription payment flow (Paystack recurring)
+- Training module player (video + quiz, AI-sequenced)
+- 15-second countdown timer on trip request screen
+
+**Screen list (exact):** DriverSplash, DriverLogin, KYCUpload, DocumentStatus,
+GoOnlineHome, TripRequest, Navigation, TripActive, TripComplete, RatePassenger,
+EarningsDashboard, Subscription, DriverProfile, Support, DriverSOS,
+TrainingModule, NotificationSettings
+
+---
+
+### AGENT 7 — ADMIN DASHBOARD (React.js)
+**Scope:** Complete web-based admin panel
+**Depends on:** Agent 1 API spec, Agent 2 WebSocket events (live map feed)
+**Delivers:**
+All screens listed in APPLICATION 3 section above, with:
+- React.js + Vite + TypeScript + TailwindCSS project setup
+- Authentication (admin login + JWT session)
+- Protected route middleware (role-based: super_admin/admin/moderator)
+- Real-time operations map (Google Maps JS API + Socket.io live driver dots)
+- Data tables (sortable, filterable, paginated) for drivers/passengers/trips/disputes
+- KYC review interface (document preview lightbox, approve/reject workflow)
+- Recharts integration (revenue charts, trip trends, earnings distribution)
+- Pricing configuration forms (base fare, distance rate, surge rules editor)
+- Zone editor (draw polygon on Google Maps → save as PostGIS geometry)
+- Dispute detail panel with evidence review
+- Notification broadcast composer
+- Financial export (CSV/PDF)
+- Global settings (API keys display, HiConnect Pay config)
+
+---
+
+## AGENT INTERFACE CONTRACTS
+
+### API Endpoints (Agent 1 must define, all other agents consume)
+
+```
+AUTH:
+POST   /auth/send-otp          (phone → Termii SMS)
+POST   /auth/verify-otp        (phone + otp → JWT)
+POST   /auth/google            (Google token → JWT)
+POST   /auth/refresh           (refresh token → new JWT)
+POST   /auth/logout
+
+PASSENGERS:
+GET    /passengers/me
+PUT    /passengers/me
+GET    /passengers/me/trips
+POST   /passengers/emergency-contacts
+
+DRIVERS:
+GET    /drivers/me
+PUT    /drivers/me
+POST   /drivers/location       (HIGH FREQUENCY — lat/lng/bearing/speed)
+PUT    /drivers/online-status  (is_online: boolean)
+GET    /drivers/earnings
+GET    /drivers/earnings/summary (daily AI Pidgin summary)
+
+KYC:
+POST   /kyc/upload             (multipart — document_type + file)
+GET    /kyc/status
+ADMIN: PUT /kyc/:driverId/review (approve/reject per document)
+
+TRIPS:
+POST   /trips/request          (pickup + destination + vehicle_type)
+POST   /trips/:id/cancel
+GET    /trips/:id
+GET    /trips/:id/status
+POST   /trips/:id/rate-driver
+POST   /trips/:id/rate-passenger
+POST   /trips/:id/sos          (trigger emergency)
+
+PAYMENTS:
+POST   /payments/initialize    (Paystack collect)
+POST   /payments/webhook       (Paystack webhook handler)
+POST   /payments/subscription/create
+POST   /payments/subscription/renew
+POST   /payments/withdraw      (driver payout request)
+GET    /payments/transactions
+
+ADMIN (ownership per agent — Agent 7 consumes all):
+
+  Agent 1 owns:
+GET    /admin/dashboard/overview   (aggregates from all modules)
+GET    /admin/passengers           (paginated + filtered)
+POST   /admin/notifications/broadcast
+
+  Agent 2 owns:
+GET    /admin/trips/live           (active trips for operations map)
+POST   /admin/zones                (create geofence zone)
+PUT    /admin/zones/:id
+DELETE /admin/zones/:id
+PUT    /admin/pricing              (fare configuration)
+
+  Agent 3 owns:
+GET    /admin/financial/report     (revenue, payouts, commissions)
+GET    /admin/payments/disputes    (payment-related disputes)
+
+  Agent 4 owns:
+GET    /admin/drivers              (paginated + filtered, with KYC status)
+PUT    /admin/drivers/:id/suspend
+PUT    /admin/drivers/:id/reinstate
+GET    /admin/drivers/:id/kyc      (document review)
+PUT    /admin/drivers/:id/kyc/approve
+PUT    /admin/drivers/:id/kyc/reject
+GET    /admin/disputes             (service quality disputes)
+PUT    /admin/disputes/:id/resolve
+
+WEBSOCKET EVENTS (Socket.io):
+Client → Server:
+  driver:location_update   { lat, lng, bearing, speed }
+  driver:go_online
+  driver:go_offline
+  driver:trip_accept        { tripId }
+  driver:trip_decline       { tripId, reason }
+  driver:arrived_at_pickup  { tripId }
+  driver:trip_started       { tripId }
+  driver:trip_completed     { tripId }
+
+Server → Client:
+  trip:new_request          { tripId, pickup, destination, fare, passengerId }
+  trip:matched              { tripId, driverId, driverDetails, eta }
+  trip:no_drivers_available { tripId }
+  trip:driver_location      { lat, lng, bearing, eta }
+  trip:driver_arrived
+  trip:started
+  trip:completed            { fare, paymentRef }
+  trip:cancelled            { reason }
+  notification:general      { title, body, type }
+```
+
+---
+
+## CRITICAL NIGERIAN MARKET CONSTRAINTS FOR ARCHITECTURE
+
+### 1. Connectivity Resilience
+```
+- Assume 3G connectivity on driver devices in satellite towns
+- All API calls must have retry logic (exponential backoff)
+- Driver app: job queue must survive app restart (AsyncStorage persistence)
+- Passenger app: show cached map tiles, last known driver positions
+- API timeout: 10s max, with meaningful error messages in Pidgin
+- SMS fallback: if FCM fails, send Termii SMS for trip request
+```
+
+### 2. Data Efficiency
+```
+- Driver location updates: compress to {lat, lng, b (bearing)} = 50 bytes/update
+- Location update frequency: every 3 seconds while trip active, every 10s while online/idle
+- Map tiles: cache aggressively (MapType.ROADMAP, Nigerian road network)
+- Image optimization: compress KYC documents to 800KB max before S3 upload
+- API response pagination: max 20 items per page, cursor-based
+```
+
+### 3. Geofencing (LEGALLY REQUIRED)
+```javascript
+// Restricted zones — keke CANNOT operate here
+const RESTRICTED_ZONES = [
+  { name: 'Maitama', type: 'RESTRICTED' },
+  { name: 'Asokoro', type: 'RESTRICTED' },
+  { name: 'Guzape', type: 'RESTRICTED' },
+  { name: 'Ahmadu Bello Way', type: 'EXPRESSWAY_RESTRICTED' },
+  { name: 'Nnamdi Azikiwe Expressway', type: 'EXPRESSWAY_RESTRICTED' },
+  { name: 'Yakubu Gowon Crescent', type: 'EXPRESSWAY_RESTRICTED' },
+];
+
+// Permitted launch zones
+const LAUNCH_ZONES = [
+  'Apo Resettlement', 'Galadimawa', 'Lugbe FHA',
+  'Lokogoma', 'Kuje', 'Gosa', 'Gaduwa', 'Gwarimpa',
+  'Dawaki', 'Kubwa', 'Nyanya', 'Karu'
+];
+
+// Architecture requirement: 
+// - Trip request validation MUST check pickup + destination against zone boundaries
+// - Driver app MUST alert when entering restricted zone
+// - Admin dashboard MUST show zone overlays on operations map
+```
+
+### 4. Payment Architecture (Paystack Nigeria)
+```
+Flow:
+1. Passenger books trip → Paystack.initialize() → charge card/USSD
+2. Payment authorized → held as "pending disbursement"
+3. Trip completes → platform fee deducted → Paystack.transfer() to driver's bank
+4. Driver subscription → Paystack recurring → monthly/weekly/daily auto-charge
+
+Important:
+- Platform commission: 10% (Year 1), 12% (Year 2+)
+- All amounts in kobo (₦1 = 100 kobo) in Paystack API
+- Webhook must be idempotent (Paystack may retry)
+- Driver bank details stored encrypted (AES-256)
+- CBN regulation: platform does NOT hold wallet at this stage (no PSSP licence yet)
+- PSSP licence application planned for Month 12 — architecture must accommodate wallet later
+```
+
+### 5. AI/ML Layer Architecture
+```
+Phase 1 (build now, low complexity):
+- Document OCR: AWS Textract → extract text → validate → auto-fill KYC form
+- Daily earnings summary: NestJS service calls OpenAI/Google → generates Pidgin summary
+- Trivia question bank: static JSON, 200 questions, Nigerian culture/history/geography
+
+Phase 2 (architect stubs now, implement later):
+- Voice commands: Google Speech-to-Text → parse intent → execute
+- Demand prediction: booking frequency time-series → alert drivers
+- AI matching enhancement: provider embedding scores
+- Skill assessment: vision model for driver portfolio photos
+
+Stub pattern: create service interface with placeholder implementation
+  Example: VoiceService.processCommand(audioBuffer) → returns MockCommandResult
+  Real implementation swapped in Phase 2 without breaking contracts
+```
+
+---
+
+## REPOSITORY STRUCTURE
+
+```
+higo-platform/                          ← Monorepo root (Nx)
+├── apps/
+│   ├── passenger-app/                  ← Agent 5
+│   │   ├── src/
+│   │   │   ├── screens/
+│   │   │   ├── components/
+│   │   │   ├── navigation/
+│   │   │   ├── hooks/
+│   │   │   ├── services/
+│   │   │   ├── store/
+│   │   │   └── utils/
+│   │   └── app.json
+│   │
+│   ├── driver-app/                     ← Agent 6
+│   │   └── [same structure as passenger-app]
+│   │
+│   ├── admin-dashboard/                ← Agent 7
+│   │   ├── src/
+│   │   │   ├── pages/
+│   │   │   ├── components/
+│   │   │   ├── hooks/
+│   │   │   ├── services/
+│   │   │   └── store/
+│   │   └── vite.config.ts
+│   │
+│   └── api/                            ← Agents 1, 2, 3, 4
+│       ├── src/
+│       │   ├── modules/
+│       │   │   ├── auth/               ← Agent 1
+│       │   │   ├── drivers/            ← Agent 1 base, Agent 4 KYC
+│       │   │   ├── passengers/         ← Agent 1
+│       │   │   ├── trips/              ← Agent 2
+│       │   │   ├── matching/           ← Agent 2
+│       │   │   ├── realtime/           ← Agent 2 (WebSocket gateway)
+│       │   │   ├── payments/           ← Agent 3
+│       │   │   ├── subscriptions/      ← Agent 3
+│       │   │   ├── kyc/                ← Agent 4
+│       │   │   ├── zones/              ← Agent 2 (geofencing)
+│       │   │   ├── admin/              ← Agent 7 reads, Agent 7 consumes all; each agent owns its own /admin/* routes
+│       │   │   └── notifications/      ← Agent 1 ONLY — Agents 2/3/4 call NotificationService, never FCM/SMS directly
+│       │   ├── common/
+│       │   │   ├── decorators/
+│       │   │   ├── filters/
+│       │   │   ├── guards/
+│       │   │   ├── interceptors/
+│       │   │   └── pipes/
+│       │   ├── prisma/
+│       │   │   ├── schema.prisma
+│       │   │   └── migrations/
+│       │   └── main.ts
+│       └── package.json
+│
+├── packages/
+│   ├── shared-types/                   ← Agent 1 defines, ALL agents import
+│   │   ├── src/
+│   │   │   ├── api.types.ts            (request/response DTOs)
+│   │   │   ├── socket.types.ts         (WebSocket event payloads)
+│   │   │   ├── domain.types.ts         (User, Driver, Trip, etc.)
+│   │   │   └── index.ts
+│   │   └── package.json
+│   │
+│   ├── brand-tokens/                   ← Design system, ALL agents import
+│   │   ├── colors.ts
+│   │   ├── typography.ts
+│   │   ├── spacing.ts
+│   │   └── index.ts
+│   │
+│   └── api-client/                     ← Agent 1 defines, Agents 5/6/7 use
+│       ├── src/
+│       │   ├── http-client.ts          (Axios instance + interceptors)
+│       │   ├── socket-client.ts        (Socket.io client wrapper)
+│       │   └── endpoints/              (typed API call functions)
+│       └── package.json
+│
+├── docker-compose.yml                  (PostgreSQL + Redis + pgAdmin)
+├── nx.json
+├── package.json
+└── .env.example
+```
+
+---
+
+## AGENT STARTUP SEQUENCE (Dependency Order)
+
+```
+Week 1:
+  Agent 1 FIRST → delivers: monorepo, Prisma schema, shared-types, AppModule stubs
+  Agent 1 BLOCKS all others until shared-types package is published
+
+Week 1-2 (after Agent 1 delivers shared-types):
+  Agent 2 → real-time engine (unblocks Agent 5, 6 for WebSocket)
+  Agent 3 → payments (can start Paystack setup independently)
+  Agent 4 → KYC (can start S3 + Textract independently)
+
+Week 2-4 (parallel):
+  Agent 5 → passenger app (uses Agent 1 API spec + Agent 2 socket spec)
+  Agent 6 → driver app (same dependencies as Agent 5)
+  Agent 7 → admin dashboard (uses Agent 1 API spec + Agent 2 socket spec)
+```
+
+---
+
+## YOUR DELIVERABLES (Opus)
+
+```
+1. ARCHITECTURE DECISION RECORD (ADR)
+   - Justify every major tech choice
+   - Document trade-offs considered
+   - Flag anything that needs client confirmation
+
+2. COMPLETE PRISMA SCHEMA
+   - All tables per DATABASE SCHEMA section
+   - Correct PostGIS types (Unsupported("geography(Point,4326)"))
+   - All relations, indices, and constraints
+   - Initial seed data (pricing config, restricted zones)
+
+3. SHARED-TYPES PACKAGE
+   - All TypeScript interfaces for domain entities
+   - All API request/response DTOs
+   - All WebSocket event payload types
+   - Enum definitions (TripStatus, KYCStatus, VehicleType, ZoneType, etc.)
+
+4. AGENT INSTRUCTION FILES (one per agent)
+   - agent-1-backend-foundation.md
+   - agent-2-realtime-matching.md
+   - agent-3-payments-financial.md
+   - agent-4-kyc-verification.md
+   - agent-5-passenger-app.md
+   - agent-6-driver-app.md
+   - agent-7-admin-dashboard.md
+   Each file must contain:
+   a. Agent scope (what you build, what you do NOT build)
+   b. Dependencies (what you need from other agents before starting)
+   c. Interface contracts (what you deliver to other agents)
+   d. File structure (exact files to create)
+   e. Key implementation decisions
+   f. Nigerian market constraints relevant to this agent
+   g. Definition of done (acceptance criteria)
+
+5. MONOREPO SETUP INSTRUCTIONS
+   - Step-by-step environment setup
+   - Required environment variables (.env.example)
+   - Docker Compose for local development
+   - GitHub Actions CI pipeline
+
+6. API CONTRACT DOCUMENT
+   - OpenAPI/Swagger spec for all endpoints
+   - WebSocket event catalogue
+   - Error code catalogue (Nigerian-appropriate error messages)
+```
+
+---
+
+
+
+---
+
+## ADDITIONAL SCHEMA — FROM RISK MITIGATION ANALYSIS
+## (These tables and columns are required. Add to Prisma schema.)
+
+### Additional Tables
+
+```sql
+-- Driver referral programme (Risk 1)
+driver_referrals: id, referrer_driver_id (FK), referred_driver_id (FK),
+  referral_code, status (pending/qualified/rewarded),
+  reward_amount, rewarded_at, created_at
+
+-- Driver feature interest registry (Risk 17 — HiGo Plus stubs)
+driver_feature_interest: id, driver_id (FK),
+  feature_name (loan/insurance/fuel_discount/spare_parts),
+  registered_at
+
+-- Community and union partners (Risk 19)
+community_partners: id, partner_type (union/estate/fm_company/church/corporate/government),
+  name, contact_person, contact_phone, zone_id (FK nullable),
+  status (prospecting/engaged/active/inactive),
+  members_count, drivers_referred INTEGER DEFAULT 0,
+  consumers_referred INTEGER DEFAULT 0,
+  agreement_signed BOOLEAN, notes TEXT,
+  created_at, last_contact_at
+
+-- Customer support tickets (Risk 7)
+support_tickets: id, trip_id (FK nullable), raised_by_user_id, raised_by_type (passenger/driver),
+  category (wrong_fare/driver_rude/passenger_rude/lost_item/driver_late/
+            wrong_location/payment_issue/other),
+  description TEXT, status (open/in_progress/resolved/closed),
+  assigned_to_admin_id, resolution TEXT,
+  created_at, updated_at, resolved_at
+
+-- Fraud event log (Risk 13)
+fraud_events: id, event_type, driver_id (FK nullable), passenger_id (FK nullable),
+  trip_id (FK nullable), severity (low/medium/high/critical),
+  description, metadata JSONB, status (open/investigating/resolved),
+  created_at, resolved_at
+
+-- Passenger fare watch alerts for surge (Risk 10)
+fare_watch_alerts: id, passenger_id (FK), zone_id (FK),
+  target_multiplier DECIMAL DEFAULT 1.0,
+  created_at, triggered_at, expires_at
+
+-- Daily revenue snapshot (Risk 15)
+revenue_daily_summary: date, gross_gmv, platform_commission,
+  subscription_revenue, verification_revenue, cash_fee_collected,
+  cash_fee_outstanding, refunds_issued, net_revenue,
+  active_drivers, completed_trips, avg_trip_value, created_at
+
+-- Regulatory compliance audit log (Risk 11)
+regulatory_audit_log: id, event_type, driver_id (FK nullable),
+  zone_id (FK nullable), description, metadata JSONB,
+  created_at, created_by
+```
+
+### Additional Columns on Existing Tables
+
+```sql
+-- drivers table additions
+ALTER TABLE drivers ADD COLUMN referral_code VARCHAR(20) UNIQUE;
+ALTER TABLE drivers ADD COLUMN fraud_risk_score INTEGER DEFAULT 0;
+ALTER TABLE drivers ADD COLUMN fraud_flags JSONB DEFAULT '[]';
+ALTER TABLE drivers ADD COLUMN device_id VARCHAR(255);
+ALTER TABLE drivers ADD COLUMN device_id_locked BOOLEAN DEFAULT false;
+ALTER TABLE drivers ADD COLUMN composite_score DECIMAL(4,2);
+ALTER TABLE drivers ADD COLUMN punctuality_score DECIMAL(4,2);
+ALTER TABLE drivers ADD COLUMN complaint_rate DECIMAL(4,2);
+ALTER TABLE drivers ADD COLUMN acceptance_rate DECIMAL(4,2);
+ALTER TABLE drivers ADD COLUMN completion_rate DECIMAL(4,2);
+ALTER TABLE drivers ADD COLUMN consecutive_rejections INTEGER DEFAULT 0;
+ALTER TABLE drivers ADD COLUMN fee_owed DECIMAL(10,2) DEFAULT 0;
+ALTER TABLE drivers ADD COLUMN activity_status VARCHAR(20) DEFAULT 'dormant';
+ALTER TABLE drivers ADD COLUMN last_trip_at TIMESTAMP;
+ALTER TABLE drivers ADD COLUMN trips_last_7_days INTEGER DEFAULT 0;
+ALTER TABLE drivers ADD COLUMN subscription_loyalty_months INTEGER DEFAULT 0;
+
+-- trips table additions
+ALTER TABLE trips ADD COLUMN pickup_landmark VARCHAR(255);
+ALTER TABLE trips ADD COLUMN pickup_voice_note_url VARCHAR(500);
+ALTER TABLE trips ADD COLUMN pickup_confirmed_at TIMESTAMP;
+ALTER TABLE trips ADD COLUMN pickup_attempts INTEGER DEFAULT 0;
+ALTER TABLE trips ADD COLUMN actual_pickup_location GEOGRAPHY(POINT,4326);
+ALTER TABLE trips ADD COLUMN payment_method VARCHAR(20) DEFAULT 'card';
+ALTER TABLE trips ADD COLUMN cash_confirmed_by_driver BOOLEAN DEFAULT false;
+ALTER TABLE trips ADD COLUMN cash_confirmed_at TIMESTAMP;
+ALTER TABLE trips ADD COLUMN rejection_reason VARCHAR(100);
+
+-- passengers table additions
+ALTER TABLE passengers ADD COLUMN fraud_risk_level VARCHAR(20) DEFAULT 'normal';
+ALTER TABLE passengers ADD COLUMN refund_request_count INTEGER DEFAULT 0;
+ALTER TABLE passengers ADD COLUMN dispute_rate DECIMAL(4,2) DEFAULT 0;
+```
+
+### Required Cron Jobs (Agent 1 implements all)
+
+```
+DriverActivityJob          → nightly 11:00pm → recalculate activity_status, send re-engagement
+ScoreRecalculationJob      → nightly 12:00am → recalculate composite_score for all drivers
+RevenueSnapshotJob         → nightly 12:30am → write daily summary to revenue_daily_summary
+DriverBonusJob             → Monday 8:00am   → calculate and pay weekly completion bonuses
+CashFeeCollectionJob       → Sunday midnight → collect platform fee on cash rides
+FareWatchJob               → every 5 min     → check surge ended, notify watching passengers
+GoogleMapsUsageJob         → every hour      → monitor Maps API spend, alert if over threshold
+FraudDetectionJob          → every hour      → run all fraud detection rules
+WeeklyKPISummaryJob        → Friday 8:00pm   → generate and email weekly KPI summary to CEO
+```
+
+### 5 Weekly KPIs — Must Be Tracked in Admin Dashboard from Day 1
+
+```
+KPI 1: Driver Active Rate      = Active Drivers (3+ trips/week) / Total Registered
+KPI 2: Ride Completion Rate    = Trips Completed / Trips Requested
+KPI 3: Avg Passenger Wait Time = avg(driver_arrived_at - trip_requested_at) in minutes
+KPI 4: Customer Acquisition Cost = Weekly Marketing Spend / New Registered Passengers
+KPI 5: Cash Burn vs Revenue    = Weekly Operating Costs / Weekly Net Revenue
+```
+
+Agent 7 (Admin Dashboard) must build a dedicated Weekly KPI page showing all 5 metrics
+with green/amber/red status indicators and 12-week historical charts.
+WeeklyKPISummaryJob auto-emails the CEO every Friday at 8pm with plain-English summary
+and any actions required.
+
+
+
+---
+
+## HICONNECT COMMUNICATION ENGINE (HCE) — MANDATORY MODULE
+## This is not optional. Wire into every relevant agent.
+
+### Why This Exists
+70%+ of HiGo's target driver base cannot read English fluently.
+The HCE removes four barriers: reading, writing, language, technology literacy.
+It is HiGo's deepest competitive moat and the shared infrastructure for all future Hiconnect products.
+
+### New NestJS Module: apps/api/src/modules/hce/
+
+```typescript
+// HceService — central entry point all agents call
+class HceService {
+  processVoice(audioBuffer: Buffer, userId: string, userType: 'passenger'|'driver'): Promise<HceResult>
+  translate(text: string, targetLanguage: LanguageCode): Promise<string>
+  speak(text: string, language: LanguageCode, voiceGender?: 'male'|'female'): Promise<string> // returns S3 audio URL
+  resolveLandmark(description: string, zone?: string): Promise<LatLng | null>
+  detectLanguage(input: Buffer | string): Promise<LanguageCode>
+  extractBookingIntent(text: string): Promise<BookingIntent | null>
+}
+
+// Sub-services (all owned by Agent 1 HCE module)
+TranscriptionService   // OpenAI Whisper + Google STT fallback
+TranslationService     // Google Translate + Azure fallback
+TextToSpeechService    // Google TTS Neural2 + pre-recorded fallback clips
+LanguageDetectionService // CLD3 (open source) + Whisper language tag
+LandmarkService        // Abuja landmark DB + Google Geocode fallback
+IntentService          // GPT-4o-mini structured output for booking intent
+```
+
+### HCE API Endpoints (Agent 1 builds, Agents 5/6 call)
+```
+POST /hce/transcribe      audio → {text, language, confidence}
+POST /hce/translate       {text, targetLanguage} → translated string
+POST /hce/speak           {text, language, voiceGender} → audio S3 URL
+POST /hce/voice-booking   audio → {destination, lat, lng, confidence}
+POST /hce/landmark        {description, zone} → {lat, lng} | null
+POST /hce/assistant       driver audio question → audio answer in driver's language
+GET  /hce/phrases/:lang   → pre-translated smart phrase set for driver app
+```
+
+### New HCE Database Tables (add to Prisma schema)
+```sql
+user_language_preferences:
+  user_id, user_type, language_code (en/ha/yo/ig/pcm),
+  voice_gender, auto_readout_enabled, updated_at
+
+landmark_database:
+  id, name, aliases JSONB, zone, lat DECIMAL, lng DECIMAL,
+  landmark_type (junction/building/market/estate_gate/mosque/hospital/other),
+  verified BOOLEAN, usage_count INTEGER, created_at
+
+landmark_resolutions:
+  id, raw_description, resolved_landmark_id (FK), confidence_score,
+  was_correct BOOLEAN, trip_id (FK), created_at
+
+hce_usage_log:
+  id, user_id, service_used, tokens_consumed, cost_usd, duration_ms, created_at
+
+driver_vocabulary:
+  id, driver_id (FK), term, resolved_lat, resolved_lng,
+  usage_count, last_used_at
+```
+
+### Per-Agent HCE Requirements
+
+AGENT 5 (Passenger App):
+  - Microphone button on Home screen search bar → POST /hce/voice-booking
+  - Auto-play incoming chat messages as TTS audio in passenger's language
+  - Language preference screen (one-time setup at registration)
+  - Voice booking: speak destination → AI resolves → booking begins
+
+AGENT 6 (Driver App):
+  - Language detection at registration (speak name → AI detects → app switches language)
+  - OTP digits spoken aloud when received (TTS, no API — pre-recorded)
+  - ALL notifications spoken aloud in driver's language (auto-readout)
+  - Trip request spoken: "New trip. Pickup Apo Market. Fare ₦650. Tap to accept."
+  - Smart Phrase Panel: 7 icon buttons replacing manual typing in chat
+  - Voice navigation: Google Maps + TTS overlay in driver's language
+  - Incoming chat messages auto-read aloud → mic button to voice-reply
+  - Driver AI Assistant: mic FAB → speak question → hear answer in Hausa/Yoruba/etc.
+  - Offline voice commands via Vosk on-device model (no internet required):
+    "Go Online", "Accept Ride", "End Trip", "Call Passenger", "Cancel"
+
+AGENT 7 (Admin Dashboard):
+  - HCE Usage Monitor panel (daily API calls, cost in ₦, cache hit rate)
+  - Language Distribution chart (Hausa/Yoruba/Igbo/Pidgin/English user split)
+  - Abuja Landmark Database manager (map view, usage counts, add/verify/edit)
+  - Translation Quality flag queue
+
+### Phase Delivery
+Phase 1 (Option A — ship at launch):
+  Icon-first driver interface, Smart Phrases, Voice OTP, Auto Message Readout,
+  Language selection at registration, Basic voice-to-message (Whisper + translate)
+
+Phase 2 (Option B — Month 4-6):
+  Live interpretation, Voice navigation, Voice booking, Driver AI assistant,
+  Offline Vosk commands, Landmark AI database (500 seeded landmarks)
+
+Phase 3 (Super App — Month 12+):
+  Full landmark learning, driver vocabulary personalisation, HCE as shared API
+  across all Hiconnect products
+
+### Technology Stack
+| Function | Provider | Monthly Cost (500 trips/day) |
+|---|---|---|
+| Speech-to-Text | OpenAI Whisper | ~$150 |
+| Translation | Google Translate | ~$40 |
+| Text-to-Speech | Google TTS Neural2 | ~$60 |
+| Language Detection | CLD3 (open source) | $0 |
+| Intent Extraction | GPT-4o-mini | ~$30 |
+| Offline STT | Vosk (open source, on-device) | $0 |
+| TOTAL | | ~$280/month (~₦392,000) |
+
+At 500 trips/day platform revenue is ~₦4.5M/month. HCE = 8.7% of revenue. Justified.
+
+
+---
+
+## WHAT OPUS MUST NOT DO
+
+```
+- Do NOT write application code in the architecture phase
+- Do NOT make assumptions about Nigerian regulatory compliance — use what is stated here
+- Do NOT choose Stripe over Paystack — Paystack is non-negotiable
+- Do NOT use Mapbox — Google Maps only (Nigerian road data coverage)
+- Do NOT design for iOS-first — Android Phase 1, architecture supports both
+- Do NOT build a microservices architecture for the MVP — modular monolith only
+- Do NOT skip the shared-types package — it is the contract that enables parallelism
+- Do NOT ignore offline-first requirements — this is Nigeria, not Silicon Valley
+- Do NOT use localStorage or browser storage in the React Native apps
+- Do NOT design the PSSP wallet yet — CBN licence not held, architect a stub only
+```
+
+---
+
+## HANDOFF TO JETECH DEVELOPMENT TEAM
+
+When Opus completes the architecture:
+
+1. Jetech Project Lead reviews Architecture Decision Record
+2. Any deviations from this brief are flagged in a Change Request
+3. Agent instruction files are loaded into 7 separate Claude instances
+4. Each agent begins work in its designated scope simultaneously
+5. Agent 1 completes shared-types first — this is the synchronisation point
+6. Weekly integration tests verify agent outputs are compatible
+
+---
+
+## CONTEXT JETECH HAS THAT OPUS DOES NOT
+
+Opus does not have conversation history. These facts must be restated in every agent brief:
+
+1. The client is Hiconnect Global Services (CEO: Engr. Joseph Jorry)
+2. The MOU reference is JTL/HGS/HGO/001/2026
+3. Option A (Android only, ₦18M) is Phase 1 — but architecture must support iOS from day one
+4. Option B (full platform iOS+Android+premium, ₦34.5M) activates post-launch from revenue
+5. The app is called HiGo (consumer brand). Parent company is Hiconnect Global Services
+6. Infrastructure costs are Hiconnect's responsibility (separate from development cost)
+7. The ₦5M Hiconnect operational capital is NOT development budget — it covers office/ops/marketing
+8. The full Hiconnect Super App (Social + Services + Commerce) is a SEPARATE contract
+9. HiGo is designed as the Mobility module of that future Super App
+10. Abuja launch zones confirmed: Apo, Galadimawa, Lugbe, Lokogoma, Gwarimpa, Kubwa, Nyanya/Karu
+
+---
+
+*End of Master Project Brief*
+*Prepared by: Jetech Limited — Project Management Office*
+*For: Claude Opus 4.7 / 4.8 — Lead Architect*
+*Version: 1.0 | June 2026*

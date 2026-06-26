@@ -9,10 +9,16 @@ import {
   ClientToServerEvents,
   ServerToClientEvents,
   TripStatus,
+  TripMatchedPayload,
+  TripDriverLocationPayload,
+  TripCompletedPayload,
+  TripCancelledPayload,
+  TripNoDriversAvailablePayload,
+  TripMessageNewPayload,
 } from '@higo/shared-types';
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
-let reconnectTimer: any = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let backoffMs = 1000;
 
 export async function connectSocket(): Promise<Socket<ServerToClientEvents, ClientToServerEvents>> {
@@ -26,7 +32,7 @@ export async function connectSocket(): Promise<Socket<ServerToClientEvents, Clie
       token: accessToken ? `Bearer ${accessToken}` : '',
     },
     autoConnect: false,
-    reconnection: false, // We handle reconnection logic manually with exponential backoff
+    reconnection: false,
   });
 
   socket.on('connect', () => {
@@ -35,7 +41,6 @@ export async function connectSocket(): Promise<Socket<ServerToClientEvents, Clie
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
-    // Reconcile trip status on successful connection if there's a active/requested trip
     void reconcileTripStatus();
   });
 
@@ -47,54 +52,76 @@ export async function connectSocket(): Promise<Socket<ServerToClientEvents, Clie
     scheduleReconnection();
   });
 
-  // Handle active trip socket events
-  socket.on(SOCKET_EVENTS.TRIP_MATCHED as any, (payload: any) => {
-    const { tripStore } = require('../stores/tripStore'); // lazy import to prevent circular deps
+  socket.on(SOCKET_EVENTS.TRIP_MATCHED, (payload: TripMatchedPayload) => {
     const store = useTripStore.getState();
     store.setStatus(TripStatus.MATCHED);
     store.setDriverDetails(payload.driverDetails);
     store.setEta(payload.eta);
+    if (store.currentTrip) {
+      store.setCurrentTrip({
+        ...store.currentTrip,
+        status: TripStatus.MATCHED,
+        driverId: payload.driverId,
+      });
+    }
   });
 
-  socket.on(SOCKET_EVENTS.TRIP_DRIVER_LOCATION as any, (payload: any) => {
+  socket.on(SOCKET_EVENTS.TRIP_DRIVER_LOCATION, (payload: TripDriverLocationPayload) => {
     const store = useTripStore.getState();
     store.updateDriverLocation({ lat: payload.lat, lng: payload.lng, bearing: payload.bearing });
     store.setEta(payload.eta);
   });
 
-  socket.on(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED as any, () => {
+  socket.on(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED, () => {
     const store = useTripStore.getState();
-    store.setStatus(TripStatus.EN_ROUTE); // driver arrived at pickup
+    store.setStatus(TripStatus.EN_ROUTE);
   });
 
-  socket.on(SOCKET_EVENTS.TRIP_STARTED as any, () => {
+  socket.on(SOCKET_EVENTS.TRIP_STARTED, () => {
     const store = useTripStore.getState();
     store.setStatus(TripStatus.ACTIVE);
   });
 
-  socket.on(SOCKET_EVENTS.TRIP_COMPLETED as any, (payload: any) => {
+  socket.on(SOCKET_EVENTS.TRIP_COMPLETED, (payload: TripCompletedPayload) => {
     const store = useTripStore.getState();
     store.setStatus(TripStatus.COMPLETED);
     if (store.currentTrip) {
       store.setCurrentTrip({
         ...store.currentTrip,
         status: TripStatus.COMPLETED,
-        fare: payload.fare,
+        totalFare: payload.fare,
       });
     }
   });
 
-  socket.on(SOCKET_EVENTS.TRIP_CANCELLED as any, () => {
+  socket.on(SOCKET_EVENTS.TRIP_CANCELLED, (payload: TripCancelledPayload) => {
     const store = useTripStore.getState();
     store.setStatus(TripStatus.CANCELLED);
+    store.setTripError(
+      payload.reason
+        ? `Trip cancelled: ${payload.reason}`
+        : 'Your trip was cancelled.',
+    );
+    if (store.currentTrip) {
+      store.setCurrentTrip({
+        ...store.currentTrip,
+        status: TripStatus.CANCELLED,
+      });
+    }
   });
 
-  socket.on(SOCKET_EVENTS.TRIP_NO_DRIVERS_AVAILABLE as any, () => {
+  socket.on(SOCKET_EVENTS.TRIP_NO_DRIVERS_AVAILABLE, (_payload: TripNoDriversAvailablePayload) => {
     const store = useTripStore.getState();
-    store.setStatus(null); // Return to booking/retry UI
+    store.setStatus(null);
+    store.setTripError('No drivers available nearby. Please try again later.');
   });
 
-  socket.on(SOCKET_EVENTS.NOTIFICATION_GENERAL as any, (payload: any) => {
+  socket.on(SOCKET_EVENTS.MESSAGE_NEW, (payload: TripMessageNewPayload) => {
+    // TripChat screen subscribes directly; hook kept for future global badge/toast.
+    console.debug('Trip message received', payload.tripId, payload.message.id);
+  });
+
+  socket.on(SOCKET_EVENTS.NOTIFICATION_GENERAL, (payload) => {
     const pushNotification = useNotificationStore.getState().push;
     pushNotification({
       title: payload.title,
@@ -115,7 +142,6 @@ function scheduleReconnection() {
     reconnectTimer = null;
     if (!socket || socket.connected) return;
 
-    // Refresh auth token
     const accessToken = await tokenStorage.getAccessToken();
     if (socket) {
       socket.auth = {
@@ -124,7 +150,6 @@ function scheduleReconnection() {
       socket.connect();
     }
 
-    // Exponential backoff 1s -> 2s -> 4s -> 8s ... up to 30s
     backoffMs = Math.min(backoffMs * 2, 30000);
   }, backoffMs);
 }

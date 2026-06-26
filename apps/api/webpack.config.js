@@ -11,6 +11,8 @@ module.exports = {
     }),
   },
   externalsPresets: { node: true },
+  target: 'node',
+  externals: {},
   module: {
     rules: [
       {
@@ -35,6 +37,9 @@ module.exports = {
       target: 'node',
       compiler: 'tsc',
       main: './src/main.ts',
+      additionalEntryPoints: [
+        { entryName: 'worker', entryPath: './src/worker.ts' },
+      ],
       tsConfig: './tsconfig.app.json',
       assets: ['./src/assets'],
       optimization: false,

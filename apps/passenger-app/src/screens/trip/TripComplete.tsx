@@ -20,7 +20,8 @@ export function TripComplete({ navigation }: Props) {
 
   const getPriceText = () => {
     // Check trip price or estimate
-    const priceKobo = currentTrip?.fare ?? estimate?.totalFare ?? 35000;
+    const priceKobo = currentTrip?.totalFare ?? estimate?.totalFare;
+    if (priceKobo == null) return '—';
     return `₦${(priceKobo / 100).toFixed(2)}`;
   };
 
@@ -46,11 +47,19 @@ export function TripComplete({ navigation }: Props) {
         </View>
       </View>
 
-      <Button
-        label={t('common.continue')}
-        onPress={handleProceed}
-        style={styles.btn}
-      />
+      <View style={styles.actions}>
+        <Button
+          label="View Receipt"
+          variant="outline"
+          onPress={() => navigation.navigate('TripReceipt')}
+          style={styles.btn}
+        />
+        <Button
+          label={t('common.continue')}
+          onPress={handleProceed}
+          style={styles.btn}
+        />
+      </View>
     </ScreenShell>
   );
 }
@@ -119,6 +128,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     width: '100%',
     marginTop: 4,
+  },
+  actions: {
+    width: '100%',
+    gap: theme.spacing.sm,
   },
   btn: {
     width: '100%',

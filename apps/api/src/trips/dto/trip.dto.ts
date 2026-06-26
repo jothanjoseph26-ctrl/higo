@@ -44,6 +44,10 @@ export class RequestTripDto {
   @IsOptional()
   @IsBoolean()
   isShared?: boolean;
+
+  @IsOptional()
+  @IsString()
+  promoCode?: string;
 }
 
 export class CancelTripDto {

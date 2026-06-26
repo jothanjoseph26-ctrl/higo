@@ -1,4 +1,15 @@
 import { AppRegistry } from 'react-native';
 import App from './app/App';
+import { initSentry, SentryRoot } from './services/sentry';
 
-AppRegistry.registerComponent('PassengerApp', () => App);
+initSentry();
+
+function Root() {
+  return (
+    <SentryRoot>
+      <App />
+    </SentryRoot>
+  );
+}
+
+AppRegistry.registerComponent('PassengerApp', () => Root);

@@ -3,6 +3,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { I18nextProvider } from 'react-i18next';
 import { ActivityIndicator, View } from 'react-native';
 import { RootStack } from './navigation/RootStack';
+import { navigationRef } from './navigation/navigationRef';
+import { useSocket } from './hooks/useSocket';
 import i18n, { initI18n } from './i18n';
 import { useQueueStore } from './stores/queueStore';
 import { theme } from './theme';
@@ -10,6 +12,8 @@ import { theme } from './theme';
 export default function App() {
   const [ready, setReady] = useState(false);
   const hydrateQueue = useQueueStore((s) => s.hydrate);
+
+  useSocket();
 
   useEffect(() => {
     void (async () => {
@@ -35,7 +39,7 @@ export default function App() {
 
   return (
     <I18nextProvider i18n={i18n}>
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <RootStack />
       </NavigationContainer>
     </I18nextProvider>

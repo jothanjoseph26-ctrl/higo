@@ -7,19 +7,20 @@ import { TripsModule } from '../trips/trips.module';
 import { MatchingService } from './matching.service';
 import { CtsService } from './cts.service';
 import { GeoRepository } from './geo.repository';
-import { DispatchProcessor } from './dispatch.processor';
+import { PushModule } from '../push/push.module';
 
 @Module({
   imports: [
     PrismaModule,
     RedisModule,
+    PushModule,
     forwardRef(() => TripsModule),
     forwardRef(() => RealtimeModule),
     BullModule.registerQueue({
       name: 'dispatch',
     }),
   ],
-  providers: [GeoRepository, CtsService, MatchingService, DispatchProcessor],
+  providers: [GeoRepository, CtsService, MatchingService],
   exports: [MatchingService, GeoRepository],
 })
 export class MatchingModule {}

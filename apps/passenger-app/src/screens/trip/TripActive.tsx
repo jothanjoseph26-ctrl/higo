@@ -3,10 +3,13 @@ import { StyleSheet, Text, View, Pressable, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { MapView } from '../../components/MapView';
+import { useRouteDirections } from '../../hooks/useRouteDirections';
 import { Button } from '../../components/Button';
 import { useTripStore } from '../../stores/tripStore';
 import { useLocationStore } from '../../stores/locationStore';
 import { startEmergencySosSharing, stopEmergencySosSharing } from '../../services/location';
+import { getEmergencyContacts } from '../../services/api';
+import { useAuthStore } from '../../stores/authStore';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { TripStatus } from '@higo/shared-types';
@@ -16,8 +19,18 @@ type Props = NativeStackScreenProps<RootStackParamList, 'TripActive'>;
 export function TripActive({ navigation }: Props) {
   const { t } = useTranslation();
   const { userLocation } = useLocationStore();
-  const { currentTrip, driverLocation, status, eta } = useTripStore();
-  
+  const { currentTrip, driverLocation, status, eta, tripError, clearTripState } = useTripStore();
+  const pickupLocation = currentTrip?.pickupLocation
+    ? { lat: currentTrip.pickupLocation.lat, lng: currentTrip.pickupLocation.lng }
+    : null;
+  const destinationLocation = currentTrip?.destinationLocation
+    ? {
+        lat: currentTrip.destinationLocation.lat,
+        lng: currentTrip.destinationLocation.lng,
+      }
+    : null;
+  const routePolyline = useRouteDirections(pickupLocation, destinationLocation);
+
   const [sosActive, setSosActive] = useState(false);
 
   useEffect(() => {
@@ -26,6 +39,20 @@ export function TripActive({ navigation }: Props) {
     }
   }, [status, navigation]);
 
+  useEffect(() => {
+    if (status === TripStatus.CANCELLED) {
+      Alert.alert('Ride Cancelled', tripError || 'Your trip was cancelled.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            clearTripState();
+            navigation.navigate('Main', { screen: 'HomeTab' });
+          },
+        },
+      ]);
+    }
+  }, [status, tripError, navigation, clearTripState]);
+
   // Cleanup SOS on unmount
   useEffect(() => {
     return () => {
@@ -33,28 +60,59 @@ export function TripActive({ navigation }: Props) {
     };
   }, []);
 
+  const resolveEmergencyPhones = async (): Promise<string[]> => {
+    const profileContacts = useAuthStore.getState().user?.emergencyContacts;
+    if (profileContacts && profileContacts.length > 0) {
+      return profileContacts.map((c) => c.phone.trim()).filter(Boolean);
+    }
+
+    const contacts = await getEmergencyContacts();
+    return contacts.map((c) => c.phone.trim()).filter(Boolean);
+  };
+
   const handleSosTrigger = () => {
     if (!currentTrip) return;
 
-    Alert.alert(
-      t('trip.sosTitle'),
-      'Are you sure you want to trigger emergency SOS? This will alert our security dispatch and SMS your emergency contacts.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Trigger SOS',
-          style: 'destructive',
-          onPress: () => {
-            setSosActive(true);
-            // Simulate 3 emergency contacts
-            const mockContacts = ['+2348011111111', '+2348022222222', '+2348033333333'];
-            startEmergencySosSharing(currentTrip.id, mockContacts, (loc) => {
-              console.log('Distress GPS ticks published:', loc);
-            });
+    void (async () => {
+      let phones: string[] = [];
+      try {
+        phones = await resolveEmergencyPhones();
+      } catch (e) {
+        console.warn('Failed to load emergency contacts for SOS', e);
+        Alert.alert('Error', 'Could not load emergency contacts. Please try again.');
+        return;
+      }
+
+      if (phones.length === 0) {
+        Alert.alert(
+          'No Emergency Contacts',
+          'Add at least one emergency contact before using SOS.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Add Contacts', onPress: () => navigation.navigate('SOS') },
+          ],
+        );
+        return;
+      }
+
+      Alert.alert(
+        t('trip.sosTitle'),
+        'Are you sure you want to trigger emergency SOS? This will alert our security dispatch and SMS your emergency contacts.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Trigger SOS',
+            style: 'destructive',
+            onPress: () => {
+              setSosActive(true);
+              startEmergencySosSharing(currentTrip.id, phones, (loc) => {
+                console.log('Distress GPS ticks published:', loc);
+              });
+            },
           },
-        },
-      ]
-    );
+        ],
+      );
+    })();
   };
 
   const handleCancelSos = () => {
@@ -66,9 +124,10 @@ export function TripActive({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <MapView
-        pickup={currentTrip?.pickup ? { lat: currentTrip.pickup.lat, lng: currentTrip.pickup.lng } : null}
-        destination={currentTrip?.destination ? { lat: currentTrip.destination.lat, lng: currentTrip.destination.lng } : null}
+        pickup={pickupLocation}
+        destination={destinationLocation}
         driverLocation={driverLocation}
+        routePolyline={routePolyline}
       />
 
       {sosActive ? (
@@ -87,12 +146,24 @@ export function TripActive({ navigation }: Props) {
         </Pressable>
       )}
 
+      <Pressable
+        onPress={() => currentTrip && navigation.navigate('TripChat', { tripId: currentTrip.id })}
+        style={styles.chatButton}
+      >
+        <Text style={styles.chatButtonIcon}>💬</Text>
+      </Pressable>
+
       <View style={styles.sheet}>
         <Text style={styles.activeText}>🛺 {t('trip.tripActive')}</Text>
         <View style={styles.etaContainer}>
           <Text style={styles.etaLabel}>Estimated Time to Destination</Text>
           <Text style={styles.etaValue}>{t('trip.etaMinutes', { eta: eta ?? 8 })}</Text>
         </View>
+        <Button
+          label="Message Driver"
+          onPress={() => currentTrip && navigation.navigate('TripChat', { tripId: currentTrip.id })}
+          style={styles.chatBtn}
+        />
       </View>
     </View>
   );
@@ -102,6 +173,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  chatButton: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  chatButtonIcon: {
+    fontSize: 22,
+  },
+  chatBtn: {
+    marginTop: theme.spacing.md,
+    width: '100%',
   },
   sosButton: {
     position: 'absolute',

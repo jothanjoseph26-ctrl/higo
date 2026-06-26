@@ -4,9 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { TriviaCard, TriviaQuestion } from '../../components/TriviaCard';
 import { Button } from '../../components/Button';
+import { CancellationFeeModal } from '../../components/CancellationFeeModal';
 import { ScreenShell } from '../../components/ScreenShell';
 import { useTripStore } from '../../stores/tripStore';
-import { api } from '../../services/api';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { TripStatus } from '@higo/shared-types';
@@ -15,10 +15,21 @@ type Props = NativeStackScreenProps<RootStackParamList, 'FindingDriver'>;
 
 export function FindingDriver({ navigation }: Props) {
   const { t } = useTranslation();
-  const { currentTrip, status, pointsEarned, addTriviaPoints, setStatus, setCurrentTrip } = useTripStore();
+  const {
+    currentTrip,
+    status,
+    pointsEarned,
+    addTriviaPoints,
+    cancelTrip,
+    clearTripState,
+    tripError,
+    clearTripError,
+  } = useTripStore();
   
   const [questions, setQuestions] = useState<TriviaQuestion[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   // Load and shuffle questions on mount
   useEffect(() => {
@@ -43,6 +54,21 @@ export function FindingDriver({ navigation }: Props) {
     }
   }, [status, navigation]);
 
+  useEffect(() => {
+    if (!status && tripError) {
+      Alert.alert('No Drivers Found', tripError, [
+        {
+          text: 'Try Again',
+          onPress: () => {
+            clearTripError();
+            clearTripState();
+            navigation.navigate('Main', { screen: 'HomeTab' });
+          },
+        },
+      ]);
+    }
+  }, [status, tripError, navigation, clearTripError, clearTripState]);
+
   const handleAnswer = async (correct: boolean) => {
     if (correct) {
       await addTriviaPoints(5);
@@ -64,24 +90,24 @@ export function FindingDriver({ navigation }: Props) {
     }
   };
 
-  const handleCancelBooking = async () => {
+  const handleCancelBooking = () => {
     if (!currentTrip) return;
-    Alert.alert('Cancel Ride', 'Are you sure you want to cancel this request?', [
-      { text: 'No', style: 'cancel' },
-      {
-        text: 'Yes, Cancel',
-        onPress: async () => {
-          try {
-            await api.cancelTrip(currentTrip.id, { reason: 'Passenger cancelled during search' });
-            setStatus(null);
-            setCurrentTrip(null);
-            navigation.navigate('Main', { screen: 'HomeTab' });
-          } catch (e: any) {
-            Alert.alert('Cancellation Failed', e.message || 'Unable to cancel trip.');
-          }
-        },
-      },
-    ]);
+    setShowCancelModal(true);
+  };
+
+  const confirmCancelBooking = async () => {
+    try {
+      setCancelling(true);
+      await cancelTrip('Passenger cancelled during search');
+      clearTripState();
+      setShowCancelModal(false);
+      navigation.navigate('Main', { screen: 'HomeTab' });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unable to cancel trip.';
+      Alert.alert('Cancellation Failed', message);
+    } finally {
+      setCancelling(false);
+    }
   };
 
   return (
@@ -107,6 +133,13 @@ export function FindingDriver({ navigation }: Props) {
         onPress={handleCancelBooking}
         variant="outline"
         style={styles.cancelBtn}
+      />
+
+      <CancellationFeeModal
+        visible={showCancelModal}
+        onConfirm={() => void confirmCancelBooking()}
+        onDismiss={() => setShowCancelModal(false)}
+        loading={cancelling}
       />
     </ScreenShell>
   );

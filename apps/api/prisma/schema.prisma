@@ -112,6 +112,156 @@ enum VerificationTier {
   tier_3 // all 5 documents approved
 }
 
+enum PromoDiscountType {
+  percent // discountValue in basis points (1000 = 10%)
+  fixed   // discountValue in kobo
+}
+
+enum ConversationType {
+  trip
+  support
+}
+
+enum MessageSenderType {
+  passenger
+  driver
+  admin
+}
+
+// --- Risk mitigation enums ---
+
+enum ReferralStatus {
+  pending
+  qualified
+  rewarded
+}
+
+enum DriverFeatureName {
+  loan
+  insurance
+  fuel_discount
+  spare_parts
+}
+
+enum PartnerType {
+  union
+  estate
+  fm_company
+  church
+  corporate
+  government
+}
+
+enum PartnerStatus {
+  prospecting
+  engaged
+  active
+  inactive
+}
+
+enum SupportTicketCategory {
+  wrong_fare
+  driver_rude
+  passenger_rude
+  lost_item
+  driver_late
+  wrong_location
+  payment_issue
+  other
+}
+
+enum SupportTicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum FraudEventType {
+  gps_spoofing
+  fare_manipulation
+  fake_trip
+  payment_fraud
+  account_sharing
+  refund_abuse
+  device_multiple_accounts
+  other
+}
+
+enum FraudSeverity {
+  low
+  medium
+  high
+  critical
+}
+
+enum FraudEventStatus {
+  open
+  investigating
+  resolved
+}
+
+enum ActivityStatus {
+  dormant
+  occasional
+  active
+  power
+}
+
+// --- HCE enums ---
+
+enum LanguageCode {
+  en
+  ha
+  yo
+  ig
+  pcm
+}
+
+enum LandmarkType {
+  junction
+  building
+  market
+  estate_gate
+  mosque
+  hospital
+  school
+  other
+}
+
+enum ComplianceEventType {
+  zone_entry
+  zone_exit
+  restricted_zone_violation
+  document_check
+  fine_issued
+  suspension
+  reinstatement
+  other
+}
+
+enum NotificationType {
+  trip
+  payment
+  kyc
+  promo
+  system
+  broadcast
+  sos
+  subscription
+  fraud_alert
+}
+
+enum HceService {
+  transcribe
+  translate
+  speak
+  voice_booking
+  landmark
+  assistant
+  intent_extract
+}
+
 // ============================================================================
 // USERS (passengers)
 // ============================================================================
@@ -130,6 +280,13 @@ model User {
   isVerified         Boolean  @default(false) @map("is_verified")
   isBlocked          Boolean  @default(false) @map("is_blocked")
   emergencyContacts  Json?    @map("emergency_contacts") @db.JsonB // [{name, phone, relationship}]
+  savedPlaces        Json?    @map("saved_places") @db.JsonB // [{label, address, lat, lng}]
+
+  // Risk mitigation: fraud (Risk 13)
+  fraudRiskLevel     String   @default("normal") @map("fraud_risk_level") // normal | elevated | high
+  refundRequestCount Int      @default(0) @map("refund_request_count")
+  disputeRate        Decimal  @default(0) @map("dispute_rate") @db.Decimal(4, 2)
+
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
@@ -137,10 +294,17 @@ model User {
   driverProfile      Driver?
   tripsAsPassenger   Trip[]          @relation("PassengerTrips")
   notifications      Notification[]  @relation("UserNotifications")
+  conversations      Conversation[]  @relation("PassengerConversations")
+  supportTickets     SupportTicket[] @relation("SupportTickets")
+  fraudEvents        FraudEvent[]    @relation("PassengerFraudEvents")
+  fareWatchAlerts    FareWatchAlert[] @relation("FareWatchAlerts")
+  languagePreference UserLanguagePreference?
+  hceUsageLogs       HceUsageLog[]   @relation("HceUsageLogs")
 
   @@index([phone])
   @@index([email])
   @@index([isBlocked])
+  @@index([fraudRiskLevel])
   @@map("users")
 }
 
@@ -187,17 +351,58 @@ model Driver {
   // PostGIS — write/read via raw SQL only. ST_SetSRID(ST_MakePoint(lng,lat),4326)::geography
   currentLocation       Unsupported("geography(Point,4326)")? @map("current_location")
 
-  createdAt             DateTime          @default(now()) @map("created_at")
-  updatedAt             DateTime          @updatedAt @map("updated_at")
+  // Risk mitigation: referral (Risk 1)
+  referralCode          String?          @unique @map("referral_code")
 
-  user                  User?             @relation(fields: [userId], references: [id])
-  tripsAsDriver         Trip[]            @relation("DriverTrips")
-  locationHistory       DriverLocation[]  @relation("DriverLocationHistory")
-  subscriptions         Subscription[]    @relation("DriverSubscriptions")
+  // Risk mitigation: fraud (Risk 13)
+  fraudRiskScore        Int              @default(0) @map("fraud_risk_score")
+  fraudFlags            Json?            @default("[]") @map("fraud_flags") @db.JsonB
+
+  // Device fingerprinting (Risk 13)
+  deviceId              String?          @map("device_id")
+  deviceIdLocked        Boolean          @default(false) @map("device_id_locked")
+
+  // Composite Trust Score components (Agent 2 matching engine)
+  compositeScore        Decimal?         @map("composite_score") @db.Decimal(4, 2)
+  punctualityScore      Decimal?         @map("punctuality_score") @db.Decimal(4, 2)
+  complaintRate         Decimal?         @map("complaint_rate") @db.Decimal(4, 2)
+  acceptanceRate        Decimal?         @map("acceptance_rate") @db.Decimal(4, 2)
+  completionRate        Decimal?         @map("completion_rate") @db.Decimal(4, 2)
+  consecutiveRejections Int              @default(0) @map("consecutive_rejections")
+
+  // Financial
+  feeOwed               Decimal          @default(0) @map("fee_owed") @db.Decimal(10, 2)
+
+  // Activity tracking (recalculated nightly by DriverActivityJob)
+  activityStatus        String           @default("dormant") @map("activity_status") // ActivityStatus enum value
+  lastTripAt            DateTime?        @map("last_trip_at")
+  tripsLast7Days        Int              @default(0) @map("trips_last_7_days")
+
+  // Subscription loyalty
+  subscriptionLoyaltyMonths Int          @default(0) @map("subscription_loyalty_months")
+
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+
+  user                  User?            @relation(fields: [userId], references: [id])
+  tripsAsDriver         Trip[]           @relation("DriverTrips")
+  locationHistory       DriverLocation[] @relation("DriverLocationHistory")
+  subscriptions         Subscription[]   @relation("DriverSubscriptions")
+  conversations         Conversation[]   @relation("DriverConversations")
+  referralsGiven        DriverReferral[] @relation("ReferrerDriver")
+  referralsReceived     DriverReferral[] @relation("ReferredDriver")
+  featureInterests      DriverFeatureInterest[] @relation("DriverFeatureInterests")
+  supportTickets        SupportTicket[]  @relation("AssignedSupportTickets")
+  fraudEvents           FraudEvent[]     @relation("DriverFraudEvents")
+  driverVocabulary      DriverVocabulary[] @relation("DriverVocabulary")
+  regulatoryAuditLogs   RegulatoryAuditLog[] @relation("RegulatoryAuditDriver")
 
   @@index([kycStatus])
   @@index([isSuspended])
   @@index([subscriptionExpiresAt])
+  @@index([referralCode])
+  @@index([activityStatus])
+  @@index([fraudRiskScore])
   // GiST index on (is_online, current_location) for nearest-driver search must be
   // added via raw SQL migration:
   //   CREATE INDEX idx_drivers_online_location ON drivers USING GIST (current_location)
@@ -248,11 +453,33 @@ model Trip {
   completedAt          DateTime?   @map("completed_at")
   cancelledAt          DateTime?   @map("cancelled_at")
   cancelReason         String?     @map("cancel_reason")
+
+  // Pickup enrichment (Risk 10 — pickup accuracy)
+  pickupLandmark       String?     @map("pickup_landmark")
+  pickupVoiceNoteUrl   String?     @map("pickup_voice_note_url") @db.VarChar(500)
+  pickupConfirmedAt    DateTime?   @map("pickup_confirmed_at")
+  pickupAttempts       Int         @default(0) @map("pickup_attempts")
+
+  // Actual pickup (may differ from requested)
+  actualPickupLocation Unsupported("geography(Point,4326)")? @map("actual_pickup_location")
+
+  // Cash confirmation (anti-fraud)
+  cashConfirmedByDriver Boolean   @default(false) @map("cash_confirmed_by_driver")
+  cashConfirmedAt      DateTime?  @map("cash_confirmed_at")
+
+  // Driver rejection tracking
+  rejectionReason      String?     @map("rejection_reason") @db.VarChar(100)
+
   createdAt            DateTime    @default(now()) @map("created_at")
 
   passenger            User        @relation("PassengerTrips", fields: [passengerId], references: [id])
   driver               Driver?     @relation("DriverTrips", fields: [driverId], references: [id])
-  disputes             Dispute[]   @relation("TripDisputes")
+  disputes             Dispute[]       @relation("TripDisputes")
+  conversation         Conversation?   @relation("TripConversation")
+  supportTickets       SupportTicket[] @relation("TripSupportTickets")
+  fraudEvents          FraudEvent[]    @relation("TripFraudEvents")
+  fareWatchAlerts      FareWatchAlert[] @relation("TripFareWatchAlerts")
+  landmarkResolutions  LandmarkResolution[] @relation("TripLandmarkResolutions")
 
   @@index([status])
   @@index([passengerId])
@@ -304,6 +531,9 @@ model Zone {
   createdAt       DateTime @default(now()) @map("created_at")
 
   surgeRules      SurgeRule[] @relation("ZoneSurgeRules")
+  communityPartners CommunityPartner[] @relation("ZoneCommunityPartners")
+  fareWatchAlerts FareWatchAlert[] @relation("ZoneFareWatchAlerts")
+  regulatoryAuditLogs RegulatoryAuditLog[] @relation("ZoneRegulatoryAudit")
 
   @@index([zoneType])
   @@index([isActive])
@@ -416,7 +646,7 @@ model Notification {
   userType  UserType @map("user_type") // passenger | driver
   title     String
   body      String
-  type      String   // trip | payment | kyc | promo | system | broadcast
+  type      String   // NotificationType enum value: trip | payment | kyc | promo | system | broadcast | sos | subscription | fraud_alert
   data      Json?    @db.JsonB
   isRead    Boolean  @default(false) @map("is_read")
   sentAt    DateTime? @map("sent_at")
@@ -493,3 +723,383 @@ model ComplianceAudit {
   @@map("compliance_audit_logs")
 }
 
+// ============================================================================
+// PLATFORM SETTINGS (singleton JSON blob)
+// ============================================================================
+
+model PlatformSettings {
+  id        String   @id @default("default")
+  settings  Json     @db.JsonB // { googleMapsOriginRestriction, smsGatewayChannel, fcmServerKey, maintenanceMode }
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // MIGRATION NOTE: run `pnpm prisma migrate dev --name add_platform_settings`
+  // from apps/api. Seeds one row with id='default' and default integration values.
+  @@map("platform_settings")
+}
+
+// ============================================================================
+// PROMO CODES
+// ============================================================================
+
+model PromoCode {
+  id            String            @id @default(uuid()) @db.Uuid
+  code          String            @unique
+  discountType  PromoDiscountType @map("discount_type")
+  discountValue Int               @map("discount_value") // basis points (percent) or kobo (fixed)
+  maxUses       Int?              @map("max_uses")
+  usedCount     Int               @default(0) @map("used_count")
+  expiresAt     DateTime?         @map("expires_at")
+  isActive      Boolean           @default(true) @map("is_active")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@index([expiresAt])
+  @@map("promo_codes")
+}
+
+// ============================================================================
+// MESSAGING (trip chat + passenger support)
+// ============================================================================
+
+model Conversation {
+  id          String           @id @default(uuid()) @db.Uuid
+  tripId      String?          @unique @map("trip_id") @db.Uuid
+  passengerId String           @map("passenger_id") @db.Uuid
+  driverId    String?          @map("driver_id") @db.Uuid
+  type        ConversationType
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  trip        Trip?            @relation("TripConversation", fields: [tripId], references: [id])
+  passenger   User             @relation("PassengerConversations", fields: [passengerId], references: [id])
+  driver      Driver?          @relation("DriverConversations", fields: [driverId], references: [id])
+  messages    Message[]        @relation("ConversationMessages")
+
+  @@index([passengerId, type])
+  @@index([driverId])
+  @@index([type])
+  @@map("conversations")
+}
+
+model Message {
+  id             String            @id @default(uuid()) @db.Uuid
+  conversationId String            @map("conversation_id") @db.Uuid
+  senderId       String            @map("sender_id") @db.Uuid
+  senderType     MessageSenderType @map("sender_type")
+  body           String
+  createdAt      DateTime          @default(now()) @map("created_at")
+
+  conversation   Conversation      @relation("ConversationMessages", fields: [conversationId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// ============================================================================
+// DRIVER REFERRALS (Risk 1)
+// ============================================================================
+
+model DriverReferral {
+  id                String         @id @default(uuid()) @db.Uuid
+  referrerDriverId  String         @map("referrer_driver_id") @db.Uuid
+  referredDriverId  String         @map("referred_driver_id") @db.Uuid
+  referralCode      String         @map("referral_code")
+  status            ReferralStatus @default(pending)
+  rewardAmount      Int            @default(0) @map("reward_amount") // kobo
+  rewardedAt        DateTime?      @map("rewarded_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+
+  referrer          Driver         @relation("ReferrerDriver", fields: [referrerDriverId], references: [id])
+  referred          Driver         @relation("ReferredDriver", fields: [referredDriverId], references: [id])
+
+  @@index([referrerDriverId])
+  @@index([referredDriverId])
+  @@index([referralCode])
+  @@index([status])
+  @@map("driver_referrals")
+}
+
+// ============================================================================
+// DRIVER FEATURE INTEREST (Risk 17 — HiGo Plus stubs)
+// ============================================================================
+
+model DriverFeatureInterest {
+  id          String            @id @default(uuid()) @db.Uuid
+  driverId    String            @map("driver_id") @db.Uuid
+  featureName DriverFeatureName @map("feature_name")
+  registeredAt DateTime        @default(now()) @map("registered_at")
+
+  driver      Driver            @relation("DriverFeatureInterests", fields: [driverId], references: [id])
+
+  @@unique([driverId, featureName])
+  @@index([driverId])
+  @@map("driver_feature_interest")
+}
+
+// ============================================================================
+// COMMUNITY PARTNERS (Risk 19)
+// ============================================================================
+
+model CommunityPartner {
+  id               String        @id @default(uuid()) @db.Uuid
+  partnerType      PartnerType   @map("partner_type")
+  name             String
+  contactPerson    String        @map("contact_person")
+  contactPhone     String        @map("contact_phone")
+  zoneId           String?       @map("zone_id") @db.Uuid
+  status           PartnerStatus @default(prospecting)
+  membersCount     Int           @default(0) @map("members_count")
+  driversReferred  Int           @default(0) @map("drivers_referred")
+  consumersReferred Int          @default(0) @map("consumers_referred")
+  agreementSigned  Boolean       @default(false) @map("agreement_signed")
+  notes            String?
+  createdAt        DateTime      @default(now()) @map("created_at")
+  lastContactAt    DateTime?     @map("last_contact_at")
+
+  zone             Zone?         @relation("ZoneCommunityPartners", fields: [zoneId], references: [id])
+
+  @@index([status])
+  @@index([partnerType])
+  @@index([zoneId])
+  @@map("community_partners")
+}
+
+// ============================================================================
+// SUPPORT TICKETS (Risk 7)
+// ============================================================================
+
+model SupportTicket {
+  id                  String               @id @default(uuid()) @db.Uuid
+  tripId              String?              @map("trip_id") @db.Uuid
+  raisedByUserId      String               @map("raised_by_user_id") @db.Uuid
+  raisedByType        UserType             @map("raised_by_type")
+  category            SupportTicketCategory
+  description         String
+  status              SupportTicketStatus  @default(open)
+  assignedToAdminId   String?              @map("assigned_to_admin_id") @db.Uuid
+  resolution          String?
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  resolvedAt          DateTime?            @map("resolved_at")
+
+  trip                Trip?                @relation("TripSupportTickets", fields: [tripId], references: [id])
+  raiser              User                 @relation("SupportTickets", fields: [raisedByUserId], references: [id])
+  assignee            Driver?              @relation("AssignedSupportTickets", fields: [assignedToAdminId], references: [id])
+
+  @@index([status])
+  @@index([category])
+  @@index([raisedByUserId])
+  @@index([tripId])
+  @@index([assignedToAdminId])
+  @@map("support_tickets")
+}
+
+// ============================================================================
+// FRAUD EVENTS (Risk 13)
+// ============================================================================
+
+model FraudEvent {
+  id            String            @id @default(uuid()) @db.Uuid
+  eventType     FraudEventType    @map("event_type")
+  driverId      String?           @map("driver_id") @db.Uuid
+  passengerId   String?           @map("passenger_id") @db.Uuid
+  tripId        String?           @map("trip_id") @db.Uuid
+  severity      FraudSeverity
+  description   String
+  metadata      Json?             @db.JsonB
+  status        FraudEventStatus  @default(open)
+  createdAt     DateTime          @default(now()) @map("created_at")
+  resolvedAt    DateTime?         @map("resolved_at")
+
+  driver        Driver?           @relation("DriverFraudEvents", fields: [driverId], references: [id])
+  passenger     User?             @relation("PassengerFraudEvents", fields: [passengerId], references: [id])
+  trip          Trip?             @relation("TripFraudEvents", fields: [tripId], references: [id])
+
+  @@index([eventType])
+  @@index([severity])
+  @@index([status])
+  @@index([driverId])
+  @@index([passengerId])
+  @@index([tripId])
+  @@index([createdAt])
+  @@map("fraud_events")
+}
+
+// ============================================================================
+// FARE WATCH ALERTS (Risk 10)
+// ============================================================================
+
+model FareWatchAlert {
+  id                String    @id @default(uuid()) @db.Uuid
+  passengerId       String    @map("passenger_id") @db.Uuid
+  zoneId            String    @map("zone_id") @db.Uuid
+  tripId            String?   @map("trip_id") @db.Uuid
+  targetMultiplier  Decimal   @default(1.0) @map("target_multiplier") @db.Decimal(4, 2)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  triggeredAt       DateTime? @map("triggered_at")
+  expiresAt         DateTime  @map("expires_at")
+
+  passenger         User      @relation("FareWatchAlerts", fields: [passengerId], references: [id])
+  zone              Zone      @relation("ZoneFareWatchAlerts", fields: [zoneId], references: [id])
+  trip              Trip?     @relation("TripFareWatchAlerts", fields: [tripId], references: [id])
+
+  @@index([passengerId])
+  @@index([zoneId])
+  @@index([tripId])
+  @@index([expiresAt])
+  @@map("fare_watch_alerts")
+}
+
+// ============================================================================
+// REVENUE DAILY SUMMARY (Risk 15)
+// ============================================================================
+
+model RevenueDailySummary {
+  date                 DateTime  @id @map("date") // date only (no time component)
+  grossGmv             Int       @default(0) @map("gross_gmv") // kobo
+  platformCommission   Int       @default(0) @map("platform_commission") // kobo
+  subscriptionRevenue  Int       @default(0) @map("subscription_revenue") // kobo
+  verificationRevenue  Int       @default(0) @map("verification_revenue") // kobo
+  cashFeeCollected     Int       @default(0) @map("cash_fee_collected") // kobo
+  cashFeeOutstanding   Int       @default(0) @map("cash_fee_outstanding") // kobo
+  refundsIssued        Int       @default(0) @map("refunds_issued") // kobo
+  netRevenue           Int       @default(0) @map("net_revenue") // kobo
+  activeDrivers        Int       @default(0) @map("active_drivers")
+  completedTrips       Int       @default(0) @map("completed_trips")
+  avgTripValue         Int       @default(0) @map("avg_trip_value") // kobo
+  createdAt            DateTime  @default(now()) @map("created_at")
+
+  @@map("revenue_daily_summary")
+}
+
+// ============================================================================
+// REGULATORY AUDIT LOG (Risk 11 — FCTA compliance)
+// ============================================================================
+
+model RegulatoryAuditLog {
+  id          String                @id @default(uuid()) @db.Uuid
+  eventType   ComplianceEventType   @map("event_type")
+  driverId    String?               @map("driver_id") @db.Uuid
+  zoneId      String?               @map("zone_id") @db.Uuid
+  description String
+  metadata    Json?                 @db.JsonB
+  createdAt   DateTime              @default(now()) @map("created_at")
+  createdBy   String?               @map("created_by") @db.Uuid
+
+  driver      Driver?               @relation("RegulatoryAuditDriver", fields: [driverId], references: [id])
+  zone        Zone?                 @relation("ZoneRegulatoryAudit", fields: [zoneId], references: [id])
+
+  @@index([eventType])
+  @@index([driverId])
+  @@index([zoneId])
+  @@index([createdAt])
+  @@map("regulatory_audit_log")
+}
+
+// ============================================================================
+// HCE — USER LANGUAGE PREFERENCES
+// ============================================================================
+
+model UserLanguagePreference {
+  userId              String   @id @map("user_id") @db.Uuid
+  userType            UserType @map("user_type")
+  languageCode        String   @default("en") @map("language_code") // LanguageCode enum value
+  voiceGender         String   @default("male") @map("voice_gender") // male | female
+  autoReadoutEnabled  Boolean  @default(true) @map("auto_readout_enabled")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user                User     @relation(fields: [userId], references: [id])
+
+  @@map("user_language_preferences")
+}
+
+// ============================================================================
+// HCE — LANDMARK DATABASE
+// ============================================================================
+
+model LandmarkDatabase {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String
+  aliases       Json     @db.JsonB // ["alias1", "alias2"]
+  zone          String
+  lat           Decimal  @db.Decimal(10, 7)
+  lng           Decimal  @db.Decimal(10, 7)
+  landmarkType  String   @map("landmark_type") // LandmarkType enum value
+  verified      Boolean  @default(false)
+  usageCount    Int      @default(0) @map("usage_count")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  resolutions   LandmarkResolution[] @relation("ResolvedLandmark")
+
+  @@index([zone])
+  @@index([verified])
+  @@index([landmarkType])
+  // GiST on lat/lng for proximity search (raw SQL migration):
+  //   CREATE INDEX idx_landmark_location ON landmark_database
+  //     USING GIST (ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography);
+  @@map("landmark_database")
+}
+
+// ============================================================================
+// HCE — LANDMARK RESOLUTIONS
+// ============================================================================
+
+model LandmarkResolution {
+  id                   String   @id @default(uuid()) @db.Uuid
+  rawDescription       String   @map("raw_description")
+  resolvedLandmarkId   String?  @map("resolved_landmark_id") @db.Uuid
+  confidenceScore      Decimal  @map("confidence_score") @db.Decimal(4, 3)
+  wasCorrect           Boolean? @map("was_correct")
+  tripId               String?  @map("trip_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  resolvedLandmark     LandmarkDatabase? @relation("ResolvedLandmark", fields: [resolvedLandmarkId], references: [id])
+  trip                 Trip?             @relation("TripLandmarkResolutions", fields: [tripId], references: [id])
+
+  @@index([resolvedLandmarkId])
+  @@index([tripId])
+  @@index([createdAt])
+  @@map("landmark_resolutions")
+}
+
+// ============================================================================
+// HCE — USAGE LOG
+// ============================================================================
+
+model HceUsageLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  serviceUsed    String   @map("service_used") // HceService enum value
+  tokensConsumed Int      @default(0) @map("tokens_consumed")
+  costUsd        Decimal  @default(0) @map("cost_usd") @db.Decimal(10, 6)
+  durationMs     Int      @default(0) @map("duration_ms")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user           User     @relation("HceUsageLogs", fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([serviceUsed])
+  @@index([createdAt])
+  @@map("hce_usage_log")
+}
+
+// ============================================================================
+// HCE — DRIVER VOCABULARY (personal landmarks)
+// ============================================================================
+
+model DriverVocabulary {
+  id          String   @id @default(uuid()) @db.Uuid
+  driverId    String   @map("driver_id") @db.Uuid
+  term        String
+  resolvedLat Decimal  @map("resolved_lat") @db.Decimal(10, 7)
+  resolvedLng Decimal  @map("resolved_lng") @db.Decimal(10, 7)
+  usageCount  Int      @default(1) @map("usage_count")
+  lastUsedAt  DateTime @default(now()) @map("last_used_at")
+
+  driver      Driver   @relation("DriverVocabulary", fields: [driverId], references: [id])
+
+  @@unique([driverId, term])
+  @@index([driverId])
+  @@map("driver_vocabulary")
+}

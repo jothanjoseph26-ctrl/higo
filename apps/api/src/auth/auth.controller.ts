@@ -19,6 +19,7 @@ import {
   RefreshTokenDto,
   SendOtpDto,
   VerifyOtpDto,
+  VerifyFirebasePhoneDto,
 } from './dto/auth.dto';
 
 const REFRESH_COOKIE = 'higo_rt';
@@ -38,6 +39,17 @@ export class AuthController {
   @Post('send-otp')
   sendOtp(@Body() dto: SendOtpDto) {
     return this.auth.sendOtp(dto);
+  }
+
+  @Public()
+  @Post('verify-firebase-phone')
+  async verifyFirebasePhone(
+    @Body() dto: VerifyFirebasePhoneDto,
+    @Headers('x-client-platform') platform: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.auth.verifyFirebasePhone(dto);
+    return this.attachRefresh(result, platform, res);
   }
 
   @Public()

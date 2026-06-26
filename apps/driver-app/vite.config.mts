@@ -2,7 +2,7 @@ import { defineConfig, transformWithEsbuild } from 'vite';
 import react from '@vitejs/plugin-react';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 const extensions = [
   '.mjs',
@@ -71,6 +71,7 @@ export default defineConfig({
       { find: 'react-native/Libraries/ReactNative/AppContainer', replacement: join(import.meta.dirname, 'src/shims/AppContainer.tsx') },
       { find: 'react-native', replacement: join(import.meta.dirname, 'src/shims/react-native-web-extended.ts') },
       { find: 'react-native-svg', replacement: 'react-native-svg-web' },
+      { find: 'react-native-maps', replacement: resolve(import.meta.dirname, './src/components/react-native-maps-mock.tsx') },
       { find: '@react-native/assets-registry/registry', replacement: 'react-native-web/dist/modules/AssetRegistry/index' },
       { find: '@react-native/normalize-colors', replacement: join(import.meta.dirname, 'src/shims/normalize-colors-shim.ts') },
       { find: /expo-modules-core[\\/]src[\\/]ts-declarations[\\/](EventEmitter|NativeModule|SharedObject|SharedRef)/, replacement: join(import.meta.dirname, 'src/shims/expo-shim.ts') },

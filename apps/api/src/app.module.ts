@@ -25,12 +25,19 @@ import { PassengersModule } from './passengers/passengers.module';
 import { DriversModule } from './drivers/drivers.module';
 import { AdminModule } from './admin/admin.module';
 import { SmsModule } from './sms/sms.module';
+import { AiModule } from './ai/ai.module';
+import { FirebaseModule } from './firebase/firebase.module';
+import { PushModule } from './push/push.module';
+import { MapsModule } from './maps/maps.module';
+import { PromosModule } from './promos/promos.module';
+import { MessagesModule } from './messages/messages.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['../../.env', '.env'],
+      envFilePath: ['../../.env.local', '../../.env', '.env.local', '.env'],
       validationSchema: envSchema,
     }),
     BullModule.forRootAsync({
@@ -43,6 +50,8 @@ import { SmsModule } from './sms/sms.module';
     CryptoModule,
     PrismaModule,
     RedisModule,
+    FirebaseModule,
+    PushModule,
     S3Module,
     AuthModule,
     SmsModule,
@@ -57,6 +66,11 @@ import { SmsModule } from './sms/sms.module';
     PassengersModule,
     DriversModule,
     AdminModule,
+    AiModule,
+    MapsModule,
+    PromosModule,
+    MessagesModule,
+    EmailModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

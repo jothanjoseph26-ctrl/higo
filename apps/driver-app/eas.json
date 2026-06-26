@@ -17,8 +17,13 @@
       }
     },
     "production": {
+      "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_MAPS_MOCK": "false",
+        "EXPO_PUBLIC_PUSH_MOCK": "false"
       }
     }
   }

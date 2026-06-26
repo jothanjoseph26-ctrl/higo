@@ -27,7 +27,7 @@ export function Onboard3({ navigation }: Props) {
         </View>
         <Button
           label="Get Started"
-          onPress={() => navigation.navigate('Login')}
+          onPress={() => navigation.navigate('LocationPermission')}
         />
       </View>
     </View>

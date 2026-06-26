@@ -14,21 +14,20 @@ import {
   Kobo,
 } from '@higo/shared-types';
 import { AppException } from '../common/errors/app.exception';
-import axios from 'axios';
+import { AiService } from '../ai/ai.service';
 
 @Injectable()
 export class EarningsService {
   private readonly logger = new Logger(EarningsService.name);
   private readonly commissionRate: number;
-  private readonly openaiApiKey?: string;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly ai: AiService,
     config: ConfigService,
   ) {
     this.commissionRate = Number(config.get<number>('PLATFORM_COMMISSION_RATE', 0.10));
-    this.openaiApiKey = config.get<string>('OPENAI_API_KEY');
   }
 
   /**
@@ -195,47 +194,23 @@ export class EarningsService {
   }
 
   /**
-   * Generate highly personalized Pidgin summary using OpenAI or a deterministic template.
+   * Generate highly personalized Pidgin summary using OpenRouter or a deterministic template.
    */
   private async generatePidginSummary(driverName: string, tripCount: number, netPayoutKobo: number): Promise<string> {
     const formattedNaira = `₦${(netPayoutKobo / 100).toLocaleString()}`;
     const defaultMessage = `${driverName}, you do ${tripCount} trip${tripCount === 1 ? '' : 's'} today, you make ${formattedNaira} after HiGo commission. Keep am up!`;
 
-    if (!this.openaiApiKey || this.openaiApiKey === 'sk-xxxxx') {
-      return defaultMessage;
-    }
-
-    try {
-      const prompt = `Write a short, encouraging message in Nigerian Pidgin English for a taxi/keke driver named ${driverName}. 
+    const prompt = `Write a short, encouraging message in Nigerian Pidgin English for a taxi/keke driver named ${driverName}. 
 Today they completed ${tripCount} trips and earned a net payout of ${formattedNaira} (already after our platform commission).
 Keep the summary to 1-2 sentences. Be warm, motivating, and friendly (e.g. use standard Pidgin slang like "Keep am up", "No shaking", "More blessings").`;
 
-      const response = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You are a friendly Abuja keke dispatch assistant.' },
-            { role: 'user', content: prompt },
-          ],
-          max_tokens: 100,
-          temperature: 0.7,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${this.openaiApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 5000,
-        },
-      );
+    const generated = await this.ai.prompt(
+      'You are a friendly Abuja keke dispatch assistant.',
+      prompt,
+      { maxTokens: 100, temperature: 0.7, timeout: 5000 },
+    );
 
-      const generated = response.data?.choices?.[0]?.message?.content?.trim();
-      return generated || defaultMessage;
-    } catch (err: any) {
-      this.logger.warn(`OpenAI Pidgin summary generation failed: ${err.message}. Falling back to template.`);
-      return defaultMessage;
-    }
+    return generated || defaultMessage;
   }
 
   /**

@@ -12,7 +12,7 @@ export function DriverSplash({ navigation }: Props) {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      navigation.replace('DriverLogin');
+      navigation.replace('LocationPermission');
     }, 1800);
     return () => clearTimeout(timer);
   }, [navigation]);

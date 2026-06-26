@@ -6,6 +6,8 @@ import { MatchingModule } from '../matching/matching.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { RedisModule } from '../redis/redis.module';
+import { PushModule } from '../push/push.module';
+import { PromosModule } from '../promos/promos.module';
 import { TripService } from './trips.service';
 import { TripsController } from './trips.controller';
 
@@ -13,6 +15,8 @@ import { TripsController } from './trips.controller';
   imports: [
     PrismaModule,
     RedisModule,
+    PushModule,
+    PromosModule,
     ZonesModule,
     PricingModule,
     forwardRef(() => MatchingModule),

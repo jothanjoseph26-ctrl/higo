@@ -33,7 +33,8 @@ import {
   KycDocumentsMap,
   REQUIRED_KYC_DOCS,
 } from './kyc-state-machine';
-import { TextractService } from './textract.service';
+import { OcrService } from './ocr.service';
+import { EmailService } from '../email/email.service';
 
 const MAX_RAW_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = new Set([
@@ -57,7 +58,8 @@ export class KYCService {
     private readonly prisma: PrismaService,
     private readonly s3: OssService,
     private readonly aes: AesService,
-    private readonly textract: TextractService,
+    private readonly ocr: OcrService,
+    private readonly email: EmailService,
     private readonly compliance: ComplianceService,
     private readonly backgroundCheck: BackgroundCheckService,
   ) {}
@@ -85,7 +87,7 @@ export class KYCService {
 
     let ocrFields: Record<string, string> = {};
     try {
-      ocrFields = await this.textract.extractForm(s3Key);
+      ocrFields = await this.ocr.extractForm(s3Key, docType);
     } catch {
       ocrFields = {};
     }
@@ -231,7 +233,7 @@ export class KYCService {
       },
     });
 
-    await this.notifyDriverStub(driverId, kycStatus);
+    await this.notifyDriver(driverId, kycStatus);
 
     return { driverId, kycStatus, verificationTier };
   }
@@ -321,16 +323,32 @@ export class KYCService {
     return match?.[0] ?? null;
   }
 
-  private async notifyDriverStub(
+  private async notifyDriver(
     driverId: string,
     status: KYCStatus,
   ): Promise<void> {
-    this.logger.log(`KYC review notification stub driver=${driverId} status=${status}`);
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { email: true, name: true },
+    });
+
+    if (driver?.email) {
+      await this.email.sendKycStatusUpdate({
+        to: driver.email,
+        name: driver.name ?? 'Driver',
+        status,
+      });
+    } else {
+      this.logger.log(
+        `KYC status updated for driver=${driverId} (${status}); no email on file`,
+      );
+    }
+
     await this.compliance.logKycEvent({
       driverId,
       action: 'notify_driver',
       actorType: 'system',
-      metadata: { kycStatus: status },
+      metadata: { kycStatus: status, emailSent: Boolean(driver?.email) },
     });
   }
 }

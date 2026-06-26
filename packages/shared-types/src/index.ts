@@ -7,6 +7,7 @@
  * version bump across all consumers.
  */
 
+export * from './enums';
 export * from './domain.types';
 export * from './api.types';
 export * from './socket.types';

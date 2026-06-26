@@ -5,6 +5,8 @@ import { PricingService } from '../pricing/pricing.service';
 import { MatchingService } from '../matching/matching.service';
 import { EventsGateway } from '../realtime/events.gateway';
 import { PaymentService } from '../payments/payment.service';
+import { PushService } from '../push/push.service';
+import { PromosService } from '../promos/promos.service';
 import { validateTransition } from './trip-state-machine';
 import { RedisService } from '../redis/redis.service';
 import {
@@ -40,6 +42,8 @@ export class TripService {
     private readonly matchingService: MatchingService,
     private readonly eventsGateway: EventsGateway,
     private readonly paymentService: PaymentService,
+    private readonly pushService: PushService,
+    private readonly promosService: PromosService,
   ) {}
 
   private haversineDistance(p1: LatLng, p2: LatLng): number {
@@ -228,13 +232,26 @@ export class TripService {
     const distanceKm = this.haversineDistance(dto.pickup, dto.destination);
     const durationMin = Math.max(1, Math.round(distanceKm * 2.5));
 
-    const estimate = await this.pricingService.estimateFare({
+    let estimate = await this.pricingService.estimateFare({
       vehicleType: dto.vehicleType,
       distanceKm,
       durationMin,
       pickup: dto.pickup,
       isShared: dto.isShared,
     });
+
+    if (dto.promoCode) {
+      const promo = await this.promosService.validateAndRedeem(dto.promoCode);
+      const originalTotalFare = estimate.totalFare;
+      const discounted = this.promosService.applyDiscount(promo, originalTotalFare);
+      estimate = {
+        ...estimate,
+        totalFare: discounted.totalFare,
+        originalTotalFare,
+        promoDiscount: discounted.discountAmount,
+        promoCode: discounted.promoCode,
+      };
+    }
 
     const tripId = crypto.randomUUID();
 
@@ -520,6 +537,16 @@ export class TripService {
       this.eventsGateway.server
         .to(`trip:${tripId}`)
         .emit(SOCKET_EVENTS.TRIP_MATCHED, payload);
+
+      void this.pushService.sendToPassenger(trip.passengerId, {
+        title: 'Driver matched',
+        body: `${driver!.name} is on the way`,
+        data: {
+          type: 'trip:matched',
+          tripId,
+          driverId: driverId!,
+        },
+      });
     } else if (to === TripStatus.EN_ROUTE) {
       this.eventsGateway.server
         .to(`trip:${tripId}`)

@@ -1,54 +1,48 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { ScreenShell } from '../../components/ScreenShell';
-import { api } from '../../services/api';
-import { getTripHistoryCache, setTripHistoryCache } from '../../services/storage';
+import { Button } from '../../components/Button';
+import { useTripStore } from '../../stores/tripStore';
+import { getTripHistoryCache } from '../../services/storage';
 import { OfflineManager } from '../../services/offline';
 import type { Trip } from '@higo/shared-types';
 
 export function TripHistory() {
   const { t } = useTranslation();
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const {
+    tripHistory,
+    historyLoading,
+    historyError,
+    fetchTripHistory,
+  } = useTripStore();
 
-  const fetchHistory = async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
+  const loadHistory = async (isRefresh = false) => {
+    const isOnline = OfflineManager.getIsConnected();
+
+    if (!isOnline) {
+      const cached = await getTripHistoryCache();
+      if (cached) {
+        useTripStore.setState({ tripHistory: cached, historyLoading: false, historyError: null });
+      } else {
+        useTripStore.setState({
+          historyLoading: false,
+          historyError: 'You are offline. No cached trip history available.',
+        });
+      }
+      return;
     }
 
     try {
-      const isOnline = OfflineManager.getIsConnected();
-      if (isOnline) {
-        const response = await api.getTripHistory();
-        setTrips(response.items);
-        await setTripHistoryCache(response.items);
-      } else {
-        // Load from offline storage cache
-        const cached = await getTripHistoryCache();
-        if (cached) {
-          setTrips(cached);
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to load trip history', e);
-      // Fallback to cache on error
-      const cached = await getTripHistoryCache();
-      if (cached) {
-        setTrips(cached);
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      await fetchTripHistory();
+    } catch {
+      // Error state is set in the store action
     }
   };
 
   useEffect(() => {
-    void fetchHistory();
+    void loadHistory();
   }, []);
 
   const formatDate = (dateStr: string) => {
@@ -82,33 +76,53 @@ export function TripHistory() {
 
       <View style={styles.cardFooter}>
         <Text style={styles.vehicleType}>🛺 {item.vehicleType.toUpperCase()}</Text>
-        <Text style={styles.fare}>₦{(item.fare / 100).toFixed(2)}</Text>
+        <Text style={styles.fare}>₦{(item.totalFare / 100).toFixed(2)}</Text>
       </View>
     </View>
   );
 
-  return (
-    <ScreenShell title={t('trip.tripHistory')} scroll={false}>
-      {loading ? (
+  if (historyLoading && tripHistory.length === 0) {
+    return (
+      <ScreenShell title={t('trip.tripHistory')} scroll={false}>
         <View style={styles.loader}>
           <ActivityIndicator size="large" color={theme.colors.primaryGreen} />
         </View>
-      ) : (
-        <FlatList
-          data={trips}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => void fetchHistory(true)} />
-          }
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>{t('trip.noTrips')}</Text>
-            </View>
-          }
-          contentContainerStyle={styles.list}
-        />
-      )}
+      </ScreenShell>
+    );
+  }
+
+  if (historyError && tripHistory.length === 0) {
+    return (
+      <ScreenShell title={t('trip.tripHistory')} scroll={false}>
+        <View style={styles.errorWrap}>
+          <Text style={styles.errorText}>{historyError}</Text>
+          <Button label="Retry" onPress={() => void loadHistory()} />
+        </View>
+      </ScreenShell>
+    );
+  }
+
+  return (
+    <ScreenShell title={t('trip.tripHistory')} scroll={false}>
+      {historyError ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{historyError}</Text>
+        </View>
+      ) : null}
+      <FlatList
+        data={tripHistory}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        refreshControl={
+          <RefreshControl refreshing={historyLoading} onRefresh={() => void loadHistory(true)} />
+        }
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>{t('trip.noTrips')}</Text>
+          </View>
+        }
+        contentContainerStyle={styles.list}
+      />
     </ScreenShell>
   );
 }
@@ -121,6 +135,29 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  errorWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.md,
+  },
+  errorText: {
+    fontSize: 15,
+    color: theme.colors.error,
+    textAlign: 'center',
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: theme.radius.input,
+    padding: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  errorBannerText: {
+    fontSize: 13,
+    color: theme.colors.error,
+    textAlign: 'center',
   },
   card: {
     backgroundColor: '#fff',

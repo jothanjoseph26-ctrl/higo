@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, Pressable, FlatList, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, Pressable, FlatList, Alert, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { Input } from '../../components/Input';
@@ -7,6 +7,7 @@ import { Button } from '../../components/Button';
 import { ScreenShell } from '../../components/ScreenShell';
 import { useTripStore } from '../../stores/tripStore';
 import { useLocationStore } from '../../stores/locationStore';
+import { api } from '../../services/api';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -14,8 +15,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Booking'>;
 
 interface PlaceSuggestion {
   description: string;
-  lat: number;
-  lng: number;
+  placeId?: string;
+  lat?: number;
+  lng?: number;
 }
 
 const LOCAL_SUGGESTIONS: PlaceSuggestion[] = [
@@ -28,6 +30,22 @@ const LOCAL_SUGGESTIONS: PlaceSuggestion[] = [
   { description: 'Aso Rock Presidential Villa, Abuja', lat: 9.0673, lng: 7.5312 },
 ];
 
+const AUTOCOMPLETE_DEBOUNCE_MS = 350;
+
+function isMapsMock(): boolean {
+  if (Platform.OS === 'web') return true;
+  return process.env.EXPO_PUBLIC_MAPS_MOCK === 'true';
+}
+
+function filterLocalSuggestions(text: string): PlaceSuggestion[] {
+  if (text.trim() === '') {
+    return LOCAL_SUGGESTIONS;
+  }
+  return LOCAL_SUGGESTIONS.filter((item) =>
+    item.description.toLowerCase().includes(text.toLowerCase()),
+  );
+}
+
 export function Booking({ navigation }: Props) {
   const { t } = useTranslation();
   const { userLocation } = useLocationStore();
@@ -37,6 +55,64 @@ export function Booking({ navigation }: Props) {
   const [destText, setDestText] = useState(destination?.address || '');
   const [activeField, setActiveField] = useState<'pickup' | 'destination'>('destination');
   const [filteredSuggestions, setFilteredSuggestions] = useState<PlaceSuggestion[]>(LOCAL_SUGGESTIONS);
+  const [isSearching, setIsSearching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
+
+  const activeText = activeField === 'pickup' ? pickupText : destText;
+
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    if (isMapsMock()) {
+      setFilteredSuggestions(filterLocalSuggestions(activeText));
+      setIsSearching(false);
+      return;
+    }
+
+    const trimmed = activeText.trim();
+    if (trimmed.length < 2) {
+      setFilteredSuggestions(LOCAL_SUGGESTIONS);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const requestId = ++requestIdRef.current;
+
+    debounceRef.current = setTimeout(() => {
+      void api
+        .placesAutocomplete(trimmed)
+        .then((result) => {
+          if (requestId !== requestIdRef.current) return;
+          setFilteredSuggestions(
+            result.suggestions.length > 0
+              ? result.suggestions.map((suggestion) => ({
+                  description: suggestion.description,
+                  placeId: suggestion.placeId,
+                }))
+              : filterLocalSuggestions(trimmed),
+          );
+        })
+        .catch(() => {
+          if (requestId !== requestIdRef.current) return;
+          setFilteredSuggestions(filterLocalSuggestions(trimmed));
+        })
+        .finally(() => {
+          if (requestId === requestIdRef.current) {
+            setIsSearching(false);
+          }
+        });
+    }, AUTOCOMPLETE_DEBOUNCE_MS);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [activeText]);
 
   const handleTextChange = (text: string, field: 'pickup' | 'destination') => {
     if (field === 'pickup') {
@@ -45,30 +121,41 @@ export function Booking({ navigation }: Props) {
       setDestText(text);
     }
     setActiveField(field);
-
-    if (text.trim() === '') {
-      setFilteredSuggestions(LOCAL_SUGGESTIONS);
-    } else {
-      const filtered = LOCAL_SUGGESTIONS.filter((item) =>
-        item.description.toLowerCase().includes(text.toLowerCase())
-      );
-      setFilteredSuggestions(filtered);
-    }
   };
 
-  const handleSelectSuggestion = (suggestion: PlaceSuggestion) => {
-    const latlng = { lat: suggestion.lat, lng: suggestion.lng, address: suggestion.description };
+  const handleSelectSuggestion = async (suggestion: PlaceSuggestion) => {
+    let lat = suggestion.lat;
+    let lng = suggestion.lng;
+    let address = suggestion.description;
+
+    if (!isMapsMock() && suggestion.placeId) {
+      try {
+        const details = await api.placesDetails(suggestion.placeId);
+        lat = details.lat;
+        lng = details.lng;
+        address = details.description;
+      } catch {
+        Alert.alert('Error', 'Unable to resolve that place. Please try another.');
+        return;
+      }
+    }
+
+    if (lat == null || lng == null) {
+      Alert.alert('Error', 'Unable to resolve that place. Please try another.');
+      return;
+    }
+
+    const latlng = { lat, lng, address };
     if (activeField === 'pickup') {
       setPickup(latlng);
-      setPickupText(suggestion.description);
+      setPickupText(address);
     } else {
       setDestination(latlng);
-      setDestText(suggestion.description);
+      setDestText(address);
     }
   };
 
   const handleProceed = () => {
-    // If pickup is Current Location and hasn't been set explicitly
     if (!pickup) {
       if (userLocation) {
         setPickup({
@@ -88,11 +175,10 @@ export function Booking({ navigation }: Props) {
     }
 
     if (!destination) {
-      // Fallback: select the first match or default to Jabi Lake Mall
       const fallback = LOCAL_SUGGESTIONS[5];
       setDestination({
-        lat: fallback.lat,
-        lng: fallback.lng,
+        lat: fallback.lat!,
+        lng: fallback.lng!,
         address: fallback.description,
       });
     }
@@ -120,14 +206,16 @@ export function Booking({ navigation }: Props) {
         />
       </View>
 
-      <Text style={styles.suggestionsHeader}>Landmarks suggestions</Text>
-      
+      <Text style={styles.suggestionsHeader}>
+        {isSearching ? 'Searching places…' : 'Place suggestions'}
+      </Text>
+
       <FlatList
         data={filteredSuggestions}
-        keyExtractor={(item) => item.description}
+        keyExtractor={(item) => item.placeId ?? item.description}
         renderItem={({ item }) => (
           <Pressable
-            onPress={() => handleSelectSuggestion(item)}
+            onPress={() => void handleSelectSuggestion(item)}
             style={styles.suggestionRow}
           >
             <Text style={styles.suggestionIcon}>📍</Text>

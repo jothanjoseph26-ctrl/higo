@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { KycController } from './kyc.controller';
 import { KYCService } from './kyc.service';
-import { TextractService } from './textract.service';
+import { OcrService } from './ocr.service';
 import { ComplianceService } from './compliance.service';
 import { BackgroundCheckService } from './background-check.service';
 import { UserTypeGuard } from '../common/guards/user-type.guard';
@@ -10,7 +10,7 @@ import { UserTypeGuard } from '../common/guards/user-type.guard';
   controllers: [KycController],
   providers: [
     KYCService,
-    TextractService,
+    OcrService,
     ComplianceService,
     BackgroundCheckService,
     UserTypeGuard,

@@ -1,0 +1,90 @@
+id,role,proposal_screen,status,wire_level,file_path,route,notes,sprint_id
+AUTH-01,Shared,Splash Screen,EXISTS,WIRED,apps/passenger-app/src/screens/auth/Splash.tsx,Auth/Splash,Auto-nav to onboard or home,—
+AUTH-02,Shared,Splash Screen (Driver),EXISTS,WIRED,apps/driver-app/src/screens/auth/DriverSplash.tsx,Auth/DriverSplash,Driver entry,—
+AUTH-03,Shared,Onboarding Carousel,EXISTS,UI_ONLY,apps/passenger-app/src/screens/auth/Onboard1.tsx|Onboard2.tsx|Onboard3.tsx,Auth/Onboard1-3,3 static screens not swipe carousel,—
+AUTH-04,Passenger,Phone Number Login,EXISTS,WIRED,apps/passenger-app/src/screens/auth/Login.tsx,Auth/Login,Phone + OTP steps in one screen,—
+AUTH-05,Passenger,OTP Verification,EXISTS,WIRED,apps/passenger-app/src/screens/auth/Login.tsx,Auth/Login (step=otp),Merged into Login not separate screen,—
+AUTH-06,Passenger,Sign Up / Profile completion,EXISTS,WIRED,apps/passenger-app/src/screens/auth/SignUp.tsx,Auth/SignUp,Post-OTP name/email,—
+AUTH-07,Driver,Phone Login,EXISTS,WIRED,apps/driver-app/src/screens/auth/DriverLogin.tsx,Auth/DriverLogin,OTP flow,—
+AUTH-08,Shared,Role Selection,BY_DESIGN,N/A,—,—,Separate passenger/driver apps no unified picker,—
+AUTH-09,Shared,Location Permission Request,EXISTS,PARTIAL,apps/passenger-app/src/stores/locationStore.ts,—,Inline on Home no dedicated screen,S5-A
+AUTH-10,Shared,Notification Permission,EXISTS,PARTIAL,apps/passenger-app/src/services/fcm.ts|apps/driver-app/src/services/fcm.ts,—,Programmatic after auth no dedicated UX,S5-A
+PAX-01,Passenger,Home Map (live drivers),EXISTS,PARTIAL,apps/passenger-app/src/screens/home/Home.tsx,Main/HomeTab,Map + location no nearby driver markers,S5-B
+PAX-02,Passenger,Destination Search,EXISTS,UI_ONLY,apps/passenger-app/src/screens/home/Booking.tsx,Booking,Text inputs no Google Places,S5-B
+PAX-03,Passenger,Pickup Location Selector,EXISTS,UI_ONLY,apps/passenger-app/src/screens/home/Booking.tsx,Booking,Same screen not map pin picker,S5-B
+PAX-04,Passenger,Ride Type Selection,EXISTS,WIRED,apps/passenger-app/src/screens/home/RideOptions.tsx,RideOptions,Keke + shared via API estimate,S2
+PAX-05,Passenger,Fare Estimate Preview,EXISTS,WIRED,apps/passenger-app/src/screens/home/RideOptions.tsx|ConfirmRide.tsx,RideOptions|ConfirmRide,DB pricing via tripStore,S2-P
+PAX-06,Passenger,Ride Request Confirmation,EXISTS,WIRED,apps/passenger-app/src/screens/home/ConfirmRide.tsx,ConfirmRide,POST /trips/request,S2
+PAX-07,Passenger,Driver Matching / Searching,EXISTS,WIRED,apps/passenger-app/src/screens/trip/FindingDriver.tsx,FindingDriver,Socket + cancel wired,S2
+PAX-08,Passenger,Driver Found,EXISTS,WIRED,apps/passenger-app/src/screens/trip/DriverEnRoute.tsx,DriverEnRoute,Merged with en-route tracking,S2
+PAX-09,Passenger,Live Trip Tracking,EXISTS,WIRED,apps/passenger-app/src/screens/trip/DriverEnRoute.tsx|TripActive.tsx,DriverEnRoute|TripActive,Map + directions + socket,S3-M
+PAX-10,Passenger,Trip In Progress,EXISTS,WIRED,apps/passenger-app/src/screens/trip/TripActive.tsx,TripActive,Active trip + SOS trigger,S2
+PAX-11,Passenger,Payment Method Selection,EXISTS,PARTIAL,apps/passenger-app/src/screens/account/PaymentMethods.tsx|home/ConfirmRide.tsx,PaymentMethods|ConfirmRide,Paystack scaffold card add simulated,S6-A
+PAX-12,Passenger,Trip Summary,EXISTS,WIRED,apps/passenger-app/src/screens/trip/TripComplete.tsx,TripComplete,Post-complete fare from socket,S2
+PAX-13,Passenger,Rating & Review,EXISTS,WIRED,apps/passenger-app/src/screens/trip/RateDriver.tsx,RateDriver,POST /trips/:id/rate-driver,S2
+PAX-14,Passenger,Receipt / Invoice,EXISTS,PARTIAL,apps/passenger-app/src/screens/trip/TripComplete.tsx,TripComplete,No separate PDF/invoice screen,S6-B
+PAX-15,Passenger,Trip History,EXISTS,WIRED,apps/passenger-app/src/screens/trip/TripHistory.tsx,TripHistoryTab,GET /passengers/me/trips,S2
+PAX-16,Passenger,Active Trips List,EXISTS,PARTIAL,apps/passenger-app/src/screens/home/Home.tsx,Main/HomeTab,Resume single trip only no list,S6-B
+PAX-17,Passenger,Scheduled Ride (Phase 2),MISSING,NONE,—,—,MOU Phase 2 not started,P7
+PAX-18,Passenger,Cancel Ride Modal,EXISTS,WIRED,apps/passenger-app/src/screens/trip/FindingDriver.tsx,FindingDriver,Alert + POST cancel,S2
+PAX-19,Passenger,Cancellation Fee Screen,MISSING,NONE,—,—,No fee breakdown UI,S6-B
+PAX-20,Passenger,SOS Emergency,EXISTS,PARTIAL,apps/passenger-app/src/screens/trip/TripActive.tsx,TripActive,TripActive uses mock emergency contacts,S5-C
+PAX-21,Passenger,Emergency Contact Setup,EXISTS,PARTIAL,apps/passenger-app/src/screens/support/SOS.tsx,SOS,UI exists API wiring to verify,S5-C
+PAX-22,Passenger,Support Chat,EXISTS,MOCK,apps/passenger-app/src/screens/support/ChatSupport.tsx,ChatSupport,Simulated replies no Message backend,S4-C
+PAX-23,Passenger,Help / FAQ,EXISTS,UI_ONLY,apps/passenger-app/src/screens/support/HelpFAQ.tsx,HelpFAQ,Static content,—
+PAX-24,Passenger,Profile,EXISTS,WIRED,apps/passenger-app/src/screens/account/Profile.tsx,ProfileTab,updateProfile API,—
+PAX-25,Passenger,Saved Places (Home/Work),MISSING,NONE,—,—,Not built,S6-B
+PAX-26,Passenger,Settings Hub,EXISTS,PARTIAL,apps/passenger-app/src/screens/account/Profile.tsx|Notifications.tsx,ProfileTab|Notifications,Language in profile no unified settings,S6-B
+PAX-27,Passenger,Wallet,EXISTS,MOCK,apps/passenger-app/src/screens/account/Wallet.tsx,WalletTab,Trivia points demo not real wallet,S6-A
+PAX-28,Passenger,Notifications Inbox,EXISTS,PARTIAL,apps/passenger-app/src/screens/account/Notifications.tsx,Notifications,Local store + push handlers,S3-P
+PAX-29,Passenger,Naija Trivia (bonus),EXISTS,UI_ONLY,apps/passenger-app/src/screens/trip/NaijaTrivia.tsx,NaijaTrivia,Engagement feature not in MOU list,—
+DRV-01,Driver,Driver Signup Wizard,EXISTS,PARTIAL,apps/driver-app/src/screens/auth/DriverLogin.tsx,Auth/DriverLogin,New user → KYC no vehicle wizard,S5-D
+DRV-02,Driver,Document Upload (KYC),EXISTS,WIRED,apps/driver-app/src/screens/kyc/KYCUpload.tsx,KYCUpload,OSS upload + API,—
+DRV-03,Driver,Verification Status,EXISTS,WIRED,apps/driver-app/src/screens/kyc/DocumentStatus.tsx,DocumentStatus,GET KYC status,—
+DRV-04,Driver,Approval Pending,EXISTS,WIRED,apps/driver-app/src/screens/kyc/DocumentStatus.tsx,DocumentStatus,Pending/rejected states,—
+DRV-05,Driver,Go Online Dashboard,EXISTS,WIRED,apps/driver-app/src/screens/online/GoOnlineHome.tsx,Tab/HomeTab,Online toggle + socket,S1-6
+DRV-06,Driver,Incoming Trip Request,EXISTS,WIRED,apps/driver-app/src/screens/online/TripRequest.tsx,TripRequest,15s timer accept/decline,S1-6
+DRV-07,Driver,Trip Navigation,EXISTS,WIRED,apps/driver-app/src/screens/online/Navigation.tsx,Navigation,Maps + directions + GPS,S3-M
+DRV-08,Driver,Pickup Confirmation,EXISTS,WIRED,apps/driver-app/src/screens/online/Navigation.tsx,Navigation,I Have Arrived merged here,S1-6
+DRV-09,Driver,Trip Active,EXISTS,WIRED,apps/driver-app/src/screens/online/TripActive.tsx,TripActive,Socket lifecycle,S1-6
+DRV-10,Driver,Trip Complete / Receipt,EXISTS,WIRED,apps/driver-app/src/screens/online/TripComplete.tsx,TripComplete,Completion flow,S1-6
+DRV-11,Driver,Rate Passenger,EXISTS,WIRED,apps/driver-app/src/screens/online/RatePassenger.tsx,RatePassenger,Rating API,S1-6
+DRV-12,Driver,Earnings Dashboard,EXISTS,WIRED,apps/driver-app/src/screens/earnings/EarningsDashboard.tsx,EarningsTab,earningsStore API,—
+DRV-13,Driver,Trip Earnings Detail,MISSING,NONE,—,—,No per-trip drill-down,S6-C
+DRV-14,Driver,Subscription Payment,EXISTS,WIRED,apps/driver-app/src/screens/earnings/Subscription.tsx,Subscription,Paystack + USSD fallback,—
+DRV-15,Driver,Wallet / Balance,MISSING,NONE,—,—,Future expansion,S7
+DRV-16,Driver,Training Module,EXISTS,UI_ONLY,apps/driver-app/src/screens/account/TrainingModule.tsx,TrainingModule,Scaffold limited content,S6-C
+DRV-17,Driver,Driver Tips / Safety,EXISTS,PARTIAL,apps/driver-app/src/screens/account/TrainingModule.tsx|DriverSOS.tsx,TrainingModule|DriverSOS,Split across screens,—
+DRV-18,Driver,Offline Mode Queue UI,EXISTS,PARTIAL,apps/driver-app/src/services/jobQueue.ts,—,Queue logic no dedicated screen,S6-C
+DRV-19,Driver,USSD Fallback,EXISTS,WIRED,apps/driver-app/src/screens/earnings/Subscription.tsx|services/ussd.ts,Subscription,Modal + codes,—
+DRV-20,Driver,Driver Profile,EXISTS,WIRED,apps/driver-app/src/screens/account/DriverProfile.tsx,AccountTab,Profile + language,—
+DRV-21,Driver,Vehicle Details Screen,EXISTS,PARTIAL,apps/driver-app/src/screens/account/DriverProfile.tsx,AccountTab,Fields on profile/API no dedicated screen,S5-D
+DRV-22,Driver,Ratings & Performance,MISSING,NONE,—,—,Not built,S6-C
+DRV-23,Driver,Support / Disputes,EXISTS,PARTIAL,apps/driver-app/src/screens/account/Support.tsx,Support,Form UI API partial,—
+DRV-24,Driver,Notification Settings,EXISTS,UI_ONLY,apps/driver-app/src/screens/account/NotificationSettings.tsx,NotificationSettings,Local prefs,S6-B
+ADM-01,Admin,Admin Login,EXISTS,WIRED,apps/admin-dashboard/src/pages/Login.tsx,/login,Real API no mock fallback,S1-7
+ADM-02,Admin,Operations Overview,EXISTS,WIRED,apps/admin-dashboard/src/pages/DashboardOverview.tsx,/,Live KPIs + charts,S1-7
+ADM-03,Admin,Live Operations Map,EXISTS,WIRED,apps/admin-dashboard/src/pages/OperationsMap.tsx,/operations-map,Live trips + drivers,S1-7
+ADM-04,Admin,Active Trips Monitoring,EXISTS,PARTIAL,apps/admin-dashboard/src/pages/OperationsMap.tsx|DashboardOverview.tsx,/operations-map,Folded into map + KPIs not standalone,S6-D
+ADM-05,Admin,Driver KYC Review Queue,EXISTS,WIRED,apps/admin-dashboard/src/pages/DriverManagement.tsx,/drivers,KYC lightbox + actions,S1-7
+ADM-06,Admin,Driver Profile Review,EXISTS,WIRED,apps/admin-dashboard/src/components/KycLightbox.tsx,/drivers,Inline in driver management,S1-7
+ADM-07,Admin,Driver Suspend / Reinstate,EXISTS,WIRED,apps/admin-dashboard/src/pages/DriverManagement.tsx,/drivers,PUT suspend/reinstate,S1-7
+ADM-08,Admin,Passenger List,EXISTS,WIRED,apps/admin-dashboard/src/pages/PassengerManagement.tsx,/passengers,Block/unblock wired,S1-7
+ADM-09,Admin,Complaint / Issue Management,EXISTS,PARTIAL,apps/admin-dashboard/src/pages/Disputes.tsx,/disputes,Disputes only no general complaints,S6-D
+ADM-10,Admin,Revenue Dashboard,EXISTS,WIRED,apps/admin-dashboard/src/pages/DashboardOverview.tsx|FinancialReports.tsx,/|/financial-reports,S1-7,
+ADM-11,Admin,Subscription Income Tracker,EXISTS,WIRED,apps/admin-dashboard/src/pages/FinancialReports.tsx,/financial-reports,Report API,S1-7
+ADM-12,Admin,Payment & Transaction Logs,EXISTS,PARTIAL,apps/admin-dashboard/src/pages/FinancialReports.tsx,/financial-reports,Reports not full txn log viewer,S6-D
+ADM-13,Admin,Pricing Configuration,EXISTS,WIRED,apps/admin-dashboard/src/pages/PricingConfig.tsx,/pricing,PUT pricing API,S1-7
+ADM-14,Admin,Surge Pricing Setup,EXISTS,PARTIAL,apps/admin-dashboard/src/pages/ZonesGeofencing.tsx|components/ZoneEditor.tsx,/zones,Surge zones + env flag no dedicated page,S6-D
+ADM-15,Admin,Zone Management,EXISTS,WIRED,apps/admin-dashboard/src/pages/ZonesGeofencing.tsx,/zones,CRUD + map,S1-7
+ADM-16,Admin,Notification Broadcast,EXISTS,WIRED,apps/admin-dashboard/src/pages/Notifications.tsx,/notifications,Broadcast composer,S1-7
+ADM-17,Admin,Global Settings,EXISTS,WIRED,apps/admin-dashboard/src/pages/Settings.tsx,/settings,PlatformSettings CRUD,S1-7
+ADM-18,Admin,Dispute Resolution,EXISTS,WIRED,apps/admin-dashboard/src/pages/Disputes.tsx,/disputes,Resolve API,S1-7
+ADM-19,Admin,Refund Management,MISSING,NONE,—,—,API refund exists no admin UI,S6-D
+ADM-20,Admin,Support Ticket System,MISSING,NONE,—,—,Not built,S6-D
+SYS-01,Shared,Language Selection,EXISTS,PARTIAL,apps/passenger-app/src/screens/account/Profile.tsx|driver-app/.../DriverProfile.tsx,Profile tabs,5 langs in i18n no dedicated screen,—
+SYS-02,Shared,Push Permission UX,EXISTS,PARTIAL,apps/*/src/services/fcm.ts,—,Wave 3 code needs dedicated screen,S5-A
+SYS-03,Shared,App Update Screen,MISSING,NONE,—,—,Not built,P7
+SYS-04,Shared,Network Error / Offline,EXISTS,PARTIAL,apps/passenger-app/src/services/offline.ts|Home.tsx,—,Banner only no full-screen,S6-B
+SYS-05,Shared,Loading / Skeleton States,EXISTS,PARTIAL,—,—,Per-screen spinners no shared system,S6-B
+SYS-06,Shared,Security Verification,MISSING,NONE,—,—,Future fraud layer,P7

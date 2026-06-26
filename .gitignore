@@ -38,6 +38,8 @@ testem.log
 # Environment
 .env
 .env.local
+hiconnect-firebase-services-key.json
+*-firebase-services-key.json
 .env.*.local
 
 # System Files

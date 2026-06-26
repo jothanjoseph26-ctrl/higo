@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
 import { startBackgroundLocation, stopBackgroundLocation } from '../services/location-task';
 import { useDriverAuthStore } from './driverAuthStore';
+import { registerFCM } from '../services/fcm';
 
 interface OnlineState {
   isOnline: boolean;
@@ -36,6 +37,7 @@ export const useOnlineStore = create<OnlineState>((set) => ({
       socket.emit('driver:go_online', { lat, lng });
 
       await startBackgroundLocation(false);
+      await registerFCM();
 
       const currentDriver = useDriverAuthStore.getState().driver;
       if (currentDriver) {

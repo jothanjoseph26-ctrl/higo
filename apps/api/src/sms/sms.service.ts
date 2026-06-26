@@ -1,14 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AfricasTalkingAdapter } from './africastalking.adapter';
 import { TermiiAdapter } from './termii.adapter';
+import { FirebaseOtpAdapter } from '../firebase/firebase-otp.adapter';
 
-export type SmsChannel = 'termii' | 'africastalking' | 'mock';
+export type SmsChannel =
+  | 'firebase'
+  | 'firebase-dev'
+  | 'termii'
+  | 'africastalking'
+  | 'mock';
 
 @Injectable()
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
 
   constructor(
+    private readonly config: ConfigService,
+    private readonly firebaseOtp: FirebaseOtpAdapter,
     private readonly termii: TermiiAdapter,
     private readonly africasTalking: AfricasTalkingAdapter,
   ) {}
@@ -18,6 +27,13 @@ export class SmsService {
     code: string,
   ): Promise<{ channel: SmsChannel }> {
     const message = `Your HiGo verification code is ${code}. Valid for 5 minutes.`;
+    const provider = this.config.get<string>('OTP_PROVIDER', 'firebase');
+
+    if (provider === 'firebase') {
+      const channel = await this.firebaseOtp.sendOtp(phone, code);
+      return { channel };
+    }
+
     return this.sendSms(phone, message);
   }
 

@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, Alert, Pressable } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../../components/Button';
 import { enqueueJob } from '../../services/jobQueue';
@@ -9,7 +8,9 @@ import { theme } from '../../theme';
 interface Course {
   id: string;
   title: string;
-  videoUrl: string;
+  icon: string;
+  duration: string;
+  content: string[];
   question: string;
   options: string[];
   correctAnswerIndex: number;
@@ -18,19 +19,64 @@ interface Course {
 const COURSES: Course[] = [
   {
     id: 'course_safety',
-    title: 'Module 1: Driver Safety Standards',
-    videoUrl: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
-    question: 'What is the maximum allowed speed limit inside residential estates?',
+    title: 'Driver Safety Standards',
+    icon: '🛡️',
+    duration: '8 min',
+    content: [
+      'Always perform a pre-trip vehicle check: tyres, brakes, lights, and fuel level.',
+      'Obey Abuja speed limits: 80 km/h on expressways, 50 km/h on major roads, 30 km/h in estates.',
+      'Never use your phone while driving. Use hands-free voice commands for HiGo app actions.',
+      'Wear your seatbelt and ensure passengers buckle up before moving.',
+      'Report accidents or hazards immediately via the in-app SOS button.',
+      'Take mandatory 15-minute breaks after every 4 hours of continuous driving.',
+    ],
+    question: 'What is the maximum allowed speed inside residential estates in Abuja?',
     options: ['A. 50 km/h', 'B. 30 km/h', 'C. 20 km/h'],
-    correctAnswerIndex: 2, // C
+    correctAnswerIndex: 1,
   },
   {
-    id: 'course_customer',
-    title: 'Module 2: Customer Hospitality in Pidgin',
-    videoUrl: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
-    question: 'How you suppose greet passenger when dey enter your Keke/Car?',
-    options: ['A. Say nothing, just drive', 'B. Greet dem politely (e.g. Welcome to HiGo)', 'C. Ask dem for money first'],
-    correctAnswerIndex: 1, // B
+    id: 'course_etiquette',
+    title: 'Passenger Etiquette & Hospitality',
+    icon: '🤝',
+    duration: '6 min',
+    content: [
+      'Greet every passenger warmly: "Welcome to HiGo!" sets a positive tone.',
+      'Confirm the destination before starting — repeat the address to avoid wrong turns.',
+      'Keep the vehicle clean, odour-free, and at a comfortable temperature.',
+      'Offer to help with luggage if the passenger needs assistance.',
+      'Maintain polite conversation but respect passengers who prefer silence.',
+      'Never ask for cash outside the app. All payments go through HiGo for your protection.',
+      'If a passenger is unhappy, stay calm and offer to contact HiGo Support from the app.',
+    ],
+    question: 'How should you greet a passenger when they enter your vehicle?',
+    options: [
+      'A. Say nothing, just drive',
+      'B. Greet them politely (e.g. "Welcome to HiGo")',
+      'C. Ask for payment in cash first',
+    ],
+    correctAnswerIndex: 1,
+  },
+  {
+    id: 'course_abuja_zones',
+    title: 'Navigating Abuja Zones',
+    icon: '🗺️',
+    duration: '10 min',
+    content: [
+      'Central Business District (CBD): High demand 7–10 AM and 4–7 PM. Use Nnamdi Azikiwe Expressway access.',
+      'Gwarinpa & Life Camp: Popular residential zones. Watch for school-run traffic 7–8 AM.',
+      'Wuse & Maitama: Premium fares. Know alternate routes via Aminu Kano Crescent.',
+      'Kubwa & Nyanya axis: Longer trips, higher earnings. Check fuel before accepting.',
+      'Airport runs (Nnamdi Azikwe Int\'l): Confirm flight time; allow 45 min buffer for drop-offs.',
+      'Surge zones appear in green on the HiGo map — position yourself nearby during peak hours.',
+      'Avoid Jabi Lake road during Friday prayers (12–2 PM) and Sunday evenings.',
+    ],
+    question: 'When are surge fares most likely in Abuja CBD?',
+    options: [
+      'A. Midnight to 4 AM',
+      'B. 7–10 AM and 4–7 PM weekdays',
+      'C. Only on public holidays',
+    ],
+    correctAnswerIndex: 1,
   },
 ];
 
@@ -39,7 +85,6 @@ export function TrainingModule() {
   const [activeCourse, setActiveCourse] = useState<Course | null>(null);
   const [showQuiz, setShowQuiz] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const videoRef = useRef<Video | null>(null);
 
   useEffect(() => {
     void loadProgress();
@@ -51,21 +96,20 @@ export function TrainingModule() {
       if (raw) {
         setCompletedCourses(JSON.parse(raw) as string[]);
       }
-    } catch {}
+    } catch {
+      // ignore
+    }
   };
 
-  const handleVideoPlaybackUpdate = (status: any) => {
-    if (status.didJustFinish) {
-      // Video completed, trigger quiz
-      setShowQuiz(true);
-    }
+  const handleStartQuiz = () => {
+    setShowQuiz(true);
   };
 
   const handleSubmitQuiz = async () => {
     if (selectedOption === null || !activeCourse) return;
 
     if (selectedOption === activeCourse.correctAnswerIndex) {
-      Alert.alert('Correct Answer!', 'You have completed this training module.', [
+      Alert.alert('Correct!', 'You have completed this training module.', [
         {
           text: 'OK',
           onPress: async () => {
@@ -73,13 +117,11 @@ export function TrainingModule() {
             setCompletedCourses(next);
             await AsyncStorage.setItem('@higo/driver/training_completed', JSON.stringify(next));
 
-            // Sync training progress in job queue
             await enqueueJob('training_progress', {
               courseId: activeCourse.id,
               completedAt: new Date().toISOString(),
             });
 
-            // Reset
             setActiveCourse(null);
             setShowQuiz(false);
             setSelectedOption(null);
@@ -87,28 +129,44 @@ export function TrainingModule() {
         },
       ]);
     } else {
-      Alert.alert('Wrong Answer', 'Please review the video and try again.');
+      Alert.alert('Wrong Answer', 'Review the lesson content and try again.');
       setSelectedOption(null);
     }
   };
 
+  const completedCount = completedCourses.length;
+  const totalCount = COURSES.length;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Safety Training</Text>
+      <Text style={styles.progress}>
+        {completedCount}/{totalCount} modules completed
+      </Text>
 
-      {/* Active Course / Video Player */}
       {activeCourse ? (
         <View style={styles.activeWrap}>
-          <Text style={styles.activeTitle}>{activeCourse.title}</Text>
+          <Text style={styles.activeTitle}>
+            {activeCourse.icon} {activeCourse.title}
+          </Text>
+          <Text style={styles.duration}>{activeCourse.duration} read</Text>
+
           {!showQuiz ? (
-            <Video
-              ref={videoRef}
-              source={{ uri: activeCourse.videoUrl }}
-              style={styles.videoPlayer}
-              useNativeControls
-              resizeMode={ResizeMode.CONTAIN}
-              onPlaybackStatusUpdate={handleVideoPlaybackUpdate}
-            />
+            <>
+              <View style={styles.lessonCard}>
+                {activeCourse.content.map((point, idx) => (
+                  <View key={idx} style={styles.lessonPoint}>
+                    <Text style={styles.lessonBullet}>•</Text>
+                    <Text style={styles.lessonText}>{point}</Text>
+                  </View>
+                ))}
+              </View>
+              <Button
+                label="Take Assessment Quiz"
+                onPress={handleStartQuiz}
+                style={styles.quizStartBtn}
+              />
+            </>
           ) : (
             <View style={styles.quizCard}>
               <Text style={styles.quizHeader}>Module Assessment</Text>
@@ -142,8 +200,9 @@ export function TrainingModule() {
               />
             </View>
           )}
+
           <Button
-            label="Cancel Training"
+            label="Back to Modules"
             onPress={() => {
               setActiveCourse(null);
               setShowQuiz(false);
@@ -160,11 +219,18 @@ export function TrainingModule() {
             return (
               <View key={course.id} style={styles.courseCard}>
                 <View style={styles.courseHeader}>
-                  <Text style={styles.courseTitle}>{course.title}</Text>
-                  {isCompleted && <Text style={styles.completedBadge}>✓ COMPLETED</Text>}
+                  <Text style={styles.courseIcon}>{course.icon}</Text>
+                  <View style={styles.courseInfo}>
+                    <Text style={styles.courseTitle}>{course.title}</Text>
+                    <Text style={styles.courseDuration}>{course.duration}</Text>
+                  </View>
+                  {isCompleted && <Text style={styles.completedBadge}>✓ DONE</Text>}
                 </View>
+                <Text style={styles.coursePreview} numberOfLines={2}>
+                  {course.content[0]}
+                </Text>
                 <Button
-                  label={isCompleted ? 'Re-watch Video' : 'Start Module'}
+                  label={isCompleted ? 'Review Module' : 'Start Module'}
                   onPress={() => {
                     setActiveCourse(course);
                     setShowQuiz(false);
@@ -193,6 +259,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: theme.colors.darkNavy,
+  },
+  progress: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
     marginBottom: theme.spacing.md,
   },
   activeWrap: {
@@ -205,16 +276,40 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: theme.colors.darkNavy,
+  },
+  duration: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
     marginBottom: theme.spacing.md,
   },
-  videoPlayer: {
-    width: '100%',
-    height: 200,
-    backgroundColor: '#000',
+  lessonCard: {
+    backgroundColor: '#F9FAFB',
     borderRadius: 8,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  lessonPoint: {
+    flexDirection: 'row',
+    marginBottom: 10,
+    gap: 8,
+  },
+  lessonBullet: {
+    fontSize: 14,
+    color: theme.colors.primaryGreen,
+    fontWeight: '700',
+  },
+  lessonText: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.colors.darkNavy,
+    lineHeight: 20,
+  },
+  quizStartBtn: {
+    marginBottom: theme.spacing.sm,
   },
   quizCard: {
-    marginTop: theme.spacing.md,
+    marginTop: theme.spacing.sm,
   },
   quizHeader: {
     fontSize: 14,
@@ -269,20 +364,35 @@ const styles = StyleSheet.create({
   },
   courseHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  courseIcon: {
+    fontSize: 28,
+  },
+  courseInfo: {
+    flex: 1,
   },
   courseTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: theme.colors.darkNavy,
-    flex: 1,
-    marginRight: 8,
+  },
+  courseDuration: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
   },
   completedBadge: {
     fontSize: 11,
     fontWeight: '700',
     color: theme.colors.primaryGreen,
+  },
+  coursePreview: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+    marginBottom: theme.spacing.md,
   },
 });

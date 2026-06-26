@@ -17,17 +17,16 @@ export function Splash({ navigation }: Props) {
   }, [hydrate]);
 
   useEffect(() => {
-    if (isHydrated) {
-      // Simulate splash display delay
-      const timer = setTimeout(() => {
-        if (isAuthenticated) {
-          // Navigated by RootStack automatically if authenticated
-        } else {
-          navigation.replace('Onboard1');
-        }
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
+    if (!isHydrated) return;
+    // Simulate splash display delay
+    const timer = setTimeout(() => {
+      if (isAuthenticated) {
+        // Navigated by RootStack automatically if authenticated
+      } else {
+        navigation.replace('Onboard1');
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
   }, [isHydrated, isAuthenticated, navigation]);
 
   return (

@@ -106,8 +106,9 @@ export default defineConfig({
       'expo-speech',
       'expo-task-manager',
       'react-native-image-picker',
+      'react-native-screens',
     ],
-    include: ['@higo/api-client', '@higo/shared-types', '@higo/brand-tokens'],
+    include: ['@higo/api-client', '@higo/shared-types', '@higo/brand-tokens', 'warn-once'],
     // Note: esbuildOptions removed — Vite 8 uses Rolldown, not esbuild.
     // JSX-in-JS is handled by the rollupPlugin('js-in-jsx') above.
   },

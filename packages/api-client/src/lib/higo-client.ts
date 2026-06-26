@@ -34,6 +34,17 @@ import {
   UpdateMyProfileResponse,
   GetMyProfileResponse,
   PaginationQuery,
+  GetDirectionsResponse,
+  GetNearbyDriversResponse,
+  LatLng,
+  PlaceDetailsResponse,
+  PlacesAutocompleteResponse,
+  GetTripMessagesResponse,
+  SendTripMessageRequest,
+  SendTripMessageResponse,
+  GetSupportMessagesResponse,
+  SendSupportMessageRequest,
+  SendSupportMessageResponse,
 } from '@higo/shared-types';
 import type { TokenStorage } from './token-storage';
 
@@ -289,6 +300,85 @@ export class HigoClient {
     return this.request<TripSosResponse>({
       method: 'POST',
       url: `/trips/${tripId}/sos`,
+      data: dto,
+    });
+  }
+
+  async getDirections(
+    origin: LatLng,
+    destination: LatLng,
+  ): Promise<GetDirectionsResponse> {
+    return this.request<GetDirectionsResponse>({
+      method: 'GET',
+      url: '/maps/directions',
+      params: {
+        originLat: origin.lat,
+        originLng: origin.lng,
+        destLat: destination.lat,
+        destLng: destination.lng,
+      },
+    });
+  }
+
+  async placesAutocomplete(input: string): Promise<PlacesAutocompleteResponse> {
+    return this.request<PlacesAutocompleteResponse>({
+      method: 'GET',
+      url: '/maps/places/autocomplete',
+      params: { input },
+    });
+  }
+
+  async placesDetails(placeId: string): Promise<PlaceDetailsResponse> {
+    return this.request<PlaceDetailsResponse>({
+      method: 'GET',
+      url: '/maps/places/details',
+      params: { placeId },
+    });
+  }
+
+  async getNearbyDrivers(
+    lat: number,
+    lng: number,
+    radiusKm = 5,
+  ): Promise<GetNearbyDriversResponse> {
+    return this.request<GetNearbyDriversResponse>({
+      method: 'GET',
+      url: '/drivers/nearby',
+      params: { lat, lng, radiusKm },
+    });
+  }
+
+  async getTripMessages(tripId: string): Promise<GetTripMessagesResponse> {
+    return this.request<GetTripMessagesResponse>({
+      method: 'GET',
+      url: `/trips/${tripId}/messages`,
+    });
+  }
+
+  async sendTripMessage(
+    tripId: string,
+    dto: SendTripMessageRequest,
+  ): Promise<SendTripMessageResponse> {
+    return this.request<SendTripMessageResponse>({
+      method: 'POST',
+      url: `/trips/${tripId}/messages`,
+      data: dto,
+    });
+  }
+
+  async getSupportMessages(): Promise<GetSupportMessagesResponse> {
+    return this.request<GetSupportMessagesResponse>({
+      method: 'GET',
+      url: '/passengers/me/support/messages',
+    });
+  }
+
+  async sendSupportMessage(
+    dto: SendSupportMessageRequest,
+  ): Promise<SendSupportMessageResponse> {
+    return this.request<SendSupportMessageResponse>({
+      method: 'POST',
+      url: '/passengers/me/support/messages',
       data: dto,
     });
   }

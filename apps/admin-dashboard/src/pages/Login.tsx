@@ -29,26 +29,7 @@ export const Login: React.FC = () => {
       setAuth(result.admin, result.accessToken);
       navigate('/');
     } catch (err: any) {
-      console.warn('Backend login failed, using fallback mock for demo verification:', err);
-      // Fallback for development if backend endpoints aren't active yet:
-      if (email.includes('admin') && password.length >= 6) {
-        const mockRole = email.includes('super') 
-          ? 'super_admin' 
-          : email.includes('mod') 
-          ? 'moderator' 
-          : 'admin';
-          
-        const mockAdmin = {
-          id: 'mock-admin-uuid',
-          name: email.split('@')[0].replace('.', ' '),
-          email,
-          role: mockRole as any,
-        };
-        setAuth(mockAdmin, 'mock-jwt-token');
-        navigate('/');
-      } else {
-        setErrorMsg(err.message || 'Invalid credentials.');
-      }
+      setErrorMsg(err?.message || 'Invalid credentials. Please try again.');
     } finally {
       setLoading(false);
     }

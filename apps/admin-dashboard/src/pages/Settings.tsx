@@ -1,20 +1,69 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePermissions } from '../hooks/usePermissions';
 import { useUiStore } from '../stores/uiStore';
-import { Settings as SettingsIcon, ShieldCheck, CheckCircle2, ShieldAlert, Key } from 'lucide-react';
+import { apiService, PlatformSettings } from '../services/api';
+import { Settings as SettingsIcon, ShieldCheck, ShieldAlert, Key, Loader2 } from 'lucide-react';
+
+const FCM_KEY_MASK = '••••••••••••••••••••••••••••••••';
+
+const defaultSettings: PlatformSettings = {
+  googleMapsOriginRestriction: 'https://admin.higo.ng/*',
+  smsGatewayChannel: 'termii',
+  fcmServerKey: '',
+  maintenanceMode: false,
+};
 
 export const Settings: React.FC = () => {
   const { isSuperAdmin } = usePermissions();
   const { addToast } = useUiStore();
+  const [settings, setSettings] = useState<PlatformSettings>(defaultSettings);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        setLoading(true);
+        const data = await apiService.getSettings();
+        setSettings(data);
+      } catch (err) {
+        console.error('Failed to load platform settings:', err);
+        addToast('Failed to load platform settings', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSettings();
+  }, [addToast]);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isSuperAdmin) {
       alert('Only super_admin users can modify global system settings.');
       return;
     }
-    addToast('Global settings updated successfully', 'success');
+
+    try {
+      setSaving(true);
+      const updated = await apiService.updateSettings(settings);
+      setSettings(updated);
+      addToast('Global settings updated successfully', 'success');
+    } catch (err) {
+      console.error('Failed to save platform settings:', err);
+      addToast('Failed to save platform settings', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-primaryGreen" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -39,7 +88,13 @@ export const Settings: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  defaultValue="https://admin.higo.ng/*"
+                  value={settings.googleMapsOriginRestriction}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      googleMapsOriginRestriction: e.target.value,
+                    }))
+                  }
                   disabled={!isSuperAdmin}
                   className="w-full px-3 py-2 border border-lightGrey rounded-input text-xs focus:outline-none focus:border-primaryGreen disabled:bg-lightGrey disabled:text-gray-400"
                 />
@@ -50,7 +105,13 @@ export const Settings: React.FC = () => {
                   Primary SMS Gateway Channel
                 </label>
                 <select
-                  defaultValue="termii"
+                  value={settings.smsGatewayChannel}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      smsGatewayChannel: e.target.value as PlatformSettings['smsGatewayChannel'],
+                    }))
+                  }
                   disabled={!isSuperAdmin}
                   className="w-full px-3 py-2 border border-lightGrey rounded-input text-xs focus:outline-none disabled:bg-lightGrey disabled:text-gray-400"
                 >
@@ -66,7 +127,14 @@ export const Settings: React.FC = () => {
               </label>
               <input
                 type="password"
-                defaultValue="••••••••••••••••••••••••••••••••"
+                value={settings.fcmServerKey}
+                placeholder="Not configured"
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    fcmServerKey: e.target.value,
+                  }))
+                }
                 disabled={!isSuperAdmin}
                 className="w-full px-3 py-2 border border-lightGrey rounded-input text-xs focus:outline-none disabled:bg-lightGrey disabled:text-gray-400 font-mono"
               />
@@ -76,7 +144,13 @@ export const Settings: React.FC = () => {
               <input
                 type="checkbox"
                 id="maintenanceMode"
-                defaultChecked={false}
+                checked={settings.maintenanceMode}
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    maintenanceMode: e.target.checked,
+                  }))
+                }
                 disabled={!isSuperAdmin}
                 className="rounded text-primaryGreen focus:ring-primaryGreen disabled:opacity-50"
               />
@@ -88,11 +162,12 @@ export const Settings: React.FC = () => {
             <div className="flex justify-end pt-4">
               <button
                 type="submit"
-                disabled={!isSuperAdmin}
-                className={`px-6 py-2.5 bg-primaryGreen text-white font-semibold rounded-button text-sm transition-all hover:bg-opacity-95 shadow-sm ${
-                  !isSuperAdmin ? 'opacity-50 cursor-not-allowed' : ''
+                disabled={!isSuperAdmin || saving}
+                className={`px-6 py-2.5 bg-primaryGreen text-white font-semibold rounded-button text-sm transition-all hover:bg-opacity-95 shadow-sm flex items-center gap-2 ${
+                  !isSuperAdmin || saving ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
+                {saving && <Loader2 className="animate-spin" size={16} />}
                 Save Settings
               </button>
             </div>

@@ -6,6 +6,7 @@ import { DriverAuthStack } from './DriverAuthStack';
 import { DriverMainStack } from './DriverMainStack';
 import type { RootStackParamList } from './types';
 import { theme } from '../theme';
+import { registerFCM, setupFCMHandlers } from '../services/fcm';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -15,6 +16,14 @@ export function RootStack() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    void registerFCM();
+    const cleanupHandlers = setupFCMHandlers();
+    return cleanupHandlers;
+  }, [isAuthenticated]);
 
   if (!isHydrated) {
     return (

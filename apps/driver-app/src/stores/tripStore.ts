@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { Audio } from 'expo-av';
-import { Trip, TripStatus, TripNewRequestPayload } from '@higo/shared-types';
+import {
+  Trip,
+  TripStatus,
+  TripNewRequestPayload,
+  TripStartedPayload,
+  TripCompletedPayload,
+  TripCancelledPayload,
+  TripDriverArrivedPayload,
+} from '@higo/shared-types';
 import { api } from '../services/api';
 import { getSocket } from '../services/socket';
 import { startBackgroundLocation } from '../services/location-task';
@@ -22,6 +30,11 @@ interface TripState {
   ratePassenger: (tripId: string, rating: number, comment?: string) => Promise<void>;
   triggerSOS: (tripId: string) => Promise<void>;
   setActiveTrip: (trip: Trip | null) => void;
+  handleTripStarted: (payload: TripStartedPayload) => void;
+  handleTripCompleted: (payload: TripCompletedPayload) => void;
+  handleTripCancelled: (payload: TripCancelledPayload) => Promise<void>;
+  handleTripDriverArrived: (payload: TripDriverArrivedPayload) => void;
+  clearTripState: () => void;
 }
 
 let countdownInterval: NodeJS.Timeout | null = null;
@@ -218,5 +231,67 @@ export const useTripStore = create<TripState>((set, get) => ({
 
   setActiveTrip(trip) {
     set({ activeTrip: trip });
+  },
+
+  handleTripStarted(payload) {
+    const current = get().activeTrip;
+    if (!current || current.id !== payload.tripId) return;
+    set({
+      activeTrip: {
+        ...current,
+        status: TripStatus.ACTIVE,
+        startedAt: payload.startedAt,
+      },
+    });
+  },
+
+  handleTripCompleted(payload) {
+    const current = get().activeTrip;
+    if (!current || current.id !== payload.tripId) return;
+    set({
+      activeTrip: {
+        ...current,
+        status: TripStatus.COMPLETED,
+        totalFare: payload.fare,
+        completedAt: payload.completedAt,
+      },
+    });
+  },
+
+  async handleTripCancelled(payload) {
+    const current = get().activeTrip;
+    const incoming = get().incomingRequest;
+    if (
+      (current && current.id === payload.tripId) ||
+      (incoming && incoming.tripId === payload.tripId)
+    ) {
+      await get().clearTripState();
+    }
+  },
+
+  handleTripDriverArrived(payload) {
+    const current = get().activeTrip;
+    if (!current || current.id !== payload.tripId) return;
+    set({
+      activeTrip: {
+        ...current,
+        status: TripStatus.EN_ROUTE,
+      },
+    });
+  },
+
+  async clearTripState() {
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
+    if (soundInstance) {
+      try {
+        await soundInstance.stopAsync();
+        await soundInstance.unloadAsync();
+      } catch {}
+      soundInstance = null;
+    }
+    set({ activeTrip: null, incomingRequest: null, countdown: 15, isSOSActive: false });
   },
 }));

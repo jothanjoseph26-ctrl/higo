@@ -2,13 +2,20 @@
  * Web shim for react-native/Libraries/Utilities/codegenNativeComponent
  *
  * This module is imported by packages like react-native-safe-area-context
- * to register native components. On web, we return a no-op factory.
+ * to register native components. On web, we return a passthrough component
+ * that renders children using a View.
  */
-import { forwardRef } from 'react';
+import React, { forwardRef } from 'react';
+import { View } from 'react-native';
 
 function codegenNativeComponent<P>(nativeComponentName: string, _options?: any) {
-  // Return a stub component that renders nothing
-  return forwardRef<any, P>((_props, _ref) => null);
+  return forwardRef<any, any>(({ children, ...props }, ref) => {
+    return (
+      <View ref={ref} {...props}>
+        {children}
+      </View>
+    );
+  });
 }
 
 export default codegenNativeComponent;
