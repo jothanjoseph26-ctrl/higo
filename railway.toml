@@ -5,7 +5,7 @@ dockerfilePath = "Dockerfile"
 [deploy]
 # Web API service (default). For Bull dispatch jobs, deploy a second Railway
 # service from the same repo with: node apps/api/dist/worker.js
-startCommand = "node apps/api/dist/main.js"
+startCommand = "sh -c 'if [ \"$RAILWAY_SERVICE_NAME\" = \"Worker\" ]; then exec node apps/api/dist/worker.js; else exec node apps/api/dist/main.js; fi'"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
