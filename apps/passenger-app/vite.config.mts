@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import { readFileSync } from 'fs';
 import { join, resolve } from 'path';
+import { expoModulesCoreShimPlugin } from './vite-expo-shim.plugin';
 
 const extensions = [
   '.mjs',
@@ -28,6 +29,10 @@ const EXPO_PACKAGES = [
   /expo-speech/,
   /expo-task-manager/,
   /expo-image-manipulator/,
+  /expo-constants/,
+  /expo-device/,
+  /expo-application/,
+  /expo-notifications/,
 ];
 
 const rollupPlugin = (matchers: RegExp[]) => ({
@@ -83,6 +88,7 @@ export default defineConfig({
     ],
   },
   build: {
+    emptyOutDir: true,
     reportCompressedSize: true,
     commonjsOptions: { transformMixedEsModules: true },
     outDir: '../../dist/apps/passenger-app/web',
@@ -118,7 +124,7 @@ export default defineConfig({
     // Note: esbuildOptions removed — Vite 8 uses Rolldown, not esbuild.
     // JSX-in-JS is handled by the rollupPlugin('js-in-jsx') above.
   },
-  plugins: [react(), nxViteTsPaths(), rollupPlugin(EXPO_PACKAGES)],
+  plugins: [expoModulesCoreShimPlugin(import.meta.dirname), react(), nxViteTsPaths(), rollupPlugin(EXPO_PACKAGES)],
   // Uncomment this if you are using workers.
   // worker: {
   //   plugins: () => [ nxViteTsPaths() ],

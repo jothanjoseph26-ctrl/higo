@@ -31,6 +31,12 @@ export class SmsService {
 
     if (provider === 'firebase') {
       const channel = await this.firebaseOtp.sendOtp(phone, code);
+      if (channel === 'firebase-dev') {
+        this.logger.warn(
+          `No FCM token for ${phone}; falling back to SMS gateway for OTP delivery`,
+        );
+        return this.sendSms(phone, message);
+      }
       return { channel };
     }
 
