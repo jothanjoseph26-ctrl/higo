@@ -1,6 +1,6 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+# Per-service Dockerfile via RAILWAY_DOCKERFILE_PATH (Dockerfile | Dockerfile.admin)
 
 [deploy]
 # Start command is in Dockerfile CMD (branches on PROCESS_ROLE=worker).
