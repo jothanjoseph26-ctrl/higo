@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Alert } from 'react-native';
+import { Platform, StyleSheet, Text, View, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { Input } from '../../components/Input';
@@ -103,6 +103,9 @@ export function Login({ navigation }: Props) {
               editable={!isLoading}
             />
             {error && <Text style={styles.errorText}>{error}</Text>}
+            {Platform.OS === 'web' ? (
+              <View nativeID="firebase-recaptcha" style={styles.recaptchaHost} />
+            ) : null}
             <Button
               label={t('auth.sendOtp')}
               onPress={handleSendOtp}
@@ -176,5 +179,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: theme.spacing.sm,
     textAlign: 'center',
+  },
+  recaptchaHost: {
+    minHeight: 78,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

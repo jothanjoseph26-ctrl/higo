@@ -8,7 +8,8 @@ import {
 } from 'firebase/auth';
 import { api } from './api';
 
-const RECAPTCHA_ID = 'firebase-recaptcha';
+/** Must match nativeID on login screen (react-native-web → id attribute). */
+export const RECAPTCHA_CONTAINER_ID = 'firebase-recaptcha';
 
 let firebaseApp: FirebaseApp | null = null;
 let auth: Auth | null = null;
@@ -28,12 +29,11 @@ async function ensureFirebase(): Promise<Auth> {
 }
 
 function ensureRecaptchaContainer(): HTMLElement {
-  let container = document.getElementById(RECAPTCHA_ID);
+  const container = document.getElementById(RECAPTCHA_CONTAINER_ID);
   if (!container) {
-    container = document.createElement('div');
-    container.id = RECAPTCHA_ID;
-    container.style.display = 'none';
-    document.body.appendChild(container);
+    throw new Error(
+      'reCAPTCHA container is missing. Reload the page and try again.',
+    );
   }
   return container;
 }
@@ -48,7 +48,7 @@ function destroyRecaptcha(): void {
     }
     recaptchaVerifier = null;
   }
-  const container = document.getElementById(RECAPTCHA_ID);
+  const container = document.getElementById(RECAPTCHA_CONTAINER_ID);
   if (container) {
     container.innerHTML = '';
   }
@@ -65,8 +65,8 @@ function getOrCreateRecaptcha(activeAuth: Auth): RecaptchaVerifier {
   }
 
   ensureRecaptchaContainer();
-  recaptchaVerifier = new RecaptchaVerifier(activeAuth, RECAPTCHA_ID, {
-    size: 'invisible',
+  recaptchaVerifier = new RecaptchaVerifier(activeAuth, RECAPTCHA_CONTAINER_ID, {
+    size: 'normal',
   });
   return recaptchaVerifier;
 }
@@ -93,6 +93,14 @@ function mapFirebasePhoneError(err: unknown): Error {
     message.includes('recaptcha-already')
   ) {
     return new Error('Verification is already in progress. Please wait a moment and try again.');
+  }
+  if (
+    message.includes('Cannot contact reCAPTCHA') ||
+    message.includes('contact reCAPTCHA')
+  ) {
+    return new Error(
+      'Cannot reach Google reCAPTCHA. Disable ad blockers, try Incognito mode, switch network (mobile data), or disconnect VPN.',
+    );
   }
   if (message.includes('CONNECTION_CLOSED') || message.includes('Failed to fetch')) {
     return new Error(

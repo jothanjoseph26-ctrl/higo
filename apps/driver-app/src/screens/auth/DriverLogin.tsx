@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
@@ -68,6 +68,9 @@ export function DriverLogin(_props: Props) {
             onChangeText={setPhone}
             error={phoneError}
           />
+          {Platform.OS === 'web' ? (
+            <View nativeID="firebase-recaptcha" style={styles.recaptchaHost} />
+          ) : null}
           <Button
             label={t('auth.sendOtp')}
             onPress={handleSendOtp}
@@ -126,5 +129,12 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
     color: theme.colors.error,
     fontSize: 14,
+  },
+  recaptchaHost: {
+    minHeight: 78,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
