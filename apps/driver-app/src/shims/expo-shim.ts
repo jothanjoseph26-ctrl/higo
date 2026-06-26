@@ -58,3 +58,9 @@ export const requireOptionalNativeModule = (_name: string) => ({});
 export const reloadAppAsync = async () => {};
 export const installOnUIRuntime = (fn: any) => {};
 export const isRunningInExpoGo = false;
+
+export const uuid = {
+  v4: () => crypto.randomUUID(),
+  v5: () => crypto.randomUUID(),
+  namespace: {},
+};

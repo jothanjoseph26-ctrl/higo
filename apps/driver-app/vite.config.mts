@@ -91,9 +91,6 @@ export default defineConfig({
     commonjsOptions: { transformMixedEsModules: true },
     outDir: '../../dist/apps/driver-app/web',
     rollupOptions: {
-      external: [
-        /expo-modules-core/,
-      ],
       plugins: [rollupPlugin(EXPO_PACKAGES)],
     },
   },

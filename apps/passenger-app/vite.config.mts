@@ -87,7 +87,6 @@ export default defineConfig({
     commonjsOptions: { transformMixedEsModules: true },
     outDir: '../../dist/apps/passenger-app/web',
     rollupOptions: {
-      external: [/expo-modules-core/],
       plugins: [rollupPlugin(EXPO_PACKAGES)],
     },
   },
