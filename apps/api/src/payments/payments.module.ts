@@ -13,9 +13,10 @@ import { FinancialAuditService } from './audit/financial-audit.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { CryptoModule } from '../common/crypto/crypto.module';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
-  imports: [PrismaModule, RedisModule, CryptoModule],
+  imports: [PrismaModule, RedisModule, CryptoModule, AiModule],
   controllers: [PaymentsController, AdminFinancialController, AdminFinanceController],
   providers: [
     AdminFinanceService,
