@@ -32,8 +32,8 @@ RUN cd packages/shared-types && pnpm exec tsc --build tsconfig.lib.json
 RUN cd packages/brand-tokens && pnpm exec tsc --build tsconfig.lib.json
 RUN cd packages/api-client && pnpm exec tsc --build tsconfig.lib.json
 RUN cd apps/admin-dashboard && pnpm exec vite build
-RUN cd apps/passenger-app && pnpm exec vite build
-RUN cd apps/driver-app && pnpm exec vite build
+RUN cd apps/passenger-app && VITE_BASE_PATH=/passenger/ pnpm exec vite build
+RUN cd apps/driver-app && VITE_BASE_PATH=/driver/ pnpm exec vite build
 RUN test -f apps/admin-dashboard/dist/index.html
 RUN test -f dist/apps/passenger-app/web/index.html
 RUN test -f dist/apps/driver-app/web/index.html

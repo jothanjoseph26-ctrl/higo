@@ -1,8 +1,13 @@
 import { LinkingOptions } from '@react-navigation/native';
 import type { RootStackParamList } from './types';
 
+const passengerWebPrefix =
+  typeof window !== 'undefined'
+    ? `${window.location.origin}/passenger`
+    : 'https://admin-production-13cc.up.railway.app/passenger';
+
 export const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: ['higo-passenger://', 'https://hiconnectgo.com/passenger'],
+  prefixes: ['higo-passenger://', 'https://hiconnectgo.com/passenger', passengerWebPrefix],
   config: {
     screens: {
       Main: {

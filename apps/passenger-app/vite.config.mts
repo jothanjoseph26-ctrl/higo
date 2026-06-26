@@ -54,6 +54,7 @@ const rollupPlugin = (matchers: RegExp[]) => ({
 
 export default defineConfig({
   root: import.meta.dirname,
+  base: process.env.VITE_BASE_PATH ?? '/',
   cacheDir: '../../node_modules/.vite/apps/passenger-app',
   define: {
     global: 'window',
