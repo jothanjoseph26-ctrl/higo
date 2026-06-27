@@ -118,7 +118,7 @@ export interface SendOtpResponse {
   sent: boolean;
   expiresInSeconds: number; // 300
   /** Channel actually used after fallback logic. */
-  channel: 'firebase' | 'firebase-dev' | 'termii' | 'africastalking' | 'mock';
+  channel: 'firebase' | 'firebase-dev' | 'twilio' | 'termii' | 'africastalking' | 'mock';
 }
 
 export interface FirebaseWebConfig {

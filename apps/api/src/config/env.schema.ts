@@ -18,7 +18,14 @@ export const envSchema = Joi.object({
   ENCRYPTION_KEY: Joi.string().base64().length(44).required(),
   GOOGLE_OAUTH_CLIENT_ID: Joi.string().required(),
 
-  OTP_PROVIDER: Joi.string().valid('firebase', 'termii').default('firebase'),
+  OTP_PROVIDER: Joi.string()
+    .valid('firebase', 'termii', 'twilio')
+    .default('firebase'),
+
+  TWILIO_ACCOUNT_SID: Joi.string().allow('').default(''),
+  TWILIO_AUTH_TOKEN: Joi.string().allow('').default(''),
+  TWILIO_PHONE_NUMBER: Joi.string().allow('').default(''),
+  TWILIO_MESSAGING_SERVICE_SID: Joi.string().allow('').default(''),
 
   TERMII_API_KEY: Joi.string().allow('').default(''),
   TERMII_SENDER_ID: Joi.string().allow('').default('HiGo'),
@@ -78,6 +85,21 @@ export const envSchema = Joi.object({
       message:
         'TERMII_API_KEY and AFRICASTALKING_API_KEY are required when OTP_PROVIDER=termii',
     });
+  }
+
+  if (value.OTP_PROVIDER === 'twilio') {
+    if (!value.TWILIO_ACCOUNT_SID || !value.TWILIO_AUTH_TOKEN) {
+      return helpers.error('any.custom', {
+        message:
+          'TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required when OTP_PROVIDER=twilio',
+      });
+    }
+    if (!value.TWILIO_PHONE_NUMBER && !value.TWILIO_MESSAGING_SERVICE_SID) {
+      return helpers.error('any.custom', {
+        message:
+          'TWILIO_PHONE_NUMBER or TWILIO_MESSAGING_SERVICE_SID is required when OTP_PROVIDER=twilio',
+      });
+    }
   }
 
   const r2Secret =
