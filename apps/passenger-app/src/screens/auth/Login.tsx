@@ -9,6 +9,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { normalizeNigerianPhone } from '../../utils/phone';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/types';
+import { preInitializeRecaptcha } from '../../services/firebase-phone-auth';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
@@ -22,6 +23,9 @@ export function Login({ navigation }: Props) {
   const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      void preInitializeRecaptcha();
+    }
     return () => {
       clearError();
     };

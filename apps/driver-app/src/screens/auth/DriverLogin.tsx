@@ -8,6 +8,7 @@ import { ScreenShell } from '../../components/ScreenShell';
 import { useDriverAuthStore } from '../../stores/driverAuthStore';
 import { normalizeNigerianPhone } from '../../utils/phone';
 import { theme } from '../../theme';
+import { preInitializeRecaptcha } from '../../services/firebase-phone-auth';
 import type { DriverAuthStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<DriverAuthStackParamList, 'DriverLogin'>;
@@ -20,6 +21,15 @@ export function DriverLogin(_props: Props) {
   const [otp, setOtp] = useState('');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phoneError, setPhoneError] = useState<string | undefined>();
+
+  React.useEffect(() => {
+    if (Platform.OS === 'web') {
+      void preInitializeRecaptcha();
+    }
+    return () => {
+      clearError();
+    };
+  }, [clearError]);
 
   const normalized = normalizeNigerianPhone(phone);
 

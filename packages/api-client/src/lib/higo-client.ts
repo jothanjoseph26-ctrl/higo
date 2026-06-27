@@ -244,11 +244,27 @@ export class HigoClient {
   ): Promise<KycUploadResponse> {
     const form = new FormData();
     form.append('docType', docType);
-    form.append('file', {
-      uri: file.uri,
-      name: file.name,
-      type: file.type,
-    } as unknown as Blob);
+
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        const response = await fetch(file.uri);
+        const blob = await response.blob();
+        form.append('file', blob, file.name);
+      } catch (err) {
+        console.error('Failed to convert URI to Blob on web, using fallback', err);
+        form.append('file', {
+          uri: file.uri,
+          name: file.name,
+          type: file.type,
+        } as unknown as Blob);
+      }
+    } else {
+      form.append('file', {
+        uri: file.uri,
+        name: file.name,
+        type: file.type,
+      } as unknown as Blob);
+    }
 
     return this.request<KycUploadResponse>({
       method: 'POST',

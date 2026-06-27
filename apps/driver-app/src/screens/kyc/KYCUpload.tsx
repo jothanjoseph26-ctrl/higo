@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View, Platform } from 'react-native';
 import {
   launchCamera,
   launchImageLibrary,
@@ -32,7 +32,31 @@ export function KYCUpload({ navigation, route }: Props) {
   const [hasOcrResponse, setHasOcrResponse] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const pickDocumentWeb = () => {
+    if (typeof document === 'undefined') return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,application/pdf';
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        const objectUrl = URL.createObjectURL(file);
+        setPicked({
+          uri: objectUrl,
+          fileName: file.name,
+          type: file.type,
+          fileSize: file.size,
+        } as any);
+      }
+    };
+    input.click();
+  };
+
   const pickDocument = () => {
+    if (Platform.OS === 'web') {
+      pickDocumentWeb();
+      return;
+    }
     Alert.alert(t('kyc.pickDocument'), undefined, [
       {
         text: 'Camera',

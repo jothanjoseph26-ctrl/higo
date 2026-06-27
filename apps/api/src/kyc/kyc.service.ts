@@ -87,8 +87,18 @@ export class KYCService {
 
     let ocrFields: Record<string, string> = {};
     try {
-      ocrFields = await this.ocr.extractForm(s3Key, docType);
-    } catch {
+      ocrFields = await Promise.race([
+        this.ocr.extractForm(s3Key, docType),
+        new Promise<Record<string, string>>((_, reject) =>
+          setTimeout(() => reject(new Error('OCR Timeout')), 8000),
+        ),
+      ]);
+    } catch (err) {
+      this.logger.warn(
+        `OCR extraction failed or timed out: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
       ocrFields = {};
     }
 

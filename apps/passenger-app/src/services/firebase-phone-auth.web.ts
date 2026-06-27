@@ -66,9 +66,19 @@ function getOrCreateRecaptcha(activeAuth: Auth): RecaptchaVerifier {
 
   ensureRecaptchaContainer();
   recaptchaVerifier = new RecaptchaVerifier(activeAuth, RECAPTCHA_CONTAINER_ID, {
-    size: 'normal',
+    size: 'invisible',
   });
   return recaptchaVerifier;
+}
+
+export async function preInitializeRecaptcha(): Promise<void> {
+  if (typeof document === 'undefined') return;
+  try {
+    const activeAuth = await ensureFirebase();
+    getOrCreateRecaptcha(activeAuth);
+  } catch (err) {
+    console.warn('Failed to pre-initialize Recaptcha:', err);
+  }
 }
 
 function mapFirebasePhoneError(err: unknown): Error {

@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "composite": true,
     "outDir": "dist",
     "types": ["node", "jest"],
     "target": "ES2021",
