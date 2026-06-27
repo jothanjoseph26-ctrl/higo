@@ -19,7 +19,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 # Bust builder cache when migrations change (20260627000000_sync_schema_drift)
-ARG MIGRATION_CACHE_BUST=20260627120000
+ARG MIGRATION_CACHE_BUST=20260627130000
 RUN echo "migration cache bust: ${MIGRATION_CACHE_BUST}"
 COPY . .
 
@@ -53,4 +53,4 @@ EXPOSE 3000
 
 # PROCESS_ROLE=worker on the Worker Railway service selects worker.js.
 # Run pending Prisma migrations before serving (DB uses Railway private network).
-CMD ["sh", "-c", "cd apps/api && npx prisma migrate deploy && if [ \"$PROCESS_ROLE\" = \"worker\" ]; then exec node apps/api/dist/worker.js; else exec node apps/api/dist/main.js; fi"]
+CMD ["sh", "-c", "cd apps/api && npx prisma migrate deploy && if [ \"$PROCESS_ROLE\" = \"worker\" ]; then exec node dist/worker.js; else exec node dist/main.js; fi"]
