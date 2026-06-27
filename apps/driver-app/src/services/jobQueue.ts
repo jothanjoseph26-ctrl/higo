@@ -122,8 +122,22 @@ async function processJob(job: QueueJob): Promise<void> {
       break;
     }
     case 'kyc_upload': {
-      const { docType, file } = job.payload as { docType: any; file: any };
-      await api.uploadKyc(docType, file);
+      const { docType, file, fileUri, fileName, mimeType } = job.payload as {
+        docType: string;
+        file?: { uri: string; name: string; type: string };
+        fileUri?: string;
+        fileName?: string;
+        mimeType?: string;
+      };
+      const uploadFile = file ?? {
+        uri: fileUri!,
+        name: fileName ?? `${docType}.jpg`,
+        type: mimeType ?? 'image/jpeg',
+      };
+      if (!uploadFile.uri) {
+        throw new Error('KYC upload job missing file URI');
+      }
+      await api.uploadKyc(docType as any, uploadFile);
       break;
     }
     default:

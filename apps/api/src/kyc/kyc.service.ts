@@ -83,7 +83,20 @@ export class KYCService {
     const timestamp = Date.now();
     const s3Key = `higo-kyc-docs/${driverId}/${docType}/${timestamp}.${ext}`;
 
-    await this.s3.upload({ key: s3Key, body, contentType });
+    try {
+      await this.s3.upload({ key: s3Key, body, contentType });
+    } catch (err) {
+      this.logger.error(
+        `KYC storage upload failed for ${s3Key}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      throw new AppException(
+        'SERVICE_UNAVAILABLE',
+        undefined,
+        'Document storage is not available. Check CLOUDFLARE_ACCOUNT_ID and R2 credentials on the API service.',
+      );
+    }
 
     let ocrFields: Record<string, string> = {};
     try {

@@ -242,22 +242,20 @@ export class HigoClient {
     docType: KycDocType,
     file: KycUploadFile,
   ): Promise<KycUploadResponse> {
+    if (!file?.uri) {
+      throw new Error('No file selected for upload');
+    }
+
     const form = new FormData();
     form.append('docType', docType);
 
     if (typeof window !== 'undefined' && typeof fetch === 'function') {
-      try {
-        const response = await fetch(file.uri);
-        const blob = await response.blob();
-        form.append('file', blob, file.name);
-      } catch (err) {
-        console.error('Failed to convert URI to Blob on web, using fallback', err);
-        form.append('file', {
-          uri: file.uri,
-          name: file.name,
-          type: file.type,
-        } as unknown as Blob);
+      const response = await fetch(file.uri);
+      if (!response.ok) {
+        throw new Error(`Failed to read file for upload (${response.status})`);
       }
+      const blob = await response.blob();
+      form.append('file', blob, file.name || 'document');
     } else {
       form.append('file', {
         uri: file.uri,

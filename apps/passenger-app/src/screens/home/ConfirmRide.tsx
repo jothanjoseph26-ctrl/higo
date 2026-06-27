@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { Platform, StyleSheet, Text, View, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { Button } from '../../components/Button';
@@ -58,33 +58,35 @@ export function ConfirmRide({ navigation }: Props) {
           paymentMethod,
         });
 
-        // Simulate presenting the Paystack native SDK bottom sheet:
-        Alert.alert(
-          'Paystack Payment',
-          `Initializing Paystack Sheet for ${paymentMethod.toUpperCase()}.\nReference: ${payInit.reference}\nAmount: ₦${(payInit.amount / 100).toFixed(2)}`,
-          [
-            {
-              text: 'Cancel',
-              onPress: () => {
-                setBooking(false);
-                setPaystackLoading(false);
-              },
-              style: 'cancel',
-            },
-            {
-              text: 'Simulate Success (Approved)',
-              onPress: () => {
-                // Poll backend status to confirm payment transaction status
-                pollPaymentStatus(trip.id, () => {
-                  setPaystackLoading(false);
-                  setBooking(false);
-                  setStatus(TripStatus.REQUESTED);
-                  navigation.navigate('FindingDriver');
-                });
-              },
-            },
-          ]
-        );
+        setBooking(false);
+        setPaystackLoading(false);
+
+        const payMessage = `Reference: ${payInit.reference}\nAmount: ₦${(payInit.amount / 100).toFixed(2)}`;
+
+        const onPaymentApproved = () => {
+          pollPaymentStatus(trip.id, () => {
+            setStatus(TripStatus.REQUESTED);
+            navigation.navigate('FindingDriver');
+          });
+        };
+
+        if (Platform.OS === 'web') {
+          const approved = window.confirm(
+            `Paystack payment for ${paymentMethod.toUpperCase()}.\n${payMessage}\n\nClick OK to simulate successful payment.`,
+          );
+          if (approved) {
+            onPaymentApproved();
+          }
+        } else {
+          Alert.alert(
+            'Paystack Payment',
+            `Initializing Paystack Sheet for ${paymentMethod.toUpperCase()}.\n${payMessage}`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Simulate Success (Approved)', onPress: onPaymentApproved },
+            ],
+          );
+        }
       } else {
         // Cash payment flow - straight to request creation
         const response = await requestTrip();

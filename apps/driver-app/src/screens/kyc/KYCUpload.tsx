@@ -97,10 +97,14 @@ export function KYCUpload({ navigation, route }: Props) {
 
     try {
       const compressedUri = await compressImage(picked.uri);
+      const mimeType = picked.type ?? 'image/jpeg';
+      const fileName =
+        picked.fileName ??
+        `kyc-${selectedDoc}.${mimeType.includes('pdf') ? 'pdf' : 'jpg'}`;
       const file = {
         uri: compressedUri,
-        name: picked.fileName ?? `kyc-${selectedDoc}.jpg`,
-        type: 'image/jpeg',
+        name: fileName,
+        type: mimeType,
       };
 
       const result = await api.uploadKyc(selectedDoc, file);
@@ -114,9 +118,11 @@ export function KYCUpload({ navigation, route }: Props) {
     } catch (err) {
       await addJob('kyc_upload', {
         docType: selectedDoc,
-        fileUri: picked.uri,
-        fileName: picked.fileName ?? `kyc-${selectedDoc}.jpg`,
-        mimeType: 'image/jpeg',
+        file: {
+          uri: picked.uri,
+          name: picked.fileName ?? `kyc-${selectedDoc}.jpg`,
+          type: picked.type ?? 'image/jpeg',
+        },
       });
       setError(
         err instanceof Error

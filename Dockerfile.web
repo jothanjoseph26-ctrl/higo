@@ -23,9 +23,11 @@ ENV CI=true
 ARG VITE_API_URL=https://hiconnect-production.up.railway.app/api
 ARG VITE_API_BASE_URL=https://hiconnect-production.up.railway.app/api
 ARG VITE_SOCKET_URL=https://hiconnect-production.up.railway.app
+ARG VITE_GOOGLE_MAPS_API_KEY=
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
+ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
 
 RUN pnpm install --frozen-lockfile
 RUN cd packages/shared-types && pnpm exec tsc --build tsconfig.lib.json

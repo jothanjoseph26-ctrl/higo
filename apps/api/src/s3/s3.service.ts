@@ -16,13 +16,19 @@ export class OssService {
 
   constructor(config: ConfigService) {
     const accountId = config.getOrThrow<string>('CLOUDFLARE_ACCOUNT_ID');
+    if (!accountId || accountId.includes('your_cloudflare')) {
+      this.logger.error(
+        'CLOUDFLARE_ACCOUNT_ID is a placeholder — set your real Cloudflare account ID on Railway for KYC uploads',
+      );
+    }
     const accessKeyId = config.getOrThrow<string>('CLOUDFLARE_ACCESS_KEY_ID');
     const secretAccessKey =
       config.get<string>('CLOUDFLARE_SECRET_ACCESS_KEY') ??
       config.getOrThrow<string>('CLOUDFLARE_SECRET_ACESS_KEY');
 
+    const configuredEndpoint = config.get<string>('CLOUDFLARE_R2_ENDPOINT')?.trim();
     const endpoint =
-      config.get<string>('CLOUDFLARE_R2_ENDPOINT') ??
+      configuredEndpoint ||
       `https://${accountId}.r2.cloudflarestorage.com`;
 
     this.defaultBucket = config.getOrThrow<string>('CLOUDFLARE_R2_BUCKET');
