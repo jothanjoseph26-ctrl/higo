@@ -6,6 +6,7 @@ import DataTable from '../components/DataTable';
 import { useUiStore } from '../stores/uiStore';
 import { ShieldAlert, ShieldCheck, Check, Ban } from 'lucide-react';
 import { ColumnDef } from '@tanstack/react-table';
+import { formatRating } from '../lib/format';
 
 export const PassengerManagement: React.FC = () => {
   const { addToast } = useUiStore();
@@ -81,7 +82,7 @@ export const PassengerManagement: React.FC = () => {
       header: 'Rating (Avg)',
       cell: (info) => (
         <span className="text-xs font-bold text-darkNavy bg-lightGrey px-2.5 py-1 rounded-input">
-          ⭐ {info.row.original.ratingAvg ? info.row.original.ratingAvg.toFixed(1) : '5.0'}
+          ⭐ {formatRating(info.row.original.ratingAvg)}
         </span>
       ),
     },

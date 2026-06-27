@@ -17,6 +17,7 @@ import {
   Cell,
 } from 'recharts';
 import { Printer, AlertCircle, RefreshCw } from 'lucide-react';
+import { formatKoboNGN, formatPeriod, toNumber } from '../lib/format';
 
 const COLORS = ['#0B6E4F', '#FF7A00', '#0A2540'];
 
@@ -44,9 +45,13 @@ export const FinancialReports: React.FC = () => {
       };
       const data = await apiService.getFinancialReport(query);
       setReport(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setReport(null);
-      setError(err?.message || 'Failed to load financial report.');
+      const message =
+        typeof err === 'object' && err !== null && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'Failed to load financial report.';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -97,25 +102,19 @@ export const FinancialReports: React.FC = () => {
     );
   }
 
-  const formatNGN = (kobo: number) => {
-    return new Intl.NumberFormat('en-NG', {
-      style: 'currency',
-      currency: 'NGN',
-      minimumFractionDigits: 0,
-    }).format(kobo / 100);
-  };
-
   const formattedSeries = report.series.map((item) => ({
-    Period: item.period,
-    Gross: item.gross / 100,
-    Payout: item.driverPayout / 100,
-    Commission: item.platformFee / 100,
-    Trips: item.trips,
+    Period: formatPeriod(item.period),
+    Gross: toNumber(item.gross) / 100,
+    Payout: toNumber(item.driverPayout) / 100,
+    Commission: toNumber(item.platformFee) / 100,
+    Trips: toNumber(item.trips),
   }));
 
-  const subscriptionBreakdown = report.totals.subscriptionRevenue > 0
-    ? [{ name: 'Total Subscription Revenue', value: report.totals.subscriptionRevenue }]
-    : [];
+  const subscriptionRevenue = toNumber(report.totals.subscriptionRevenue);
+  const subscriptionBreakdown =
+    subscriptionRevenue > 0
+      ? [{ name: 'Total Subscription Revenue', value: subscriptionRevenue }]
+      : [];
 
   return (
     <div className="space-y-6 print:p-0 print:space-y-4">
@@ -162,32 +161,32 @@ export const FinancialReports: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         <div className="bg-white p-4 rounded-card border border-lightGrey shadow-custom print:border-2">
           <span className="text-[10px] font-semibold text-gray-500 block mb-1 uppercase">Gross Fares</span>
-          <span className="text-sm font-bold text-darkNavy block">{formatNGN(report.totals.gross)}</span>
+          <span className="text-sm font-bold text-darkNavy block">{formatKoboNGN(report.totals.gross)}</span>
         </div>
 
         <div className="bg-white p-4 rounded-card border border-lightGrey shadow-custom print:border-2">
           <span className="text-[10px] font-semibold text-gray-500 block mb-1 uppercase">Commission (5%)</span>
-          <span className="text-sm font-bold text-primaryGreen block">{formatNGN(report.totals.platformFee)}</span>
+          <span className="text-sm font-bold text-primaryGreen block">{formatKoboNGN(report.totals.platformFee)}</span>
         </div>
 
         <div className="bg-white p-4 rounded-card border border-lightGrey shadow-custom print:border-2">
           <span className="text-[10px] font-semibold text-gray-500 block mb-1 uppercase">Driver Payouts</span>
-          <span className="text-sm font-bold text-darkNavy block">{formatNGN(report.totals.driverPayout)}</span>
+          <span className="text-sm font-bold text-darkNavy block">{formatKoboNGN(report.totals.driverPayout)}</span>
         </div>
 
         <div className="bg-white p-4 rounded-card border border-lightGrey shadow-custom print:border-2">
           <span className="text-[10px] font-semibold text-gray-500 block mb-1 uppercase">Subscription Revenue</span>
-          <span className="text-sm font-bold text-primaryGreen block">{formatNGN(report.totals.subscriptionRevenue)}</span>
+          <span className="text-sm font-bold text-primaryGreen block">{formatKoboNGN(report.totals.subscriptionRevenue)}</span>
         </div>
 
         <div className="bg-white p-4 rounded-card border border-lightGrey shadow-custom print:border-2">
           <span className="text-[10px] font-semibold text-gray-500 block mb-1 uppercase">Refund Volume</span>
-          <span className="text-sm font-bold text-error block">{formatNGN(report.totals.refunds)}</span>
+          <span className="text-sm font-bold text-error block">{formatKoboNGN(report.totals.refunds)}</span>
         </div>
 
         <div className="bg-white p-4 rounded-card border border-lightGrey shadow-custom print:border-2">
           <span className="text-[10px] font-semibold text-gray-500 block mb-1 uppercase">Completed Rides</span>
-          <span className="text-sm font-bold text-darkNavy block">{report.totals.trips}</span>
+          <span className="text-sm font-bold text-darkNavy block">{toNumber(report.totals.trips)}</span>
         </div>
       </div>
 
@@ -277,11 +276,11 @@ export const FinancialReports: React.FC = () => {
             <tbody className="divide-y divide-lightGrey">
               {report.series.map((item, idx) => (
                 <tr key={idx} className="hover:bg-lightGrey hover:bg-opacity-30 transition-colors font-medium">
-                  <td className="px-6 py-3 text-darkNavy font-bold">{item.period}</td>
-                  <td className="px-6 py-3">{item.trips}</td>
-                  <td className="px-6 py-3">{formatNGN(item.gross)}</td>
-                  <td className="px-6 py-3">{formatNGN(item.driverPayout)}</td>
-                  <td className="px-6 py-3 text-primaryGreen font-semibold">{formatNGN(item.platformFee)}</td>
+                  <td className="px-6 py-3 text-darkNavy font-bold">{formatPeriod(item.period)}</td>
+                  <td className="px-6 py-3">{toNumber(item.trips)}</td>
+                  <td className="px-6 py-3">{formatKoboNGN(item.gross)}</td>
+                  <td className="px-6 py-3">{formatKoboNGN(item.driverPayout)}</td>
+                  <td className="px-6 py-3 text-primaryGreen font-semibold">{formatKoboNGN(item.platformFee)}</td>
                 </tr>
               ))}
             </tbody>

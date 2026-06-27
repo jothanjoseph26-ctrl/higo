@@ -703,7 +703,15 @@ export class AdminController {
       this.prisma.user.count({ where }),
     ]);
 
-    return { users, total, limit: Number(limit), offset: Number(offset) };
+    return {
+      users: users.map((user) => ({
+        ...user,
+        ratingAvg: Number(user.ratingAvg),
+      })),
+      total,
+      limit: Number(limit),
+      offset: Number(offset),
+    };
   }
 
   @Put('users/:id/block')

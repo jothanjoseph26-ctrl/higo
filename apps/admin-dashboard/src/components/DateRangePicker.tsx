@@ -1,6 +1,10 @@
 import React from 'react';
-import DatePicker from 'react-datepicker';
+import DatePickerModule from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+
+// Vite + React 19: default export may be nested under `.default`
+const DatePicker =
+  (DatePickerModule as { default?: typeof DatePickerModule }).default ?? DatePickerModule;
 
 interface DateRangePickerProps {
   startDate: Date | null;
