@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AppException } from '../common/errors/app.exception';
 import { AfricasTalkingAdapter } from './africastalking.adapter';
 import { TermiiAdapter } from './termii.adapter';
 import { TwilioAdapter } from './twilio.adapter';
@@ -88,6 +89,14 @@ export class SmsService {
             atError instanceof Error ? atError.message : 'unknown'
           }`,
         );
+        const nodeEnv = this.config.get<string>('NODE_ENV', 'development');
+        if (nodeEnv === 'production') {
+          throw new AppException(
+            'SERVICE_UNAVAILABLE',
+            undefined,
+            'SMS delivery failed. Check Termii API key and sender ID on the server.',
+          );
+        }
         this.logger.log(
           `[DEVELOPMENT MOCK SMS] To: ${phone} | Message: ${message}`,
         );
