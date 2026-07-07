@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Pressable, SafeAreaView, Platform } from 'react-native';
+import { StyleSheet, Text, View, Pressable, Platform } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { MapView } from '../../components/MapView';
@@ -28,6 +29,7 @@ function isMapsMock(): boolean {
 
 export function Home({ navigation }: any) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { userLocation, requestPermission, watch } = useLocationStore();
   const { status, driverLocation } = useTripStore();
   const { unreadCount } = useNotificationStore();
@@ -154,7 +156,7 @@ export function Home({ navigation }: any) {
         nearbyDrivers={nearbyDrivers}
       />
 
-      <SafeAreaView style={styles.overlay}>
+      <SafeAreaView style={styles.overlay} edges={['top', 'left', 'right']}>
         <View style={styles.topRow}>
           <Pressable
             onPress={() => navigation.navigate('Notifications')}
@@ -176,7 +178,12 @@ export function Home({ navigation }: any) {
           </Pressable>
         </View>
 
-        <View style={styles.bottomContainer}>
+        <View
+          style={[
+            styles.bottomContainer,
+            { paddingBottom: theme.spacing.md + Math.max(insets.bottom, theme.spacing.sm) },
+          ]}
+        >
           {activeTripCount > 1 ? (
             <Pressable
               onPress={() => navigation.navigate('ActiveTrips')}
@@ -207,7 +214,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'space-between',
     padding: theme.spacing.md,
   },
@@ -258,7 +269,6 @@ const styles = StyleSheet.create({
   },
   bottomContainer: {
     width: '100%',
-    paddingBottom: 20,
     gap: theme.spacing.sm,
   },
   activeTripsBanner: {

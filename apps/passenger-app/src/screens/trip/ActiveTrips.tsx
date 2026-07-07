@@ -35,7 +35,9 @@ const STATUS_LABELS: Record<TripStatus, string> = {
   [TripStatus.CANCELLED]: 'Cancelled',
 };
 
-const RESUME_SCREENS: Partial<Record<TripStatus, keyof RootStackParamList>> = {
+const RESUME_SCREENS: Partial<
+  Record<TripStatus, 'FindingDriver' | 'DriverEnRoute' | 'TripActive'>
+> = {
   [TripStatus.REQUESTED]: 'FindingDriver',
   [TripStatus.MATCHED]: 'DriverEnRoute',
   [TripStatus.EN_ROUTE]: 'DriverEnRoute',

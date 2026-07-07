@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Audio } from 'expo-av';
+import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import {
   Trip,
   TripStatus,
@@ -38,7 +38,7 @@ interface TripState {
 }
 
 let countdownInterval: NodeJS.Timeout | null = null;
-let soundInstance: Audio.Sound | null = null;
+let soundInstance: AudioPlayer | null = null;
 
 export const useTripStore = create<TripState>((set, get) => ({
   activeTrip: null,
@@ -54,8 +54,8 @@ export const useTripStore = create<TripState>((set, get) => ({
 
     if (soundInstance) {
       try {
-        await soundInstance.stopAsync();
-        await soundInstance.unloadAsync();
+        soundInstance.pause();
+        soundInstance.remove();
       } catch {}
       soundInstance = null;
     }
@@ -68,11 +68,12 @@ export const useTripStore = create<TripState>((set, get) => ({
     set({ incomingRequest: req, countdown: 15 });
 
     try {
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav' },
-        { shouldPlay: true, isLooping: true }
-      );
-      soundInstance = sound;
+      const player = createAudioPlayer({
+        uri: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav',
+      });
+      player.loop = true;
+      player.play();
+      soundInstance = player;
     } catch (err) {
       console.warn('Failed to play incoming request sound:', err);
     }
@@ -287,8 +288,8 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
     if (soundInstance) {
       try {
-        await soundInstance.stopAsync();
-        await soundInstance.unloadAsync();
+        soundInstance.pause();
+        soundInstance.remove();
       } catch {}
       soundInstance = null;
     }

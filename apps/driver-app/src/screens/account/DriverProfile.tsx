@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDriverAuthStore } from '../../stores/driverAuthStore';
 import { Button } from '../../components/Button';
 import { setStoredLanguage } from '../../services/storage';
+import { updateHceLanguagePreference } from '../../services/hce';
 import { theme } from '../../theme';
 import type { DriverMainStackParamList } from '../../navigation/types';
 
@@ -24,6 +25,7 @@ export function DriverProfile({ navigation }: { navigation: any }) {
           onPress: async () => {
             await i18n.changeLanguage('en');
             await setStoredLanguage('en');
+            await updateHceLanguagePreference('en');
           },
         },
         {
@@ -31,6 +33,7 @@ export function DriverProfile({ navigation }: { navigation: any }) {
           onPress: async () => {
             await i18n.changeLanguage('pcm');
             await setStoredLanguage('pcm');
+            await updateHceLanguagePreference('pcm');
           },
         },
         {
@@ -38,6 +41,7 @@ export function DriverProfile({ navigation }: { navigation: any }) {
           onPress: async () => {
             await i18n.changeLanguage('ha');
             await setStoredLanguage('ha');
+            await updateHceLanguagePreference('ha');
           },
         },
         {
@@ -45,6 +49,7 @@ export function DriverProfile({ navigation }: { navigation: any }) {
           onPress: async () => {
             await i18n.changeLanguage('yo');
             await setStoredLanguage('yo');
+            await updateHceLanguagePreference('yo');
           },
         },
         { text: 'Cancel', style: 'cancel' },

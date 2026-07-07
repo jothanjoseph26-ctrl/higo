@@ -1,19 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
-import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { FareCard } from '../../components/FareCard';
 import { Button } from '../../components/Button';
 import { ScreenShell } from '../../components/ScreenShell';
 import { useTripStore } from '../../stores/tripStore';
+import { api } from '../../services/api';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
-import { VehicleType, PaymentMethod } from '@higo/shared-types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RideOptions'>;
 
 export function RideOptions({ navigation }: Props) {
-  const { t } = useTranslation();
   const {
     pickup,
     destination,
@@ -27,42 +25,64 @@ export function RideOptions({ navigation }: Props) {
   } = useTripStore();
 
   const [loading, setLoading] = useState(true);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [supply, setSupply] = useState<{
+    nearbyDrivers: number;
+    available: boolean;
+    etaMin: number | null;
+  } | null>(null);
 
   useEffect(() => {
-    // Simulate estimate calculation based on GPS distance
-    if (!pickup || !destination) return;
-
-    setLoading(true);
-    const timer = setTimeout(() => {
-      // Basic distance estimate in km using lat/lng
-      const dLat = destination.lat - pickup.lat;
-      const dLng = destination.lng - pickup.lng;
-      const distanceKm = Math.max(Math.sqrt(dLat * dLat + dLng * dLng) * 100, 1.2); // minimum 1.2km
-      const durationMin = Math.ceil(distanceKm * 2.5); // 2.5 min per km
-
-      // Base fare ₦200 = 20000 kobo
-      const baseFare = 20000;
-      const distanceFare = Math.round(distanceKm * 15000); // ₦150 per km
-      const timeFare = durationMin * 5000; // ₦50 per min
-      const surgeMultiplier = 1.0;
-      const totalFare = Math.round((baseFare + distanceFare + timeFare) * surgeMultiplier);
-
-      const calculatedEstimate = {
-        baseFare,
-        distanceFare,
-        timeFare,
-        surgeMultiplier,
-        totalFare,
-        distanceKm,
-        durationMin,
-      };
-
-      setEstimate(calculatedEstimate);
+    if (!pickup || !destination) {
       setLoading(false);
-    }, 1500);
+      setEstimate(null);
+      setSupply(null);
+      return;
+    }
 
-    return () => clearTimeout(timer);
-  }, [pickup, destination, setEstimate]);
+    let cancelled = false;
+
+    async function loadQuote() {
+      setLoading(true);
+      setQuoteError(null);
+      try {
+        const quote = await api.quoteTrip({
+          pickup: { lat: pickup.lat, lng: pickup.lng },
+          pickupAddress: pickup.address,
+          destination: { lat: destination.lat, lng: destination.lng },
+          destinationAddress: destination.address,
+          vehicleType,
+          paymentMethod,
+          isShared,
+        });
+
+        if (cancelled) return;
+        setEstimate(quote.estimate);
+        setSupply({
+          nearbyDrivers: quote.supply.nearbyDrivers,
+          available: quote.supply.available,
+          etaMin: quote.supply.etaMin,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        const message =
+          err instanceof Error
+            ? err.message
+            : 'Could not calculate this trip. Please check the route and try again.';
+        setEstimate(null);
+        setSupply(null);
+        setQuoteError(message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadQuote();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pickup, destination, vehicleType, paymentMethod, isShared, setEstimate]);
 
   const handleChoose = () => {
     navigation.navigate('ConfirmRide');
@@ -72,14 +92,14 @@ export function RideOptions({ navigation }: Props) {
     <ScreenShell title="Choose Ride Option" scroll={false} contentStyle={styles.container}>
       <View style={styles.summaryCard}>
         <View style={styles.row}>
-          <Text style={styles.bullet}>🟢</Text>
+          <Text style={styles.bullet}>P</Text>
           <Text style={styles.address} numberOfLines={1}>
             {pickup?.address}
           </Text>
         </View>
         <View style={styles.line} />
         <View style={styles.row}>
-          <Text style={styles.bullet}>🔴</Text>
+          <Text style={styles.bullet}>D</Text>
           <Text style={styles.address} numberOfLines={1}>
             {destination?.address}
           </Text>
@@ -90,7 +110,12 @@ export function RideOptions({ navigation }: Props) {
         {loading ? (
           <View style={styles.loaderWrap}>
             <ActivityIndicator size="large" color={theme.colors.primaryGreen} />
-            <Text style={styles.loaderText}>Calculating best fares...</Text>
+            <Text style={styles.loaderText}>Calculating live fare...</Text>
+          </View>
+        ) : quoteError ? (
+          <View style={styles.infoCard}>
+            <Text style={styles.infoTitle}>Quote unavailable</Text>
+            <Text style={styles.warningText}>{quoteError}</Text>
           </View>
         ) : (
           <View style={styles.infoCard}>
@@ -103,6 +128,21 @@ export function RideOptions({ navigation }: Props) {
               <Text style={styles.detailLabel}>Estimated Time</Text>
               <Text style={styles.detailVal}>{estimate?.durationMin} mins</Text>
             </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Nearby Drivers</Text>
+              <Text style={styles.detailVal}>{supply?.nearbyDrivers ?? 0}</Text>
+            </View>
+            {supply?.etaMin && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Nearest ETA</Text>
+                <Text style={styles.detailVal}>{supply.etaMin} mins</Text>
+              </View>
+            )}
+            {supply && !supply.available && (
+              <Text style={styles.warningText}>
+                No nearby drivers are available right now. Please try again shortly.
+              </Text>
+            )}
           </View>
         )}
       </View>
@@ -119,6 +159,7 @@ export function RideOptions({ navigation }: Props) {
           <Button
             label="Select Payment & Book"
             onPress={handleChoose}
+            disabled={supply ? !supply.available : false}
             style={styles.bookBtn}
           />
         </View>
@@ -145,8 +186,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bullet: {
-    fontSize: 14,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     marginRight: theme.spacing.sm,
+    backgroundColor: '#E8F5EF',
+    color: theme.colors.primaryGreen,
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 18,
+    textAlign: 'center',
   },
   address: {
     fontSize: 14,
@@ -158,7 +207,7 @@ const styles = StyleSheet.create({
     width: 1.5,
     height: 12,
     backgroundColor: '#D1D5DB',
-    marginLeft: 6,
+    marginLeft: 8,
     marginVertical: 2,
   },
   space: {
@@ -200,6 +249,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: theme.colors.darkNavy,
+  },
+  warningText: {
+    marginTop: theme.spacing.sm,
+    fontSize: 13,
+    color: '#B45309',
+    lineHeight: 18,
   },
   fareCardWrapper: {
     width: '100%',

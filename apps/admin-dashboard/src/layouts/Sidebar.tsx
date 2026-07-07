@@ -53,8 +53,18 @@ export const Sidebar: React.FC = () => {
       }`}
     >
       <div className="flex items-center justify-between p-4 border-b border-white border-opacity-10 h-16">
-        {sidebarOpen && (
-          <span className="font-bold text-lg tracking-wider text-primaryGreen">HiGo Admin</span>
+        {sidebarOpen ? (
+          <img
+            src="/logo-rectangular-dark.png"
+            alt="HiGo Logo"
+            className="h-8 object-contain"
+          />
+        ) : (
+          <img
+            src="/logo-square.png"
+            alt="HiGo Logo"
+            className="h-8 w-8 object-contain rounded-md"
+          />
         )}
         <button
           onClick={toggleSidebar}

@@ -16,6 +16,31 @@ Notifications.setNotificationHandler({
 
 let lastRegisteredToken: string | null = null;
 
+const FIREBASE_APP_NOT_READY = /firebase\s*app|firebase messaging instance/i;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// On cold start, native FirebaseApp initialization can still be in flight
+// when this runs, causing getDevicePushTokenAsync() to throw. Retry with
+// backoff before giving up so the race doesn't silently drop registration.
+async function getDevicePushTokenWithRetry(maxAttempts = 4): Promise<string> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const deviceToken = await Notifications.getDevicePushTokenAsync();
+      return deviceToken.data;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (attempt === maxAttempts || !FIREBASE_APP_NOT_READY.test(message)) {
+        throw error;
+      }
+      await delay(500 * attempt);
+    }
+  }
+  throw new Error('Unreachable');
+}
+
 export async function requestNotificationPermission(): Promise<boolean> {
   if (Platform.OS === 'web') {
     return false;
@@ -54,8 +79,7 @@ async function resolveFcmToken(): Promise<string | null> {
     });
   }
 
-  const deviceToken = await Notifications.getDevicePushTokenAsync();
-  return deviceToken.data;
+  return getDevicePushTokenWithRetry();
 }
 
 export async function registerFCM(): Promise<string | null> {

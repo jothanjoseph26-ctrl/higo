@@ -1,13 +1,14 @@
 import { LinkingOptions } from '@react-navigation/native';
 import type { RootStackParamList } from './types';
 
+// On React Native `window` exists but `window.location` does not — guard both.
 const passengerWebPrefix =
-  typeof window !== 'undefined'
+  typeof window !== 'undefined' && window.location?.origin
     ? `${window.location.origin}/passenger`
-    : 'https://admin-production-13cc.up.railway.app/passenger';
+    : 'https://www.hiconnectgo.com/passenger';
 
 export const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: ['higo-passenger://', 'https://hiconnectgo.com/passenger', passengerWebPrefix],
+  prefixes: ['higo-passenger://', 'https://www.hiconnectgo.com/passenger', passengerWebPrefix],
   config: {
     screens: {
       Main: {

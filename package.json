@@ -62,10 +62,16 @@
     "@nestjs/platform-express": "^11.0.0",
     "@prisma/client": "^6.19.3",
     "axios": "^1.6.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-native": "~0.84.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "~0.85.3",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "react": "19.2.3",
+      "react-dom": "19.2.3"
+    }
   }
 }

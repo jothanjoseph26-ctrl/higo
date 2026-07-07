@@ -9,4 +9,4 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
 [build.environmentVariables]
-VITE_API_URL = "https://hiconnect-production.up.railway.app/api"
+VITE_API_URL = "https://www.hiconnectgo.com/api"

@@ -1,9 +1,34 @@
 {
-  "name": "PassengerApp",
-  "displayName": "PassengerApp",
-  "extra": {
-    "eas": {
-      "projectId": "2c1b89dc-6f6d-4797-96d5-1c2c9ccdce75"
-    }
+  "expo": {
+    "name": "HiGo Passenger",
+    "slug": "passengerapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "higopassenger",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.higopassenger"
+    },
+    "android": {
+      "package": "com.higopassenger",
+      "googleServicesFile": "./android/app/google-services.json",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2c1b89dc-6f6d-4797-96d5-1c2c9ccdce75"
+      }
+    },
+    "plugins": [
+      "@sentry/react-native"
+    ]
   }
 }

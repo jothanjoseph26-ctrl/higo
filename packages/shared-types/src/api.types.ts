@@ -337,6 +337,8 @@ export interface RequestTripRequest {
   promoCode?: string;
 }
 
+export type QuoteTripRequest = RequestTripRequest;
+
 export interface FareEstimate {
   baseFare: Kobo;
   distanceFare: Kobo;
@@ -349,6 +351,18 @@ export interface FareEstimate {
   promoCode?: string;
   promoDiscount?: Kobo;
   originalTotalFare?: Kobo;
+}
+
+export interface QuoteTripResponse {
+  quoteId: UUID;
+  estimate: FareEstimate;
+  supply: {
+    nearbyDrivers: number;
+    available: boolean;
+    radiusKm: number;
+    etaMin: number | null;
+  };
+  expiresAt: ISODateString;
 }
 
 export interface RequestTripResponse {
@@ -370,6 +384,7 @@ export type GetTripResponse = Trip;
 export interface GetTripStatusResponse {
   tripId: UUID;
   status: Trip['status'];
+  paymentStatus: PaymentStatus;
   driver?: MatchedDriverDetails;
   driverLocation?: LatLng & { bearing?: number; etaMin?: number };
 }

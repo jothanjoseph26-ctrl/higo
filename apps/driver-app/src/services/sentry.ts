@@ -51,7 +51,7 @@ const errorFallback = React.createElement(
   React.createElement(Text, null, 'Something went wrong.'),
 );
 
-export function SentryRoot({ children }: SentryRootProps) {
+export function SentryRoot({ children }: SentryRootProps): React.ReactElement {
   if (!sentryEnabled) {
     return React.createElement(React.Fragment, null, children);
   }

@@ -4,6 +4,7 @@
     "slug": "higo-driver",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./src/assets/app-icon.png",
     "scheme": "higodriver",
     "platforms": [
       "ios",
@@ -13,15 +14,39 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.driverapp"
     },
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      "expo-audio",
+      "@sentry/react-native",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "HiGo Driver uses the camera to capture your KYC documents.",
+          "photosPermission": "HiGo Driver needs access to your photos to upload KYC documents."
+        }
+      ]
+    ],
     "android": {
       "package": "com.driverapp",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAhVQGmTIcqNTBe1SopUeLGXGFgDj4Fc5w"
+        }
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION",
         "RECEIVE_BOOT_COMPLETED"
-      ]
+      ],
+      "versionCode": 2
     },
     "extra": {
       "eas": {

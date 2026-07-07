@@ -1,7 +1,7 @@
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './api';
-import { PaymentMethod } from '@higo/shared-types';
+import { PaymentMethod, PaymentStatus, TripStatus } from '@higo/shared-types';
 
 const PAYSTACK_API_BASE = 'https://api.paystack.co';
 const SAVED_CARDS_KEY = '@higo/passenger/savedCards';
@@ -69,7 +69,7 @@ export function getPaystackCheckoutUrl(accessCode: string): string {
 
 export function parsePaystackCallbackUrl(url: string): { reference: string | null; status: string | null } {
   try {
-    const normalized = url.includes('://') ? new URL(url) : new URL(url, 'https://hiconnectgo.com');
+    const normalized = url.includes('://') ? new URL(url) : new URL(url, 'https://www.hiconnectgo.com');
     const reference =
       normalized.searchParams.get('reference') ??
       normalized.searchParams.get('trxref') ??
@@ -147,6 +147,14 @@ export async function initializeCardSaveIntent(
 }
 
 export async function openPaystackCheckout(authorizationUrl: string): Promise<void> {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const checkoutWindow = window.open(authorizationUrl, '_blank', 'noopener,noreferrer');
+    if (!checkoutWindow) {
+      window.location.assign(authorizationUrl);
+    }
+    return;
+  }
+
   const canOpen = await Linking.canOpenURL(authorizationUrl);
   if (!canOpen) {
     throw new Error('Cannot open Paystack checkout on this device.');
@@ -202,25 +210,41 @@ export async function openTripPaymentCheckout(
 export async function pollPaymentStatus(
   tripId: string,
   onConfirmed: () => void,
+  onUnconfirmed?: (reason: 'failed' | 'timeout') => void,
   maxAttempts = 10,
   intervalMs = 3000,
 ) {
   let attempts = 0;
+  let settled = false;
 
   const check = setInterval(async () => {
     attempts++;
     try {
       const statusInfo = await api.getTripStatus(tripId);
-      if (statusInfo.status !== 'requested') {
+      if (
+        statusInfo.paymentStatus === PaymentStatus.HELD ||
+        statusInfo.paymentStatus === PaymentStatus.RELEASED
+      ) {
+        settled = true;
         clearInterval(check);
         onConfirmed();
+      } else if (
+        statusInfo.paymentStatus === PaymentStatus.FAILED ||
+        statusInfo.paymentStatus === PaymentStatus.REFUNDED ||
+        statusInfo.status === TripStatus.CANCELLED
+      ) {
+        settled = true;
+        clearInterval(check);
+        onUnconfirmed?.('failed');
       }
     } catch (e) {
       console.warn('Error polling payment status', e);
     }
 
-    if (attempts >= maxAttempts) {
+    if (!settled && attempts >= maxAttempts) {
+      settled = true;
       clearInterval(check);
+      onUnconfirmed?.('timeout');
     }
   }, intervalMs);
 

@@ -24,8 +24,10 @@ export const envSchema = Joi.object({
 
   TWILIO_ACCOUNT_SID: Joi.string().allow('').default(''),
   TWILIO_AUTH_TOKEN: Joi.string().allow('').default(''),
+  TWILIO_API_KEY: Joi.string().allow('').default(''),
   TWILIO_PHONE_NUMBER: Joi.string().allow('').default(''),
   TWILIO_MESSAGING_SERVICE_SID: Joi.string().allow('').default(''),
+  TWILIO_VERIFY_SERVICE_SID: Joi.string().allow('').default(''),
 
   TERMII_API_KEY: Joi.string().allow('').default(''),
   TERMII_SENDER_ID: Joi.string().allow('').default('HiGo'),
@@ -55,6 +57,7 @@ export const envSchema = Joi.object({
   PAYSTACK_PLAN_WEEKLY: Joi.string().required(),
   PAYSTACK_PLAN_MONTHLY: Joi.string().required(),
   PLATFORM_COMMISSION_RATE: Joi.number().min(0).max(1).default(0.1),
+  DRIVER_SUBSCRIPTION_GRACE_DAYS: Joi.number().integer().min(0).default(14),
 
   GOOGLE_MAPS_API_KEY: Joi.string().required(),
   MAPS_DIRECTIONS_ENABLED: Joi.boolean().default(true),
@@ -88,16 +91,23 @@ export const envSchema = Joi.object({
   }
 
   if (value.OTP_PROVIDER === 'twilio') {
-    if (!value.TWILIO_ACCOUNT_SID || !value.TWILIO_AUTH_TOKEN) {
+    if (
+      !value.TWILIO_ACCOUNT_SID ||
+      (!value.TWILIO_AUTH_TOKEN && !value.TWILIO_API_KEY)
+    ) {
       return helpers.error('any.custom', {
         message:
-          'TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required when OTP_PROVIDER=twilio',
+          'TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN or TWILIO_API_KEY are required when OTP_PROVIDER=twilio',
       });
     }
-    if (!value.TWILIO_PHONE_NUMBER && !value.TWILIO_MESSAGING_SERVICE_SID) {
+    if (
+      !value.TWILIO_VERIFY_SERVICE_SID &&
+      !value.TWILIO_PHONE_NUMBER &&
+      !value.TWILIO_MESSAGING_SERVICE_SID
+    ) {
       return helpers.error('any.custom', {
         message:
-          'TWILIO_PHONE_NUMBER or TWILIO_MESSAGING_SERVICE_SID is required when OTP_PROVIDER=twilio',
+          'TWILIO_VERIFY_SERVICE_SID, TWILIO_PHONE_NUMBER, or TWILIO_MESSAGING_SERVICE_SID is required when OTP_PROVIDER=twilio',
       });
     }
   }

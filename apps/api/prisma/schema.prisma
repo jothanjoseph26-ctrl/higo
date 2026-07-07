@@ -47,6 +47,20 @@ enum KYCStatus {
   rejected
 }
 
+enum DriverApplicationStatus {
+  new
+  contacted
+  invited
+  converted
+  rejected
+}
+
+enum ContactSubmissionStatus {
+  new
+  triaged
+  closed
+}
+
 enum VehicleType {
   keke      // keke napep (motorised tricycle) — Phase 1 primary
   car       // reserved for future
@@ -396,6 +410,7 @@ model Driver {
   fraudEvents           FraudEvent[]     @relation("DriverFraudEvents")
   driverVocabulary      DriverVocabulary[] @relation("DriverVocabulary")
   regulatoryAuditLogs   RegulatoryAuditLog[] @relation("RegulatoryAuditDriver")
+  trainingCompletions   DriverTrainingCompletion[]
 
   @@index([kycStatus])
   @@index([isSuspended])
@@ -408,6 +423,69 @@ model Driver {
   //   CREATE INDEX idx_drivers_online_location ON drivers USING GIST (current_location)
   //     WHERE is_online = true;
   @@map("drivers")
+}
+
+model DriverApplication {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  fullName           String                  @map("full_name")
+  phone              String                  @unique
+  email              String?
+  city               String                  @default("Abuja")
+  preferredLanguage  String                  @default("en") @map("preferred_language")
+  vehicleType        VehicleType             @default(keke) @map("vehicle_type")
+  vehiclePlate       String?                 @map("vehicle_plate")
+  vehicleModel       String?                 @map("vehicle_model")
+  hasSmartphone      Boolean                 @default(true) @map("has_smartphone")
+  hasNin             Boolean                 @default(false) @map("has_nin")
+  hasDriversLicence  Boolean                 @default(false) @map("has_drivers_licence")
+  status             DriverApplicationStatus @default(new)
+  source             String                  @default("web")
+  consentAccepted    Boolean                 @default(false) @map("consent_accepted")
+  notes              String?
+  metadata           Json?                   @db.JsonB
+  convertedDriverId  String?                 @map("converted_driver_id") @db.Uuid
+  contactedAt        DateTime?               @map("contacted_at")
+  createdAt          DateTime                @default(now()) @map("created_at")
+  updatedAt          DateTime                @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([city])
+  @@index([createdAt])
+  @@map("driver_applications")
+}
+
+model DriverTrainingCompletion {
+  id          String   @id @default(uuid()) @db.Uuid
+  driverId    String   @map("driver_id") @db.Uuid
+  moduleKey   String   @map("module_key")
+  completedAt DateTime @default(now()) @map("completed_at")
+  score       Int?
+  metadata    Json?    @db.JsonB
+
+  driver      Driver   @relation(fields: [driverId], references: [id])
+
+  @@unique([driverId, moduleKey])
+  @@index([driverId])
+  @@map("driver_training_completions")
+}
+
+model ContactSubmission {
+  id        String                  @id @default(uuid()) @db.Uuid
+  name      String
+  email     String
+  phone     String?
+  role      String
+  message   String
+  source    String                  @default("web")
+  status    ContactSubmissionStatus @default(new)
+  metadata  Json?                   @db.JsonB
+  createdAt DateTime                @default(now()) @map("created_at")
+  updatedAt DateTime                @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([role])
+  @@index([createdAt])
+  @@map("contact_submissions")
 }
 
 // ============================================================================
@@ -1071,6 +1149,11 @@ model HceUsageLog {
   id             String   @id @default(uuid()) @db.Uuid
   userId         String   @map("user_id") @db.Uuid
   serviceUsed    String   @map("service_used") // HceService enum value
+  provider       String?  @map("provider")
+  model          String?  @map("model")
+  cacheHit       Boolean  @default(false) @map("cache_hit")
+  fallbackUsed   Boolean  @default(false) @map("fallback_used")
+  success        Boolean  @default(true)
   tokensConsumed Int      @default(0) @map("tokens_consumed")
   costUsd        Decimal  @default(0) @map("cost_usd") @db.Decimal(10, 6)
   durationMs     Int      @default(0) @map("duration_ms")
@@ -1082,6 +1165,27 @@ model HceUsageLog {
   @@index([serviceUsed])
   @@index([createdAt])
   @@map("hce_usage_log")
+}
+
+model HceCache {
+  id             String   @id @default(uuid()) @db.Uuid
+  cacheKey       String   @unique @map("cache_key")
+  service        String
+  sourceLanguage String?  @map("source_language")
+  targetLanguage String?  @map("target_language")
+  inputHash      String   @map("input_hash")
+  inputText      String   @map("input_text")
+  output         Json     @db.JsonB
+  provider       String?
+  model          String?
+  hitCount       Int      @default(0) @map("hit_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([service])
+  @@index([sourceLanguage, targetLanguage])
+  @@index([updatedAt])
+  @@map("hce_cache")
 }
 
 // ============================================================================

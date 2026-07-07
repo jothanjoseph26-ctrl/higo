@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { I18nextProvider } from 'react-i18next';
 import { ActivityIndicator, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootStack } from './navigation/RootStack';
 import { navigationRef } from './navigation/navigationRef';
 import { useSocket } from './hooks/useSocket';
@@ -38,10 +39,12 @@ export default function App() {
   }
 
   return (
-    <I18nextProvider i18n={i18n}>
-      <NavigationContainer ref={navigationRef}>
-        <RootStack />
-      </NavigationContainer>
-    </I18nextProvider>
+    <SafeAreaProvider>
+      <I18nextProvider i18n={i18n}>
+        <NavigationContainer ref={navigationRef}>
+          <RootStack />
+        </NavigationContainer>
+      </I18nextProvider>
+    </SafeAreaProvider>
   );
 }

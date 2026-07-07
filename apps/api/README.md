@@ -107,7 +107,7 @@ Route is `POST /api/auth/admin/login` (auth controller, not `/admin/*`).
 ```bash
 curl -sS -X POST "$BASE/api/auth/admin/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@higo.ng","password":"<ADMIN_PASSWORD>"}'
+  -d '{"email":"admin@hiconnectgo.com","password":"<ADMIN_PASSWORD>"}'
 # → accessToken (+ refreshToken unless X-Client-Platform: web)
 ```
 

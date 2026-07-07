@@ -19,7 +19,7 @@ COPY --from=deps /app/apps/admin-dashboard/node_modules ./apps/admin-dashboard/n
 COPY . .
 
 ENV CI=true
-ARG VITE_API_URL=https://hiconnect-production.up.railway.app/api
+ARG VITE_API_URL=https://www.hiconnectgo.com/api
 ENV VITE_API_URL=$VITE_API_URL
 
 RUN pnpm install --frozen-lockfile

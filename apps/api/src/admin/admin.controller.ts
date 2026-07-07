@@ -9,14 +9,20 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UseGuards } from '@nestjs/common';
 import { AppException } from '../common/errors/app.exception';
+import { DEFAULT_HCE_CONFIG } from '../hce/hce-defaults';
+import { HceRoutingConfig } from '../hce/hce.types';
+import { parseHceConfig } from '../hce/hce-settings.service';
+import { HceUsageService } from '../hce/hce-usage.service';
+import { AiService } from '../ai/ai.service';
 
 const PLATFORM_SETTINGS_ID = 'default';
 
 const DEFAULT_PLATFORM_SETTINGS = {
-  googleMapsOriginRestriction: 'https://admin.higo.ng/*',
+  googleMapsOriginRestriction: 'https://www.hiconnectgo.com/*',
   smsGatewayChannel: 'termii' as const,
   fcmServerKey: '',
   maintenanceMode: false,
+  hce: DEFAULT_HCE_CONFIG,
 };
 
 type PlatformSettingsPayload = {
@@ -24,6 +30,7 @@ type PlatformSettingsPayload = {
   smsGatewayChannel: 'termii' | 'africastalking';
   fcmServerKey: string;
   maintenanceMode: boolean;
+  hce: HceRoutingConfig;
 };
 
 const FCM_KEY_MASK = '••••••••••••••••••••••••••••••••';
@@ -39,6 +46,7 @@ function parsePlatformSettings(raw: unknown): PlatformSettingsPayload {
       data.smsGatewayChannel === 'africastalking' ? 'africastalking' : 'termii',
     fcmServerKey: typeof data.fcmServerKey === 'string' ? data.fcmServerKey : '',
     maintenanceMode: Boolean(data.maintenanceMode),
+    hce: parseHceConfig((data as any).hce),
   };
 }
 
@@ -91,6 +99,8 @@ export class AdminController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly weeklyKpi: WeeklyKpiService,
+    private readonly hceUsage: HceUsageService,
+    private readonly ai: AiService,
   ) {}
 
   @Get('weekly-kpis')
@@ -734,6 +744,18 @@ export class AdminController {
     return maskFcmServerKey(settings);
   }
 
+  @Get('hce/status')
+  async getAiStatus() {
+    return {
+      ai: this.ai.getStatus(),
+      hce: parsePlatformSettings(
+        (await this.prisma.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } }))?.settings ??
+          DEFAULT_PLATFORM_SETTINGS,
+      ).hce,
+      usage: await this.hceUsage.getCounters(),
+    };
+  }
+
   @Put('settings')
   @Roles('super_admin')
   async updateSettings(@Body() dto: Partial<PlatformSettingsPayload>) {
@@ -760,12 +782,13 @@ export class AdminController {
       fcmServerKey: shouldKeepExistingFcmKey ? current.fcmServerKey : incomingFcmKey!,
       maintenanceMode:
         typeof dto.maintenanceMode === 'boolean' ? dto.maintenanceMode : current.maintenanceMode,
+      hce: dto.hce ? parseHceConfig(dto.hce) : current.hce,
     };
 
     const row = await this.prisma.platformSettings.upsert({
       where: { id: PLATFORM_SETTINGS_ID },
-      create: { id: PLATFORM_SETTINGS_ID, settings: next },
-      update: { settings: next },
+      create: { id: PLATFORM_SETTINGS_ID, settings: next as any },
+      update: { settings: next as any },
     });
 
     return maskFcmServerKey(parsePlatformSettings(row.settings));

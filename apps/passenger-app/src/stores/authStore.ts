@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type { User } from '@higo/shared-types';
-import { Platform } from 'react-native';
 import { api } from '../services/api';
 import {
   sendFirebasePhoneOtp,
@@ -52,11 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   async sendOtp(phone: string) {
     set({ isLoading: true, error: null });
     try {
-      if (Platform.OS === 'web') {
-        await sendFirebasePhoneOtp(phone);
-      } else {
-        await api.sendOtp({ phone, userType: 'passenger' });
-      }
+      await sendFirebasePhoneOtp(phone);
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to send OTP',
@@ -70,13 +65,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   async verifyOtp(phone: string, code: string) {
     set({ isLoading: true, error: null });
     try {
-      const result =
-        Platform.OS === 'web'
-          ? await api.verifyFirebasePhone({
-              idToken: await verifyFirebasePhoneOtp(code),
-              userType: 'passenger',
-            })
-          : await api.verifyOtp({ phone, code, userType: 'passenger' });
+      const result = await api.verifyFirebasePhone({
+        idToken: await verifyFirebasePhoneOtp(code),
+        userType: 'passenger',
+      });
       await persistSession(result.user);
       set({
         user: result.user ?? null,

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, Pressable, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { MapView } from '../../components/MapView';
@@ -18,6 +19,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'TripActive'>;
 
 export function TripActive({ navigation }: Props) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { userLocation } = useLocationStore();
   const { currentTrip, driverLocation, status, eta, tripError, clearTripState } = useTripStore();
   const pickupLocation = currentTrip?.pickupLocation
@@ -153,7 +155,12 @@ export function TripActive({ navigation }: Props) {
         <Text style={styles.chatButtonIcon}>💬</Text>
       </Pressable>
 
-      <View style={styles.sheet}>
+      <View
+        style={[
+          styles.sheet,
+          { paddingBottom: theme.spacing.lg + Math.max(insets.bottom, theme.spacing.md) },
+        ]}
+      >
         <Text style={styles.activeText}>🛺 {t('trip.tripActive')}</Text>
         <View style={styles.etaContainer}>
           <Text style={styles.etaLabel}>Estimated Time to Destination</Text>

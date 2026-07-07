@@ -14,10 +14,11 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://hiconnect-production.up.railway.app/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://hiconnect-production.up.railway.app",
+        "EXPO_PUBLIC_API_BASE_URL": "https://www.hiconnectgo.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://www.hiconnectgo.com",
         "EXPO_PUBLIC_MAPS_MOCK": "false",
-        "EXPO_PUBLIC_PUSH_MOCK": "false"
+        "EXPO_PUBLIC_PUSH_MOCK": "false",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAhVQGmTIcqNTBe1SopUeLGXGFgDj4Fc5w"
       }
     },
     "production": {
@@ -27,7 +28,8 @@
       },
       "env": {
         "EXPO_PUBLIC_MAPS_MOCK": "false",
-        "EXPO_PUBLIC_PUSH_MOCK": "false"
+        "EXPO_PUBLIC_PUSH_MOCK": "false",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAhVQGmTIcqNTBe1SopUeLGXGFgDj4Fc5w"
       }
     }
   },

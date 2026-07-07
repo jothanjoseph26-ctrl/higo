@@ -7,6 +7,7 @@ import { ScreenShell } from '../../components/ScreenShell';
 import { SupportedLanguage } from '@higo/shared-types';
 import { useAuthStore } from '../../stores/authStore';
 import i18n from '../../i18n';
+import { updateHceLanguagePreference } from '../../services/hce';
 
 const LANGUAGES: Array<{ code: SupportedLanguage; name: string }> = [
   { code: SupportedLanguage.ENGLISH, name: 'English' },
@@ -19,12 +20,13 @@ export function Language() {
   const { t } = useTranslation();
   const { user, updateProfile, isLoading } = useAuthStore();
   const [lang, setLang] = useState<SupportedLanguage>(
-    user?.preferredLanguage ?? SupportedLanguage.ENGLISH,
+    (user?.preferredLanguage as SupportedLanguage) ?? SupportedLanguage.ENGLISH,
   );
 
   const handleSave = async () => {
     try {
       await updateProfile({ preferredLanguage: lang });
+      await updateHceLanguagePreference(lang);
       await i18n.changeLanguage(lang);
       Alert.alert('Success', 'Language preference updated.');
     } catch (e: unknown) {

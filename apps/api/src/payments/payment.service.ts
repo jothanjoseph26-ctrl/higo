@@ -1,9 +1,10 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Logger, UnauthorizedException, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { PaystackClient } from './paystack/paystack.client';
 import { FinancialAuditService } from './audit/financial-audit.service';
+import { MatchingService } from '../matching/matching.service';
 import {
   InitializePaymentRequest,
   InitializePaymentResponse,
@@ -29,6 +30,8 @@ export class PaymentService {
     private readonly paystack: PaystackClient,
     private readonly audit: FinancialAuditService,
     private readonly config: ConfigService,
+    @Inject(forwardRef(() => MatchingService))
+    private readonly matchingService: MatchingService,
   ) {
     this.paystackSecret = config.getOrThrow<string>('PAYSTACK_SECRET_KEY');
     this.paymentCallbackUrl = config.getOrThrow<string>('APP_PAYMENT_CALLBACK_URL');
@@ -49,6 +52,15 @@ export class PaymentService {
 
     if (trip.passengerId !== passengerId) {
       throw new AppException('FORBIDDEN', undefined, 'You cannot initialize payment for this trip');
+    }
+    if (dto.paymentMethod === PaymentMethod.CASH) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'Cash trips do not use Paystack initialization');
+    }
+    if (trip.status !== 'requested') {
+      throw new AppException('VALIDATION_ERROR', undefined, 'Payment can only be initialized for requested trips');
+    }
+    if (trip.paymentStatus === PaymentStatus.HELD) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'Payment is already confirmed for this trip');
     }
 
     const email = trip.passenger.email || `${trip.passenger.phone}@higo.com`;
@@ -253,6 +265,14 @@ export class PaymentService {
           where: { id: trip.id },
           data: { paymentStatus: 'held' },
         });
+
+        if (trip.status === 'requested') {
+          this.matchingService.dispatch(trip.id).catch((err) => {
+            this.logger.error(
+              `Matching dispatch failed after payment confirmation for trip ${trip.id}: ${err.message}`,
+            );
+          });
+        }
 
         await this.audit.logEvent({
           action: 'charge.success',

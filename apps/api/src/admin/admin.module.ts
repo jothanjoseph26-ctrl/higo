@@ -6,6 +6,8 @@ import { PaymentsModule } from '../payments/payments.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { AdminController } from './admin.controller';
 import { JobsModule } from '../jobs/jobs.module';
+import { HceModule } from '../hce/hce.module';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { JobsModule } from '../jobs/jobs.module';
     PaymentsModule,
     RealtimeModule,
     JobsModule,
+    HceModule,
+    AiModule,
   ],
   controllers: [AdminController],
 })

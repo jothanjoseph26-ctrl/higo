@@ -1,30 +1,13 @@
-import { Platform } from 'react-native';
+const PROD_API = 'https://www.hiconnectgo.com/api';
+const PROD_WS = 'https://www.hiconnectgo.com';
 
-const PROD_API = 'https://hiconnect-production.up.railway.app/api';
-const PROD_WS = 'https://hiconnect-production.up.railway.app';
+// EXPO_PUBLIC_* vars are inlined by Expo's Babel preset on native; the web
+// build injects the same keys through Vite's `define` (see vite.config.mts).
+// Hermes cannot parse `import.meta`, so it must never appear in shared code.
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || PROD_API;
 
-/** API base URL — Vite injects VITE_API_BASE_URL at web build time. */
-export const API_BASE_URL =
-  (typeof import.meta !== 'undefined' &&
-    (import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env
-      ?.VITE_API_BASE_URL) ||
-  Platform.select({
-    android: PROD_API,
-    ios: PROD_API,
-    default: PROD_API,
-  });
-
-/** Origin without the `/api` suffix — health lives at `/health`, not `/api/health`. */
 export const API_ROOT_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export const HEALTH_CHECK_URL = `${API_ROOT_URL}/health`;
 
-export const WS_BASE_URL =
-  (typeof import.meta !== 'undefined' &&
-    (import.meta as ImportMeta & { env?: { VITE_SOCKET_URL?: string } }).env
-      ?.VITE_SOCKET_URL) ||
-  Platform.select({
-    android: PROD_WS,
-    ios: PROD_WS,
-    default: PROD_WS,
-  });
+export const WS_BASE_URL = process.env.EXPO_PUBLIC_SOCKET_URL || PROD_WS;

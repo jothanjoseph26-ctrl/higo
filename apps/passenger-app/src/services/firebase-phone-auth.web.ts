@@ -95,7 +95,7 @@ function mapFirebasePhoneError(err: unknown): Error {
     code.includes('auth/app-not-authorized')
   ) {
     return new Error(
-      'Firebase Phone Auth is not authorized for this domain. Add admin-production-13cc.up.railway.app to Firebase Authorized domains and enable Phone sign-in.',
+      'Firebase Phone Auth is not authorized for this domain. Add www.hiconnectgo.com to Firebase Authorized domains and enable Phone sign-in.',
     );
   }
   if (

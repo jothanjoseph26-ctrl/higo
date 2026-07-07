@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Image } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
@@ -19,7 +19,11 @@ export function DriverSplash({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.logo}>HiGo</Text>
+      <Image
+        source={require('../../assets/logo-rectangular-dark.png')}
+        style={styles.logoImage}
+        resizeMode="contain"
+      />
       <Text style={styles.tagline}>{t('auth.splashTagline')}</Text>
       <Text style={styles.role}>Driver</Text>
     </View>
@@ -34,10 +38,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: theme.spacing.lg,
   },
-  logo: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: theme.colors.primaryGreen,
+  logoImage: {
+    width: 240,
+    height: 130,
     marginBottom: theme.spacing.sm,
   },
   tagline: {

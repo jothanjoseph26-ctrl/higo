@@ -1,0 +1,121 @@
+{
+  "project_info": {
+    "project_number": "397868913640",
+    "project_id": "hiconnect-3caf8",
+    "storage_bucket": "hiconnect-3caf8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:397868913640:android:a2c392abda420d994d0a5d",
+        "android_client_info": {
+          "package_name": "com.driverapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "397868913640-rprhi71r1g8svqumlvkrn20k6aket04r.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.driverapp",
+            "certificate_hash": "a7ccfc7d27cd7549a53490d7546776c546bd67a9"
+          }
+        },
+        {
+          "client_id": "397868913640-pjal430sat5igdbs9rr2r02o45c1j9uj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxwFwy4kEmSu8-9Jxcoth6ATgXJ-6FYdI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "397868913640-pjal430sat5igdbs9rr2r02o45c1j9uj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:397868913640:android:5760403679671a124d0a5d",
+        "android_client_info": {
+          "package_name": "com.higopassenger"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "397868913640-e3j0v5p6ving7in3ibab0fgstt0iamqc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.higopassenger",
+            "certificate_hash": "4b06842461ad4fafae6c6b1609518c73eace5aad"
+          }
+        },
+        {
+          "client_id": "397868913640-ti1202gef9gg1f5i15djs32aobi1n4q3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.higopassenger",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "397868913640-pjal430sat5igdbs9rr2r02o45c1j9uj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxwFwy4kEmSu8-9Jxcoth6ATgXJ-6FYdI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "397868913640-pjal430sat5igdbs9rr2r02o45c1j9uj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:397868913640:android:48bf24104fe6e8174d0a5d",
+        "android_client_info": {
+          "package_name": "com.passengerapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "397868913640-pjal430sat5igdbs9rr2r02o45c1j9uj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxwFwy4kEmSu8-9Jxcoth6ATgXJ-6FYdI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "397868913640-pjal430sat5igdbs9rr2r02o45c1j9uj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

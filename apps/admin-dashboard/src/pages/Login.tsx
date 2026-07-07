@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { apiService } from '../services/api';
-import { AlertCircle, Lock } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -39,9 +39,11 @@ export const Login: React.FC = () => {
     <div className="min-h-screen bg-lightGrey flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md p-8 rounded-card shadow-custom border border-lightGrey">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-primaryGreen bg-opacity-10 text-primaryGreen rounded-full flex items-center justify-center mx-auto mb-4">
-            <Lock size={32} />
-          </div>
+          <img
+            src="/logo-rectangular.png"
+            alt="HiGo Logo"
+            className="h-16 mx-auto mb-4 object-contain"
+          />
           <h2 className="text-2xl font-bold text-darkNavy font-poppins">HiGo Abuja Control Room</h2>
           <p className="text-xs text-gray-500 mt-1">Please enter your credentials to authenticate</p>
         </div>
@@ -64,7 +66,7 @@ export const Login: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3.5 py-2.5 border border-lightGrey rounded-input text-sm focus:outline-none focus:border-primaryGreen focus:ring-1 focus:ring-primaryGreen"
-              placeholder="e.g. superadmin@higo.ng"
+              placeholder="e.g. superadmin@hiconnectgo.com"
               autoComplete="username"
               required
             />

@@ -1,4 +1,5 @@
 import { Controller, Post, Put, Body, Get, Query } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { GetNearbyDriversResponse } from '@higo/shared-types';
 import { PresenceService } from '../realtime/presence.service';
 import { PostDriverLocationDto } from '../trips/dto/trip.dto';
@@ -7,12 +8,22 @@ import { AuthUser } from '../common/types/auth-user';
 import { AppException } from '../common/errors/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { NearbyDriversQueryDto } from './dto/nearby-drivers-query.dto';
+import { HceService } from '../hce/hce.service';
+
+const TRAINING_MODULES = [
+  { key: 'safety_basics', title: 'Safety basics', required: true },
+  { key: 'service_quality', title: 'Service quality', required: true },
+  { key: 'payments_and_escrow', title: 'Payments and escrow', required: true },
+  { key: 'voice_dispatch', title: 'Voice dispatch', required: false },
+];
 
 @Controller('drivers')
 export class DriversController {
   constructor(
     private readonly presenceService: PresenceService,
     private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly hce: HceService,
   ) {}
 
   @Get('nearby')
@@ -68,7 +79,7 @@ export class DriversController {
       if (driver.kycStatus !== 'approved') {
         throw new AppException('KYC_INCOMPLETE');
       }
-      if (!driver.subscriptionExpiresAt || new Date(driver.subscriptionExpiresAt) < new Date()) {
+      if (!this.hasActiveSubscriptionOrGrace(driver.subscriptionExpiresAt, driver.createdAt)) {
         throw new AppException('SUBSCRIPTION_EXPIRED');
       }
       if (driver.isSuspended) {
@@ -85,13 +96,29 @@ export class DriversController {
   }
 
   @Post('voice-confirm')
-  async voiceConfirm(@CurrentUser() user: AuthUser) {
+  async voiceConfirm(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: { transcript?: string; command?: string; tripId?: string },
+  ) {
     if (user.type !== 'driver') {
       throw new AppException('FORBIDDEN', undefined, 'Only drivers can confirm via voice');
     }
-    const rand = Math.random();
-    const intent = rand < 0.7 ? 'accept' : rand < 0.9 ? 'decline' : 'unclear';
-    return { intent };
+
+    if (dto.tripId) {
+      const trip = await this.prisma.trip.findFirst({
+        where: { id: dto.tripId, driverId: user.sub },
+        select: { id: true },
+      });
+      if (!trip) {
+        throw new AppException('FORBIDDEN', undefined, 'Trip is not assigned to this driver');
+      }
+    }
+
+    return this.hce.intent(user, {
+      text: dto.command,
+      transcript: dto.transcript,
+      context: dto.tripId ? `trip:${dto.tripId}` : undefined,
+    });
   }
 
   @Get('me')
@@ -216,7 +243,60 @@ export class DriversController {
     if (user.type !== 'driver') {
       throw new AppException('FORBIDDEN', undefined, 'Only drivers can access training progress');
     }
-    return { modulesCompleted: 0, totalModules: 0, completionPercentage: 0 };
+
+    const completed = await this.prisma.driverTrainingCompletion.findMany({
+      where: { driverId: user.sub },
+      orderBy: { completedAt: 'desc' },
+    });
+    const completedKeys = new Set(completed.map((item) => item.moduleKey));
+    const modules = TRAINING_MODULES.map((module) => {
+      const completion = completed.find((item) => item.moduleKey === module.key);
+      return {
+        ...module,
+        completed: completedKeys.has(module.key),
+        completedAt: completion?.completedAt ?? null,
+        score: completion?.score ?? null,
+      };
+    });
+    const modulesCompleted = modules.filter((module) => module.completed).length;
+    return {
+      modulesCompleted,
+      totalModules: TRAINING_MODULES.length,
+      completionPercentage: Math.round((modulesCompleted / TRAINING_MODULES.length) * 100),
+      modules,
+    };
+  }
+
+  @Post('training/progress')
+  async recordDriverTrainingProgress(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: { moduleKey?: string; moduleId?: string; score?: number; metadata?: Record<string, unknown> },
+  ) {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can update training progress');
+    }
+
+    const moduleKey = dto.moduleKey ?? dto.moduleId;
+    if (!moduleKey || !TRAINING_MODULES.some((module) => module.key === moduleKey)) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'Unknown training module');
+    }
+
+    await this.prisma.driverTrainingCompletion.upsert({
+      where: { driverId_moduleKey: { driverId: user.sub, moduleKey } },
+      create: {
+        driverId: user.sub,
+        moduleKey,
+        score: dto.score,
+        metadata: dto.metadata,
+      },
+      update: {
+        completedAt: new Date(),
+        score: dto.score,
+        metadata: dto.metadata,
+      },
+    });
+
+    return this.getDriverTrainingProgress(user);
   }
 
   @Get('voice-commands')
@@ -224,6 +304,37 @@ export class DriversController {
     if (user.type !== 'driver') {
       throw new AppException('FORBIDDEN', undefined, 'Only drivers can access voice commands');
     }
-    return { commands: [] };
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: user.sub },
+      select: { kycStatus: true, subscriptionExpiresAt: true, isSuspended: true, createdAt: true },
+    });
+    return {
+      commands: [
+        { intent: 'accept', phrases: ['accept', 'yes', 'karba', 'gba', 'confirm'] },
+        { intent: 'decline', phrases: ['decline', 'no', 'ki', 'ko', 'reject'] },
+      ],
+      available: Boolean(
+        driver &&
+          driver.kycStatus === 'approved' &&
+          this.hasActiveSubscriptionOrGrace(driver.subscriptionExpiresAt, driver.createdAt) &&
+          !driver.isSuspended,
+      ),
+    };
+  }
+
+  private hasActiveSubscriptionOrGrace(
+    subscriptionExpiresAt: Date | null,
+    driverCreatedAt: Date,
+  ): boolean {
+    if (subscriptionExpiresAt && new Date(subscriptionExpiresAt) > new Date()) {
+      return true;
+    }
+
+    const graceDays = this.config.get<number>('DRIVER_SUBSCRIPTION_GRACE_DAYS') ?? 14;
+    if (graceDays <= 0) return false;
+
+    const graceExpiresAt = new Date(driverCreatedAt);
+    graceExpiresAt.setDate(graceExpiresAt.getDate() + graceDays);
+    return graceExpiresAt > new Date();
   }
 }

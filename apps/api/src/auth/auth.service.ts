@@ -68,7 +68,9 @@ export class AuthService {
 
   async sendOtp(dto: SendOtpRequest): Promise<SendOtpResponse> {
     const code = this.otp.generateCode();
-    await this.otp.storeOtp(dto.phone, code);
+    if (!this.sms.usesExternalOtpVerification()) {
+      await this.otp.storeOtp(dto.phone, code);
+    }
     const { channel } = await this.sms.sendOtp(dto.phone, code);
     return { sent: true, expiresInSeconds: 300, channel };
   }
@@ -98,7 +100,14 @@ export class AuthService {
   }
 
   async verifyOtp(dto: VerifyOtpRequest): Promise<VerifyOtpResponse> {
-    await this.otp.verifyOtp(dto.phone, dto.code);
+    if (this.sms.usesExternalOtpVerification()) {
+      const approved = await this.sms.verifyOtp(dto.phone, dto.code);
+      if (!approved) {
+        throw new AppException('OTP_INVALID');
+      }
+    } else {
+      await this.otp.verifyOtp(dto.phone, dto.code);
+    }
     return this.issueAuthForPhone(dto.phone, dto.userType);
   }
 

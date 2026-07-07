@@ -31,7 +31,11 @@ export function Splash({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.logo}>🛺 HiGo</Text>
+      <Image
+        source={require('../../assets/logo-rectangular-dark.png')}
+        style={styles.logoImage}
+        resizeMode="contain"
+      />
       <Text style={styles.tagline}>{t('auth.splashTagline')}</Text>
       <ActivityIndicator size="large" color="#fff" style={styles.loader} />
     </View>
@@ -46,10 +50,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: theme.spacing.lg,
   },
-  logo: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: '#fff',
+  logoImage: {
+    width: 240,
+    height: 130,
     marginBottom: theme.spacing.sm,
   },
   tagline: {

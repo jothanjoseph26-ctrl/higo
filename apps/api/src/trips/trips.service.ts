@@ -16,6 +16,7 @@ import {
   VehicleType,
   PaymentMethod,
   PaymentStatus,
+  QuoteTripResponse,
   RequestTripRequest,
   RequestTripResponse,
   CancelTripResponse,
@@ -27,7 +28,14 @@ import {
   TripMatchedPayload,
 } from '@higo/shared-types';
 import { AppException } from '../common/errors/app.exception';
+import { AuthUser } from '../common/types/auth-user';
 import * as crypto from 'crypto';
+
+interface PreparedTripRequest {
+  distanceKm: number;
+  durationMin: number;
+  estimate: RequestTripResponse['estimate'];
+}
 
 @Injectable()
 export class TripService {
@@ -70,6 +78,21 @@ export class TripService {
         Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+  }
+
+  async assertTripAccess(tripId: string, user: AuthUser): Promise<void> {
+    const trip = await this.getTrip(tripId);
+    if (!trip) {
+      throw new AppException('NOT_FOUND', undefined, 'Trip not found');
+    }
+    this.assertTripVisibleToUser(trip, user);
+  }
+
+  assertTripVisibleToUser(trip: Trip, user: AuthUser): void {
+    if (user.type === 'admin') return;
+    if (user.type === 'passenger' && trip.passengerId === user.sub) return;
+    if (user.type === 'driver' && trip.driverId === user.sub) return;
+    throw new AppException('FORBIDDEN', undefined, 'You cannot access this trip');
   }
 
   private mapTripRow(row: any): Trip {
@@ -207,17 +230,10 @@ export class TripService {
     };
   }
 
-  async requestTrip(passengerId: string, dto: RequestTripRequest): Promise<RequestTripResponse> {
-    const activeTripRows = await this.prisma.$queryRaw<any[]>`
-      SELECT id FROM trips
-      WHERE passenger_id = ${passengerId}::uuid
-        AND status::text IN ('requested', 'matched', 'en_route', 'active')
-      LIMIT 1;
-    `;
-    if (activeTripRows.length > 0) {
-      throw new AppException('TRIP_ALREADY_ACTIVE');
-    }
-
+  private async prepareTripRequest(
+    dto: RequestTripRequest,
+    options: { redeemPromo: boolean },
+  ): Promise<PreparedTripRequest> {
     const restrictedPickup = await this.zonesService.isPointRestricted(dto.pickup);
     if (restrictedPickup.restricted) {
       throw new AppException(
@@ -253,7 +269,9 @@ export class TripService {
     });
 
     if (dto.promoCode) {
-      const promo = await this.promosService.validateAndRedeem(dto.promoCode);
+      const promo = options.redeemPromo
+        ? await this.promosService.validateAndRedeem(dto.promoCode)
+        : await this.promosService.validate(dto.promoCode);
       const originalTotalFare = estimate.totalFare;
       const discounted = this.promosService.applyDiscount(promo, originalTotalFare);
       estimate = {
@@ -264,6 +282,47 @@ export class TripService {
         promoCode: discounted.promoCode,
       };
     }
+
+    return { distanceKm, durationMin, estimate };
+  }
+
+  async quoteTrip(_passengerId: string, dto: RequestTripRequest): Promise<QuoteTripResponse> {
+    const prepared = await this.prepareTripRequest(dto, { redeemPromo: false });
+    const candidates = await this.matchingService.findCandidates(dto.pickup, dto.vehicleType);
+    const nearbyDrivers = candidates.length;
+    const closest = candidates[0];
+    const etaMin = closest
+      ? Math.max(1, Math.round((closest.distanceMeters / 1000) * 2.5))
+      : null;
+    const expiresAt = new Date(Date.now() + 2 * 60 * 1000).toISOString();
+
+    return {
+      quoteId: crypto.randomUUID(),
+      estimate: prepared.estimate,
+      supply: {
+        nearbyDrivers,
+        available: nearbyDrivers > 0,
+        radiusKm: 5,
+        etaMin,
+      },
+      expiresAt,
+    };
+  }
+
+  async requestTrip(passengerId: string, dto: RequestTripRequest): Promise<RequestTripResponse> {
+    const activeTripRows = await this.prisma.$queryRaw<any[]>`
+      SELECT id FROM trips
+      WHERE passenger_id = ${passengerId}::uuid
+        AND status::text IN ('requested', 'matched', 'en_route', 'active')
+      LIMIT 1;
+    `;
+    if (activeTripRows.length > 0) {
+      throw new AppException('TRIP_ALREADY_ACTIVE');
+    }
+
+    const { distanceKm, durationMin, estimate } = await this.prepareTripRequest(dto, {
+      redeemPromo: true,
+    });
 
     const tripId = crypto.randomUUID();
 
@@ -312,14 +371,20 @@ export class TripService {
       throw new AppException('INTERNAL_ERROR', undefined, 'Failed to create trip');
     }
 
-    this.matchingService.dispatch(tripId).catch((err) => {
-      this.logger.error(`Matching dispatch failed for trip ${tripId}: ${err.message}`);
-    });
+    if (dto.paymentMethod === PaymentMethod.CASH) {
+      this.dispatchRequestedTrip(tripId);
+    }
 
     return {
       trip,
       estimate,
     };
+  }
+
+  dispatchRequestedTrip(tripId: string): void {
+    this.matchingService.dispatch(tripId).catch((err) => {
+      this.logger.error(`Matching dispatch failed for trip ${tripId}: ${err.message}`);
+    });
   }
 
   async cancelTrip(tripId: string, by: 'passenger' | 'driver', reason: string): Promise<CancelTripResponse> {
@@ -400,6 +465,7 @@ export class TripService {
     return {
       tripId,
       status: trip.status,
+      paymentStatus: trip.paymentStatus,
       driver: driverDetails,
       driverLocation,
     };

@@ -64,13 +64,17 @@ export default defineConfig({
   define: {
     global: 'window',
     __DEV__: 'true',
-    'process.env': '{}',
-    'import.meta.env.VITE_API_BASE_URL': JSON.stringify(
-      process.env.VITE_API_BASE_URL ?? 'https://hiconnect-production.up.railway.app/api',
-    ),
-    'import.meta.env.VITE_SOCKET_URL': JSON.stringify(
-      process.env.VITE_SOCKET_URL ?? 'https://hiconnect-production.up.railway.app',
-    ),
+    'process.env': JSON.stringify({
+      EXPO_PUBLIC_API_BASE_URL:
+        process.env.VITE_API_BASE_URL ??
+        process.env.EXPO_PUBLIC_API_BASE_URL ??
+        'https://www.hiconnectgo.com/api',
+      EXPO_PUBLIC_SOCKET_URL:
+        process.env.VITE_SOCKET_URL ??
+        process.env.EXPO_PUBLIC_SOCKET_URL ??
+        'https://www.hiconnectgo.com',
+      EXPO_PUBLIC_SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '',
+    }),
   },
   resolve: {
     extensions,

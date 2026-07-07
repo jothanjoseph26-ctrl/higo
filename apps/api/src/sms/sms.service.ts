@@ -26,6 +26,21 @@ export class SmsService {
     private readonly africasTalking: AfricasTalkingAdapter,
   ) {}
 
+  usesExternalOtpVerification(): boolean {
+    return (
+      this.config.get<string>('OTP_PROVIDER', 'firebase') === 'twilio' &&
+      this.twilio.hasVerifyService()
+    );
+  }
+
+  async verifyOtp(phone: string, code: string): Promise<boolean> {
+    if (!this.usesExternalOtpVerification()) {
+      throw new Error('No external OTP verifier configured');
+    }
+
+    return this.twilio.checkVerification(phone, code);
+  }
+
   async sendOtp(
     phone: string,
     code: string,
@@ -34,6 +49,10 @@ export class SmsService {
     const provider = this.config.get<string>('OTP_PROVIDER', 'firebase');
 
     if (provider === 'twilio') {
+      if (this.twilio.hasVerifyService()) {
+        await this.twilio.startVerification(phone);
+        return { channel: 'twilio' };
+      }
       await this.twilio.sendSms(phone, message);
       return { channel: 'twilio' };
     }

@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
   ViewStyle,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../theme';
 
 interface ScreenShellProps {
@@ -24,8 +24,11 @@ export function ScreenShell({
   scroll = true,
   contentStyle,
 }: ScreenShellProps) {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = theme.spacing.lg + Math.max(insets.bottom, theme.spacing.md);
+
   const body = (
-    <View style={[styles.content, contentStyle]}>
+    <View style={[styles.content, contentStyle, { paddingBottom: bottomPadding }]}>
       {title ? <Text style={styles.title}>{title}</Text> : null}
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       {children}
@@ -33,7 +36,7 @@ export function ScreenShell({
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       {scroll ? (
         <ScrollView
           contentContainerStyle={styles.scroll}

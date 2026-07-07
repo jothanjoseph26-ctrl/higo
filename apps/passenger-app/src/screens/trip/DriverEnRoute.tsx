@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View, Pressable, Linking, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { MapView } from '../../components/MapView';
@@ -15,6 +16,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'DriverEnRoute'>;
 
 export function DriverEnRoute({ navigation }: Props) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { userLocation } = useLocationStore();
   const { driverDetails, driverLocation, eta, status, tripError, clearTripState } = useTripStore();
   const routePolyline = useRouteDirections(driverLocation, userLocation);
@@ -70,7 +72,12 @@ export function DriverEnRoute({ navigation }: Props) {
         routePolyline={routePolyline}
       />
 
-      <View style={styles.sheet}>
+      <View
+        style={[
+          styles.sheet,
+          { paddingBottom: theme.spacing.lg + Math.max(insets.bottom, theme.spacing.md) },
+        ]}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>
             {status === TripStatus.EN_ROUTE ? 'Driver has arrived' : t('trip.driverEnRoute')}

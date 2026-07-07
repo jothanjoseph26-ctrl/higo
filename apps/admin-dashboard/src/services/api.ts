@@ -85,9 +85,65 @@ export interface PlatformSettings {
   smsGatewayChannel: 'termii' | 'africastalking';
   fcmServerKey: string;
   maintenanceMode: boolean;
+  hce: HceRoutingConfig;
 }
 
 export type UpdatePlatformSettingsRequest = Partial<PlatformSettings>;
+
+export type HceCapability =
+  | 'translate'
+  | 'intent_extract'
+  | 'voice_booking'
+  | 'tts'
+  | 'transcribe'
+  | 'landmark'
+  | 'assistant';
+
+export type HceProvider = 'local' | 'openrouter' | 'azure' | 'mock' | 'disabled';
+
+export interface HceCapabilityConfig {
+  provider: HceProvider;
+  model: string;
+  fallbackProvider: HceProvider;
+  fallbackModel: string;
+  dailyLimit: number;
+}
+
+export interface HceRoutingConfig {
+  enabled: boolean;
+  mockMode: boolean;
+  defaultProvider: HceProvider;
+  defaultModel: string;
+  dailyLimits: {
+    passenger: number;
+    driver: number;
+    admin: number;
+    globalOpenRouter: number;
+    azureSttMinutesMonthly: number;
+    azureTtsCharsMonthly: number;
+  };
+  capabilities: Record<HceCapability, HceCapabilityConfig>;
+}
+
+export interface HceAiStatus {
+  ai: { enabled: boolean; provider: string; model: string };
+  hce: HceRoutingConfig;
+  usage: {
+    openRouter: { usedToday: number; dailyLimit: number };
+    azure: {
+      sttMinutesUsedThisMonth: number;
+      sttMinutesMonthlyLimit: number;
+      ttsCharsUsedThisMonth: number;
+      ttsCharsMonthlyLimit: number;
+    };
+    last30Days: {
+      totalCalls: number;
+      cacheHits: number;
+      fallbacks: number;
+      cacheHitRate: number;
+    };
+  };
+}
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
@@ -436,6 +492,11 @@ export const apiService = {
 
   async updateSettings(dto: UpdatePlatformSettingsRequest): Promise<PlatformSettings> {
     const res = await api.put<ApiResponse<PlatformSettings>>('/admin/settings', dto);
+    return unwrap(res);
+  },
+
+  async getAiStatus(): Promise<HceAiStatus> {
+    const res = await api.get<ApiResponse<HceAiStatus>>('/admin/hce/status');
     return unwrap(res);
   },
 

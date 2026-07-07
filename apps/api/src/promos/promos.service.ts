@@ -160,4 +160,14 @@ export class PromosService {
       });
     });
   }
+
+  async validate(code: string): Promise<PromoCode> {
+    const normalizedCode = this.normalizeCode(code);
+    const promo = await this.prisma.promoCode.findUnique({ where: { code: normalizedCode } });
+    if (!promo) {
+      throw new AppException('NOT_FOUND', undefined, 'Promo code not found');
+    }
+    this.assertPromoUsable(promo);
+    return promo;
+  }
 }

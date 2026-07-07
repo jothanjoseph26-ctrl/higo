@@ -1,4 +1,5 @@
 import './instrument';
+import { join } from 'path';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -12,7 +13,7 @@ async function bootstrap() {
   app.enableCors({ origin: true, credentials: true });
 
   app.setGlobalPrefix('api', {
-    exclude: ['health', 'health/ready', 'docs', 'docs-json'],
+    exclude: ['health', 'health/ready', 'docs', 'docs-json', 'downloads/HiGo-Passenger.apk'],
   });
 
   // Back-compat for clients that probe `${API_BASE_URL}/health` (i.e. /api/health).
@@ -20,6 +21,14 @@ async function bootstrap() {
   http.get('/api/health', (_req: unknown, res: { redirect: (code: number, url: string) => void }) => {
     res.redirect(308, '/health');
   });
+
+  // Direct APK download — interim distribution while the Play Store listing is pending.
+  http.get(
+    '/downloads/HiGo-Passenger.apk',
+    (_req: unknown, res: { sendFile: (path: string) => void }) => {
+      res.sendFile(join(__dirname, '..', 'static', 'downloads', 'HiGo-Passenger.apk'));
+    },
+  );
 
   app.useGlobalPipes(
     new ValidationPipe({

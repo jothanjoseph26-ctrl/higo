@@ -13,9 +13,12 @@ interface QueuedRequest {
 }
 
 const HEALTH_CHECK_INTERVAL_MS = 15_000;
+const HEALTH_CHECK_TIMEOUT_MS = 8_000;
+const MAX_FAILED_HEALTH_CHECKS = 2;
 
 export class OfflineManager {
   private static isConnected = true;
+  private static failedHealthChecks = 0;
   private static listeners: Array<(connected: boolean) => void> = [];
   private static monitorTimer: ReturnType<typeof setInterval> | null = null;
   private static monitoring = false;
@@ -37,25 +40,44 @@ export class OfflineManager {
 
   static async checkConnection(): Promise<boolean> {
     if (Platform.OS === 'web' && typeof navigator !== 'undefined' && !navigator.onLine) {
+      this.failedHealthChecks = MAX_FAILED_HEALTH_CHECKS;
       this.setConnectionStatus(false);
       return false;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5_000);
       const response = await fetch(HEALTH_CHECK_URL, {
         method: 'GET',
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
         signal: controller.signal,
       });
-      clearTimeout(timeoutId);
-      const connected = response.ok;
-      this.setConnectionStatus(connected);
-      return connected;
+      return this.recordHealthCheckResult(response.ok);
     } catch {
-      this.setConnectionStatus(false);
-      return false;
+      return this.recordHealthCheckResult(false);
+    } finally {
+      clearTimeout(timeoutId);
     }
+  }
+
+  private static recordHealthCheckResult(connected: boolean) {
+    if (connected) {
+      this.failedHealthChecks = 0;
+      this.setConnectionStatus(true);
+      return true;
+    }
+
+    this.failedHealthChecks += 1;
+    if (this.failedHealthChecks >= MAX_FAILED_HEALTH_CHECKS) {
+      this.setConnectionStatus(false);
+    }
+    return false;
   }
 
   static setConnectionStatus(connected: boolean) {

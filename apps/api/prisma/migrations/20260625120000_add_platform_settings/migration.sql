@@ -12,7 +12,7 @@ INSERT INTO "platform_settings" ("id", "settings", "updated_at")
 VALUES (
     'default',
     '{
-        "googleMapsOriginRestriction": "https://admin.higo.ng/*",
+        "googleMapsOriginRestriction": "https://www.hiconnectgo.com/*",
         "smsGatewayChannel": "termii",
         "fcmServerKey": "",
         "maintenanceMode": false

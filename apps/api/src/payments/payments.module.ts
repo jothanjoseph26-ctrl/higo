@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { PaymentsController } from './payments.controller';
 import { AdminFinancialController } from './admin-financial.controller';
 import { AdminFinanceController } from './admin-finance.controller';
@@ -14,9 +14,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { CryptoModule } from '../common/crypto/crypto.module';
 import { AiModule } from '../ai/ai.module';
+import { MatchingModule } from '../matching/matching.module';
 
 @Module({
-  imports: [PrismaModule, RedisModule, CryptoModule, AiModule],
+  imports: [PrismaModule, RedisModule, CryptoModule, AiModule, forwardRef(() => MatchingModule)],
   controllers: [PaymentsController, AdminFinancialController, AdminFinanceController],
   providers: [
     AdminFinanceService,

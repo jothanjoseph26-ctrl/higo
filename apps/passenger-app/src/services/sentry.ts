@@ -6,17 +6,9 @@ let sentryEnabled = false;
 let disabledLogged = false;
 
 function getSentryDsn(): string {
-  const expoDsn = process.env.EXPO_PUBLIC_SENTRY_DSN?.trim();
-  if (expoDsn) return expoDsn;
-
-  try {
-    const meta = import.meta as ImportMeta & {
-      env?: { EXPO_PUBLIC_SENTRY_DSN?: string };
-    };
-    return meta.env?.EXPO_PUBLIC_SENTRY_DSN?.trim() ?? '';
-  } catch {
-    return '';
-  }
+  // Hermes cannot parse `import.meta`; process.env is inlined on native and
+  // provided by Vite's `define` on web.
+  return process.env.EXPO_PUBLIC_SENTRY_DSN?.trim() ?? '';
 }
 
 export function initSentry(): void {
@@ -61,7 +53,7 @@ const errorFallback = React.createElement(
   React.createElement(Text, null, 'Something went wrong.'),
 );
 
-export function SentryRoot({ children }: SentryRootProps) {
+export function SentryRoot({ children }: SentryRootProps): React.ReactElement {
   if (!sentryEnabled) {
     return React.createElement(React.Fragment, null, children);
   }

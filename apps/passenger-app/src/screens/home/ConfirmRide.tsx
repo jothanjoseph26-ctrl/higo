@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Platform, StyleSheet, Text, View, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { Button } from '../../components/Button';
 import { ScreenShell } from '../../components/ScreenShell';
 import { useTripStore } from '../../stores/tripStore';
-import { initializePayment, pollPaymentStatus } from '../../services/paystack';
+import { openTripPaymentCheckout, pollPaymentStatus } from '../../services/paystack';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { PaymentMethod, TripStatus } from '@higo/shared-types';
@@ -28,7 +28,7 @@ export function ConfirmRide({ navigation }: Props) {
   } = useTripStore();
 
   const [booking, setBooking] = useState(false);
-  const [paystackLoading, setPaystackLoading] = useState(false);
+  const [paymentPending, setPaymentPending] = useState(false);
 
   const handleSelectPayment = (method: PaymentMethod) => {
     setPaymentMethod(method);
@@ -42,80 +42,64 @@ export function ConfirmRide({ navigation }: Props) {
 
     setBooking(true);
     try {
-      // 1. If cashless payment, initialize Paystack flow first
-      if (paymentMethod !== PaymentMethod.CASH) {
-        setPaystackLoading(true);
-        // Request booking pre-allocation or create first to get a trip ID
-        // To be safe, we create the trip first or estimate.
-        // Let's create the trip request to get the trip ID.
-        const response = await requestTrip();
-        const trip = response.trip;
-        setEstimate(response.estimate);
+      const response = await requestTrip();
+      const trip = response.trip;
+      setEstimate(response.estimate);
+      setStatus(TripStatus.REQUESTED);
 
-        // Call Paystack initializer
-        const payInit = await initializePayment({
-          tripId: trip.id,
-          paymentMethod,
-        });
-
-        setBooking(false);
-        setPaystackLoading(false);
-
-        const payMessage = `Reference: ${payInit.reference}\nAmount: ₦${(payInit.amount / 100).toFixed(2)}`;
-
-        const onPaymentApproved = () => {
-          pollPaymentStatus(trip.id, () => {
-            setStatus(TripStatus.REQUESTED);
-            navigation.navigate('FindingDriver');
-          });
-        };
-
-        if (Platform.OS === 'web') {
-          const approved = window.confirm(
-            `Paystack payment for ${paymentMethod.toUpperCase()}.\n${payMessage}\n\nClick OK to simulate successful payment.`,
-          );
-          if (approved) {
-            onPaymentApproved();
-          }
-        } else {
-          Alert.alert(
-            'Paystack Payment',
-            `Initializing Paystack Sheet for ${paymentMethod.toUpperCase()}.\n${payMessage}`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Simulate Success (Approved)', onPress: onPaymentApproved },
-            ],
-          );
-        }
-      } else {
-        // Cash payment flow - straight to request creation
-        const response = await requestTrip();
-        setEstimate(response.estimate);
-        setStatus(TripStatus.REQUESTED);
+      if (paymentMethod === PaymentMethod.CASH) {
         setBooking(false);
         navigation.navigate('FindingDriver');
+        return;
       }
+
+      const checkout = await openTripPaymentCheckout({
+        tripId: trip.id,
+        paymentMethod,
+      });
+
+      setPaymentPending(true);
+      setBooking(false);
+
+      void pollPaymentStatus(
+        trip.id,
+        () => {
+          setPaymentPending(false);
+          setStatus(TripStatus.REQUESTED);
+          navigation.navigate('FindingDriver');
+        },
+        (reason) => {
+          setPaymentPending(false);
+          const message =
+            reason === 'failed'
+              ? 'Payment was not completed. Your driver request was not dispatched.'
+              : `We are still waiting for Paystack confirmation for reference ${checkout.reference}. Please do not request another ride until this payment resolves.`;
+          Alert.alert('Payment not confirmed', message);
+        },
+        40,
+        3000,
+      );
     } catch (err: any) {
       setBooking(false);
-      setPaystackLoading(false);
+      setPaymentPending(false);
       Alert.alert('Booking Failed', err.message || t('common.error'));
     }
   };
 
   const getPriceLabel = () => {
-    if (!estimate) return '₦0.00';
-    let multiplier = 1.0;
-    if (isShared && vehicleType === 'keke') multiplier = 0.7;
-    return `₦${((estimate.totalFare * multiplier) / 100).toFixed(2)}`;
+    if (!estimate) return 'NGN 0.00';
+    return `NGN ${(estimate.totalFare / 100).toFixed(2)}`;
   };
+
+  const isBusy = booking || paymentPending;
 
   return (
     <ScreenShell title="Confirm Booking" scroll={true}>
       <View style={styles.summary}>
         <Text style={styles.sectionTitle}>Ride Summary</Text>
         <View style={styles.row}>
-          <Text style={styles.icon}>🛺</Text>
-          <View>
+          <Text style={styles.icon}>H</Text>
+          <View style={styles.rideMeta}>
             <Text style={styles.boldText}>HiGo {vehicleType.toUpperCase()}</Text>
             {isShared && <Text style={styles.subtext}>Shared ride active</Text>}
           </View>
@@ -125,52 +109,60 @@ export function ConfirmRide({ navigation }: Props) {
 
       <View style={styles.paymentSection}>
         <Text style={styles.sectionTitle}>{t('booking.paymentMethod')}</Text>
-        
+
         <Pressable
           onPress={() => handleSelectPayment(PaymentMethod.CASH)}
+          disabled={isBusy}
           style={[styles.paymentBtn, paymentMethod === PaymentMethod.CASH && styles.activePayment]}
         >
-          <Text style={styles.paymentIcon}>💵</Text>
+          <Text style={styles.paymentIcon}>NGN</Text>
           <Text style={styles.paymentText}>{t('booking.cash')}</Text>
         </Pressable>
 
         <Pressable
           onPress={() => handleSelectPayment(PaymentMethod.CARD)}
+          disabled={isBusy}
           style={[styles.paymentBtn, paymentMethod === PaymentMethod.CARD && styles.activePayment]}
         >
-          <Text style={styles.paymentIcon}>💳</Text>
+          <Text style={styles.paymentIcon}>CARD</Text>
           <Text style={styles.paymentText}>{t('booking.card')}</Text>
         </Pressable>
 
         <Pressable
           onPress={() => handleSelectPayment(PaymentMethod.BANK)}
+          disabled={isBusy}
           style={[styles.paymentBtn, paymentMethod === PaymentMethod.BANK && styles.activePayment]}
         >
-          <Text style={styles.paymentIcon}>🏦</Text>
+          <Text style={styles.paymentIcon}>BANK</Text>
           <Text style={styles.paymentText}>{t('booking.bank')}</Text>
         </Pressable>
 
         <Pressable
           onPress={() => handleSelectPayment(PaymentMethod.USSD)}
+          disabled={isBusy}
           style={[styles.paymentBtn, paymentMethod === PaymentMethod.USSD && styles.activePayment]}
         >
-          <Text style={styles.paymentIcon}>📱</Text>
+          <Text style={styles.paymentIcon}>USSD</Text>
           <Text style={styles.paymentText}>{t('booking.ussd')}</Text>
         </Pressable>
       </View>
 
-      {booking && (
+      {isBusy && (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={theme.colors.primaryGreen} />
           <Text style={styles.loadingText}>
-            {paystackLoading ? 'Processing cashless transaction...' : 'Booking your ride...'}
+            {paymentPending
+              ? 'Waiting for Paystack confirmation...'
+              : paymentMethod === PaymentMethod.CASH
+                ? 'Booking your ride...'
+                : 'Opening secure checkout...'}
           </Text>
         </View>
       )}
 
-      {!booking && (
+      {!isBusy && (
         <Button
-          label="Request Ride Now"
+          label={paymentMethod === PaymentMethod.CASH ? 'Request Ride Now' : 'Pay & Request Ride'}
           onPress={handleBook}
           style={styles.bookBtn}
         />
@@ -200,7 +192,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   icon: {
-    fontSize: 28,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#E8F5EF',
+    color: theme.colors.primaryGreen,
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 34,
+    textAlign: 'center',
+  },
+  rideMeta: {
+    flex: 1,
+    marginHorizontal: theme.spacing.md,
   },
   boldText: {
     fontSize: 16,
@@ -213,7 +217,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   price: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: theme.colors.primaryGreen,
   },
@@ -235,8 +239,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(11, 110, 79, 0.05)',
   },
   paymentIcon: {
-    fontSize: 20,
+    minWidth: 42,
     marginRight: theme.spacing.md,
+    color: theme.colors.primaryGreen,
+    fontSize: 12,
+    fontWeight: '800',
   },
   paymentText: {
     fontSize: 15,

@@ -33,6 +33,8 @@ import { PromosModule } from './promos/promos.module';
 import { MessagesModule } from './messages/messages.module';
 import { EmailModule } from './email/email.module';
 import { JobsModule } from './jobs/jobs.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
+import { HceModule } from './hce/hce.module';
 
 @Module({
   imports: [
@@ -73,6 +75,8 @@ import { JobsModule } from './jobs/jobs.module';
     MessagesModule,
     EmailModule,
     JobsModule,
+    OnboardingModule,
+    HceModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

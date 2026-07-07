@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, StyleSheet, Text, View, Platform } from 'react-native';
-import {
-  launchCamera,
-  launchImageLibrary,
-  type Asset,
-} from 'react-native-image-picker';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useTranslation } from 'react-i18next';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { KycDocType, KYCStatus } from '@higo/shared-types';
@@ -20,6 +17,15 @@ import { theme } from '../../theme';
 import type { DriverMainStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<DriverMainStackParamList, 'KYCUpload'>;
+
+// Normalized shape shared by the web input, expo-image-picker, and
+// expo-document-picker paths.
+type Asset = {
+  uri: string;
+  fileName?: string;
+  type?: string;
+  fileSize?: number;
+};
 
 export function KYCUpload({ navigation, route }: Props) {
   const { t } = useTranslation();
@@ -46,10 +52,60 @@ export function KYCUpload({ navigation, route }: Props) {
           fileName: file.name,
           type: file.type,
           fileSize: file.size,
-        } as any);
+        });
       }
     };
     input.click();
+  };
+
+  const setPickedFromImage = (asset: ImagePicker.ImagePickerAsset) => {
+    setPicked({
+      uri: asset.uri,
+      fileName: asset.fileName ?? undefined,
+      type: asset.mimeType ?? 'image/jpeg',
+      fileSize: asset.fileSize ?? undefined,
+    });
+  };
+
+  const pickFromCamera = async () => {
+    const { granted } = await ImagePicker.requestCameraPermissionsAsync();
+    if (!granted) {
+      setError('Camera permission is required');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPickedFromImage(result.assets[0]);
+    }
+  };
+
+  const pickFromGallery = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPickedFromImage(result.assets[0]);
+    }
+  };
+
+  const pickPdf = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+      copyToCacheDirectory: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const doc = result.assets[0];
+      setPicked({
+        uri: doc.uri,
+        fileName: doc.name,
+        type: doc.mimeType ?? 'application/pdf',
+        fileSize: doc.size ?? undefined,
+      });
+    }
   };
 
   const pickDocument = () => {
@@ -57,33 +113,21 @@ export function KYCUpload({ navigation, route }: Props) {
       pickDocumentWeb();
       return;
     }
-    Alert.alert(t('kyc.pickDocument'), undefined, [
-      {
-        text: 'Camera',
-        onPress: async () => {
-          const result = await launchCamera({
-            mediaType: 'photo',
-            quality: 0.7,
-            maxWidth: 1600,
-            maxHeight: 1600,
-          });
-          if (result.assets?.[0]) setPicked(result.assets[0]);
-        },
-      },
-      {
-        text: 'Gallery',
-        onPress: async () => {
-          const result = await launchImageLibrary({
-            mediaType: 'photo',
-            quality: 0.7,
-            maxWidth: 1600,
-            maxHeight: 1600,
-          });
-          if (result.assets?.[0]) setPicked(result.assets[0]);
-        },
-      },
-      { text: t('common.cancel'), style: 'cancel' },
-    ]);
+    // Android alerts show at most 3 buttons; rely on cancelable there and
+    // only add an explicit cancel button on iOS.
+    Alert.alert(
+      t('kyc.pickDocument'),
+      undefined,
+      [
+        { text: 'Camera', onPress: pickFromCamera },
+        { text: 'Gallery', onPress: pickFromGallery },
+        { text: 'PDF', onPress: pickPdf },
+        ...(Platform.OS === 'ios'
+          ? [{ text: t('common.cancel'), style: 'cancel' as const }]
+          : []),
+      ],
+      { cancelable: true },
+    );
   };
 
   const handleUpload = async () => {
@@ -96,8 +140,10 @@ export function KYCUpload({ navigation, route }: Props) {
     setError(null);
 
     try {
-      const compressedUri = await compressImage(picked.uri);
       const mimeType = picked.type ?? 'image/jpeg';
+      const compressedUri = mimeType.includes('pdf')
+        ? picked.uri
+        : await compressImage(picked.uri);
       const fileName =
         picked.fileName ??
         `kyc-${selectedDoc}.${mimeType.includes('pdf') ? 'pdf' : 'jpg'}`;

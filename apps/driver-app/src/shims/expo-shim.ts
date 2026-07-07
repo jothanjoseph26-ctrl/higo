@@ -8,9 +8,11 @@ export class LegacyEventEmitter extends EventEmitter {}
 
 export class NativeModule extends EventEmitter {}
 
-export class SharedObject {}
+export class SharedObject extends EventEmitter {
+  release() {}
+}
 
-export class SharedRef {}
+export class SharedRef extends SharedObject {}
 
 export class CodedError extends Error {
   constructor(public code: string, message: string) {
@@ -58,6 +60,12 @@ export const requireOptionalNativeModule = (_name: string) => ({});
 export const reloadAppAsync = async () => {};
 export const installOnUIRuntime = (fn: any) => {};
 export const isRunningInExpoGo = false;
+
+// Event hooks from the real `expo` package; on web the shimmed native
+// modules never emit events, so these are inert.
+export const useEvent = (_module?: any, _eventName?: string, initialValue?: any) =>
+  initialValue ?? null;
+export const useEventListener = (_module?: any, _eventName?: string, _listener?: any) => {};
 
 export const uuid = {
   v4: () => crypto.randomUUID(),

@@ -21,6 +21,7 @@ import {
   VerifyOtpRequest,
   VerifyOtpResponse,
   RequestTripRequest,
+  QuoteTripResponse,
   RequestTripResponse,
   GetTripStatusResponse,
   CancelTripRequest,
@@ -291,6 +292,14 @@ export class HigoClient {
     return this.request<RequestTripResponse>({
       method: 'POST',
       url: '/trips/request',
+      data: dto,
+    });
+  }
+
+  async quoteTrip(dto: RequestTripRequest): Promise<QuoteTripResponse> {
+    return this.request<QuoteTripResponse>({
+      method: 'POST',
+      url: '/trips/quote',
       data: dto,
     });
   }

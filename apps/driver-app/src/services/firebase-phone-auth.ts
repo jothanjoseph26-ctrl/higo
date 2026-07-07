@@ -1,11 +1,25 @@
-export async function sendFirebasePhoneOtp(_phone: string): Promise<void> {
-  throw new Error('Firebase phone auth is only available on web');
-}
+import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
-export async function verifyFirebasePhoneOtp(_code: string): Promise<string> {
-  throw new Error('Firebase phone auth is only available on web');
-}
+let pendingConfirmation: FirebaseAuthTypes.ConfirmationResult | null = null;
 
 export async function preInitializeRecaptcha(): Promise<void> {
-  // No-op on native platforms
+  // Native Firebase phone auth does not need the web reCAPTCHA bootstrap.
+}
+
+export async function sendFirebasePhoneOtp(phone: string): Promise<void> {
+  pendingConfirmation = await auth().signInWithPhoneNumber(phone);
+}
+
+export async function verifyFirebasePhoneOtp(code: string): Promise<string> {
+  if (!pendingConfirmation) {
+    throw new Error('No Firebase phone verification is in progress');
+  }
+
+  const credential = await pendingConfirmation.confirm(code);
+  if (!credential) {
+    throw new Error('Firebase phone verification failed');
+  }
+  const idToken = await credential.user.getIdToken();
+  pendingConfirmation = null;
+  return idToken;
 }
