@@ -59,6 +59,9 @@ Thumbs.db
 vite.config.*.timestamp*
 test-output
 
+# Large mobile artifacts — serve via API static dir locally; not in git
+apps/api/static/downloads/*.apk
+
 # React Native
 
 # OSX

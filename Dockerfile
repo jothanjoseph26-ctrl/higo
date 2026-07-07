@@ -23,6 +23,18 @@ ARG MIGRATION_CACHE_BUST=20260627140000
 RUN echo "migration cache bust: ${MIGRATION_CACHE_BUST}"
 COPY . .
 
+# Passenger APK is gitignored (~96MB). Provide at build time via Railway build arg.
+ARG PASSENGER_APK_URL=
+RUN mkdir -p apps/api/static/downloads && \
+  if [ -f apps/api/static/downloads/HiGo-Passenger.apk ]; then \
+    echo "Passenger APK present in build context"; \
+  elif [ -n "$PASSENGER_APK_URL" ]; then \
+    echo "Fetching passenger APK from PASSENGER_APK_URL"; \
+    wget -q -O apps/api/static/downloads/HiGo-Passenger.apk "$PASSENGER_APK_URL"; \
+  else \
+    echo "WARN: No passenger APK — /downloads/HiGo-Passenger.apk will 404 until PASSENGER_APK_URL is set"; \
+  fi
+
 ENV CI=true
 ENV NX_DAEMON=false
 
