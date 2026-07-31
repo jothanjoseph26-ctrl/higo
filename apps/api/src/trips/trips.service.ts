@@ -63,6 +63,7 @@ export class TripService {
     @Inject(forwardRef(() => MatchingService))
     private readonly matchingService: MatchingService,
     private readonly eventsGateway: EventsGateway,
+    @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
     private readonly pushService: PushService,
     private readonly promosService: PromosService,
