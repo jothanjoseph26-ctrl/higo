@@ -37,7 +37,7 @@ export function CancellationFeeModal({
             If a driver has already accepted your trip, a flat fee of {feeText} may apply.
           </Text>
           <Text style={styles.note}>
-            By confirming, you agree to HiGo&apos;s cancellation terms.
+            By confirming, you agree to HiGO&apos;s cancellation terms.
           </Text>
 
           <View style={styles.actions}>

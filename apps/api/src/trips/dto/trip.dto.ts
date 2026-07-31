@@ -9,12 +9,13 @@ import {
   IsNumber,
   Min,
   Max,
+  IsDateString,
   registerDecorator,
   type ValidationArguments,
   type ValidationOptions,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { LatLng, VehicleType, PaymentMethod } from '@higo/shared-types';
+import { LatLng, VehicleType, PaymentMethod, RideMode } from '@higo/shared-types';
 
 function isFiniteLatLng(value: unknown): value is LatLng {
   if (!value || typeof value !== 'object') return false;
@@ -86,6 +87,14 @@ export class RequestTripDto {
   @IsOptional()
   @IsString()
   promoCode?: string;
+
+  @IsOptional()
+  @IsEnum(RideMode)
+  rideMode?: RideMode;
+
+  @IsOptional()
+  @IsDateString()
+  scheduledFor?: string;
 }
 
 export class QuoteTripDto extends RequestTripDto {}
@@ -129,6 +138,22 @@ export class TripSosDto {
   @IsOptional()
   @IsString()
   note?: string;
+}
+
+export class FindSharedRideDto {
+  @IsNotEmpty()
+  @IsObject()
+  @IsLatLngObject()
+  pickup!: LatLng;
+
+  @IsNotEmpty()
+  @IsObject()
+  @IsLatLngObject()
+  destination!: LatLng;
+
+  @IsOptional()
+  @IsEnum(VehicleType)
+  vehicleType?: VehicleType;
 }
 
 export class PostDriverLocationDto {

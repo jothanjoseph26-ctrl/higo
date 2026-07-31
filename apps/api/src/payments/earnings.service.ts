@@ -198,7 +198,7 @@ export class EarningsService {
    */
   private async generatePidginSummary(driverName: string, tripCount: number, netPayoutKobo: number): Promise<string> {
     const formattedNaira = `₦${(netPayoutKobo / 100).toLocaleString()}`;
-    const defaultMessage = `${driverName}, you do ${tripCount} trip${tripCount === 1 ? '' : 's'} today, you make ${formattedNaira} after HiGo commission. Keep am up!`;
+    const defaultMessage = `${driverName}, you do ${tripCount} trip${tripCount === 1 ? '' : 's'} today, you make ${formattedNaira} after HiGO commission. Keep am up!`;
 
     const prompt = `Write a short, encouraging message in Nigerian Pidgin English for a taxi/keke driver named ${driverName}. 
 Today they completed ${tripCount} trips and earned a net payout of ${formattedNaira} (already after our platform commission).

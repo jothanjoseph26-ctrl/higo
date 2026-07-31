@@ -73,7 +73,7 @@ const SETTINGS_ITEMS: SettingsItem[] = [
 
 export function Settings({ navigation }: Props) {
   return (
-    <ScreenShell title="Settings" subtitle="Manage your HiGo account preferences">
+    <ScreenShell title="Settings" subtitle="Manage your HiGO account preferences">
       <View style={styles.list}>
         {SETTINGS_ITEMS.map((item) => (
           <Pressable

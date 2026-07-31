@@ -117,9 +117,9 @@ export class OnboardingService {
     hasNin: boolean;
     hasDriversLicence: boolean;
   }): string {
-    if (!application.hasSmartphone) return 'Get a smartphone that can run the HiGo Driver app.';
+    if (!application.hasSmartphone) return 'Get a smartphone that can run the HiGO Driver app.';
     if (!application.hasNin) return 'Prepare your NIN before KYC verification.';
     if (!application.hasDriversLicence) return "Prepare your driver's licence before KYC verification.";
-    return 'HiGo ops will contact you to complete KYC and app onboarding.';
+    return 'HiGO ops will contact you to complete KYC and app onboarding.';
   }
 }

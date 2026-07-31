@@ -21,3 +21,12 @@
 - The `nx-generate` skill handles generator discovery internally - don't call nx_docs just to look up generator syntax
 
 <!-- nx configuration end-->
+
+## Railway deployment
+
+When deploying HiGO to production, read and follow **[docs/RAILWAY_DEPLOY.md](docs/RAILWAY_DEPLOY.md)**. Summary:
+
+- Three deployable services: `Hiconnect` (API), `Worker`, `Admin` (admin + passenger + driver web)
+- Deploy from repo root: `railway up -s <Service> --detach`
+- Never `git add -A` — `.env` files contain secrets
+- API health is `/health`, not `/api/health`

@@ -1,4 +1,4 @@
-# HiGo Platform — Master Roadmap & Multi-Agent Execution Plan
+# HiGO Platform — Master Roadmap & Multi-Agent Execution Plan
 
 **Date:** 25 June 2026  
 **Scope:** `higo-platform/` monorepo (Passenger, Driver, Admin) vs MOU / Kickoff screen library  

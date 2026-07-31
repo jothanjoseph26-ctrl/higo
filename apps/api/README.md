@@ -1,6 +1,6 @@
-# HiGo API (`@higo/api`)
+# HiGO API (`@higo/api`)
 
-NestJS modular monolith — backend foundation for the HiGo Abuja mobility module.
+NestJS modular monolith — backend foundation for the HiGO Abuja mobility module.
 
 ## Dev startup
 
@@ -116,14 +116,14 @@ curl -sS -X POST "$BASE/api/auth/admin/login" \
 From repo root (API must be running; seed admin credentials from `prisma/seed.js`):
 
 ```bash
-# Health + readiness + admin login (defaults: localhost:3000, admin@hiconnect.com / HiGo@Admin2024)
+# Health + readiness + admin login (defaults: localhost:3000, admin@hiconnect.com / HiGO@Admin2024)
 node scripts/smoke-api.cjs
 
 # Against staging
 BASE=https://your-service.up.railway.app node scripts/smoke-api.cjs
 
 # Custom admin credentials
-ADMIN_EMAIL=admin@hiconnect.com ADMIN_PASSWORD=HiGo@Admin2024 node scripts/smoke-api.cjs
+ADMIN_EMAIL=admin@hiconnect.com ADMIN_PASSWORD=HiGO@Admin2024 node scripts/smoke-api.cjs
 ```
 
 `scripts/test-browser.cjs` runs `smoke-api.cjs` first, then probes the admin dashboard in headless Chromium.
@@ -147,7 +147,7 @@ cd apps/api && pnpm exec prisma migrate dev && pnpm exec prisma db seed && cd ..
 pnpm nx e2e @higo/admin-dashboard-e2e
 ```
 
-E2E uses seed admin `admin@hiconnect.com` / `HiGo@Admin2024` (override via `ADMIN_EMAIL` / `ADMIN_PASSWORD`).
+E2E uses seed admin `admin@hiconnect.com` / `HiGO@Admin2024` (override via `ADMIN_EMAIL` / `ADMIN_PASSWORD`).
 
 ### Request trip (authenticated passenger)
 

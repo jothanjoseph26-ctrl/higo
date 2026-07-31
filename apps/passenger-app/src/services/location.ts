@@ -14,7 +14,7 @@ export async function sendSosRequest(tripId: string, location: LatLng, note?: st
 }
 
 export async function sendEmergencySms(phoneNumbers: string[], location: LatLng) {
-  const message = `EMERGENCY: HiGo passenger needs assistance. Current location: https://maps.google.com/?q=${location.lat},${location.lng}`;
+  const message = `EMERGENCY: HiGO passenger needs assistance. Current location: https://maps.google.com/?q=${location.lat},${location.lng}`;
   console.log(`Sending emergency SMS to ${phoneNumbers.join(', ')}: "${message}"`);
   
   // In a native app, we would use expo-sms:

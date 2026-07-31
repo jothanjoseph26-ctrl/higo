@@ -45,7 +45,7 @@ export class SmsService {
     phone: string,
     code: string,
   ): Promise<{ channel: SmsChannel }> {
-    const message = `Your HiGo verification code is ${code}. Valid for 5 minutes.`;
+    const message = `Your HiGO verification code is ${code}. Valid for 5 minutes.`;
     const provider = this.config.get<string>('OTP_PROVIDER', 'firebase');
 
     if (provider === 'twilio') {

@@ -14,7 +14,7 @@ export class EmailService {
     const apiKey = this.config.get<string>('RESEND_API_KEY', '').trim();
     this.from = this.config.get<string>(
       'EMAIL_FROM',
-      'HiGo <noreply@hiconnect.com>',
+      'HiGO <noreply@hiconnect.com>',
     );
     this.enabled = apiKey.length > 0;
     this.resend = this.enabled ? new Resend(apiKey) : null;
@@ -70,19 +70,19 @@ export class EmailService {
     status: KYCStatus;
   }): Promise<boolean> {
     const statusLabel = params.status.replace(/_/g, ' ');
-    const subject = `HiGo KYC update: ${statusLabel}`;
+    const subject = `HiGO KYC update: ${statusLabel}`;
     const html = `
       <p>Hello ${params.name},</p>
-      <p>Your HiGo driver verification status is now <strong>${statusLabel}</strong>.</p>
-      <p>Open the HiGo Driver app to view document details or upload again if needed.</p>
-      <p>— HiGo by Hiconnect</p>
+      <p>Your HiGO driver verification status is now <strong>${statusLabel}</strong>.</p>
+      <p>Open the HiGO Driver app to view document details or upload again if needed.</p>
+      <p>— HiGO by Hiconnect</p>
     `;
 
     return this.send({
       to: params.to,
       subject,
       html,
-      text: `Hello ${params.name}, your HiGo KYC status is now ${statusLabel}.`,
+      text: `Hello ${params.name}, your HiGO KYC status is now ${statusLabel}.`,
     });
   }
 
@@ -95,9 +95,9 @@ export class EmailService {
     const ngn = (kobo: number) =>
       `₦${(kobo / 100).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
 
-    const subject = `HiGo Weekly KPI — week ending ${params.kpi.period.to.slice(0, 10)}`;
+    const subject = `HiGO Weekly KPI — week ending ${params.kpi.period.to.slice(0, 10)}`;
     const html = `
-      <h2>HiGo Weekly KPI Summary</h2>
+      <h2>HiGO Weekly KPI Summary</h2>
       <p>Period: ${params.kpi.period.from.slice(0, 10)} to ${params.kpi.period.to.slice(0, 10)}</p>
       <table cellpadding="8" cellspacing="0" border="1" style="border-collapse:collapse;font-family:sans-serif;font-size:14px;">
         <tr><td><strong>Driver Active Rate</strong></td><td>${pct(params.kpi.driverActiveRate)}</td></tr>
@@ -107,7 +107,7 @@ export class EmailService {
         <tr><td><strong>Cash Burn vs Revenue</strong></td><td>${params.kpi.cashBurnVsRevenue.toFixed(2)}x</td></tr>
       </table>
       <pre style="font-family:sans-serif;font-size:13px;white-space:pre-wrap;margin-top:16px;">${params.plainText}</pre>
-      <p>— HiGo by Hiconnect</p>
+      <p>— HiGO by Hiconnect</p>
     `;
 
     return this.send({

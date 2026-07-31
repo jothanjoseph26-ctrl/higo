@@ -1,5 +1,5 @@
 /**
- * HiGo Abuja — Shared WebSocket Event Types
+ * HiGO Abuja — Shared WebSocket Event Types
  * Package: @higo/shared-types
  *
  * Socket.io namespace: '/' with JWT auth middleware.

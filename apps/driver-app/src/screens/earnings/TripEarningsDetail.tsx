@@ -187,7 +187,7 @@ export function TripEarningsDetail({ route }: Props) {
         <View style={styles.divider} />
         <BreakdownRow label="Gross fare" value={formatKobo(earning.grossFare)} highlight />
         <BreakdownRow
-          label="HiGo platform fee (10%)"
+          label="HiGO platform fee (10%)"
           value={`-${formatKobo(earning.platformFee)}`}
           negative
         />

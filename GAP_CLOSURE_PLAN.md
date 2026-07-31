@@ -1,4 +1,4 @@
-# HiGo Platform — Gap Closure & Production Launch Plan
+# HiGO Platform — Gap Closure & Production Launch Plan
 
 ## Current Status: ~60-65% Complete
 

@@ -121,6 +121,98 @@ export class SubscriptionService {
     });
   }
 
+  async applyCoupon(
+    driverId: string,
+    code: string,
+  ): Promise<{ success: boolean; message: string; expiresAt: string }> {
+    const normalizedCode = code.trim().toUpperCase();
+    if (!normalizedCode) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'Coupon code is required');
+    }
+
+    const driver = await this.prisma.driver.findUnique({ where: { id: driverId } });
+    if (!driver) {
+      throw new AppException('NOT_FOUND', undefined, 'Driver not found');
+    }
+
+    const coupon = await this.prisma.subscriptionCoupon.findUnique({
+      where: { code: normalizedCode },
+    });
+    const now = new Date();
+    if (!coupon || !coupon.isActive) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'Invalid or expired coupon code');
+    }
+    if (coupon.validFrom && coupon.validFrom > now) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'This coupon is not yet active');
+    }
+    if (coupon.validUntil && coupon.validUntil < now) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'This coupon has expired');
+    }
+    if (coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'This coupon has reached its usage limit');
+    }
+
+    if (coupon.maxUsesPerUser > 0) {
+      const usedByDriver = await this.prisma.subscriptionCouponRedemption.count({
+        where: { couponId: coupon.id, driverId },
+      });
+      if (usedByDriver >= coupon.maxUsesPerUser) {
+        throw new AppException('VALIDATION_ERROR', undefined, 'You have already used this coupon');
+      }
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + coupon.durationDays);
+
+    await this.prisma.$transaction([
+      this.prisma.driver.update({
+        where: { id: driverId },
+        data: {
+          subscriptionTier: coupon.plan,
+          subscriptionExpiresAt: expiresAt,
+        },
+      }),
+      this.prisma.subscriptionCoupon.update({
+        where: { id: coupon.id },
+        data: { usedCount: { increment: 1 } },
+      }),
+      this.prisma.subscriptionCouponRedemption.create({
+        data: {
+          couponId: coupon.id,
+          driverId,
+          userId: driver.userId,
+        },
+      }),
+      this.prisma.subscription.create({
+        data: {
+          driverId,
+          tier: coupon.plan,
+          amount: 0,
+          isActive: true,
+          autoRenew: false,
+          expiresAt,
+        },
+      }),
+    ]);
+
+    await this.audit.logEvent({
+      action: 'subscription.coupon_applied',
+      actorId: driverId,
+      actorType: 'driver',
+      reference: `COUPON-${normalizedCode}-${Date.now()}`,
+      amount: 0,
+      beforeStatus: 'inactive',
+      afterStatus: 'active',
+      metadata: { couponId: coupon.id, code: normalizedCode, tier: coupon.plan },
+    });
+
+    return {
+      success: true,
+      message: `Free ${coupon.plan} subscription activated for ${coupon.durationDays} days`,
+      expiresAt: expiresAt.toISOString(),
+    };
+  }
+
   /**
    * Used by Agent 2 to gate go-online.
    * Checks if driver has an active subscription that has not expired.

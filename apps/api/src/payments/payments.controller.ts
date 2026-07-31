@@ -122,6 +122,18 @@ export class PaymentsController {
     return this.subscriptionService.renew(user.sub, dto);
   }
 
+  @Post('subscription/coupon')
+  @HttpCode(HttpStatus.OK)
+  async applySubscriptionCoupon(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: { couponCode?: string; coupon_code?: string },
+  ) {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can apply subscription coupons');
+    }
+    return this.subscriptionService.applyCoupon(user.sub, dto.couponCode ?? dto.coupon_code ?? '');
+  }
+
   @Get('earnings')
   async getEarnings(
     @CurrentUser() user: AuthUser,

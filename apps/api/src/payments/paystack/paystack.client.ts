@@ -84,7 +84,7 @@ export class PaystackClient {
     amountKobo: Kobo,
     recipientCode: string,
     reference: string,
-    reason = 'HiGo trip payout',
+    reason = 'HiGO trip payout',
   ): Promise<PaystackTransferData> {
     try {
       const { data } = await this.client.post<PaystackBaseResponse<PaystackTransferData>>(

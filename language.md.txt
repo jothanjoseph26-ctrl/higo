@@ -2,7 +2,7 @@
 ## ⚡ OPUS PROMPT — READ THIS FIRST
 
 ```
-You are the Lead Architect for the HiGo platform.
+You are the Lead Architect for the HiGO platform.
 Read this entire brief in full before responding.
 Your first task is to produce TWO artefacts only:
 
@@ -37,10 +37,10 @@ Schema errors caught after 7 agent briefs reference them cost hours.
 
 ## YOUR ROLE
 
-You are the **Lead Software Architect** for the HiGo Abuja ride-hailing platform.  
+You are the **Lead Software Architect** for the HiGO Abuja ride-hailing platform.  
 Your immediate task is to:
 
-1. Design the **complete technical architecture** for the HiGo platform
+1. Design the **complete technical architecture** for the HiGO platform
 2. Create the **project frame** — repository structure, environment setup, coding standards, shared utilities
 3. Write **precise instructions for 7 concurrent AI coding agents** who will build the platform simultaneously
 4. Ensure every agent has zero ambiguity about their scope, interfaces, and handoff points
@@ -55,7 +55,7 @@ You do NOT write application code in this task. You write the architecture, the 
 **Hiconnect Global Services** — a Nigerian technology company building a ride-hailing Super App ecosystem.
 
 ### The Product
-**HiGo** — a keke napep (motorised tricycle) ride-hailing app for Abuja, FCT Nigeria.  
+**HiGO** — a keke napep (motorised tricycle) ride-hailing app for Abuja, FCT Nigeria.  
 Tagline: *"Moving Abuja Smarter"*  
 Brand: *"Powered by Hiconnect"*
 
@@ -66,14 +66,14 @@ Brand: *"Powered by Hiconnect"*
 - **Paystack primary payment**: Nigeria's dominant payment processor — not Stripe
 - **Google Maps**: Nigerian road data is on Google Maps, not Mapbox
 - **Phase 1**: Android only. iOS comes in Phase 2 (Option B). Architecture must support both from day one.
-- **This is a module**: HiGo is the Mobility module of the broader Hiconnect Super App. Architecture must support future integration without a rebuild.
+- **This is a module**: HiGO is the Mobility module of the broader Hiconnect Super App. Architecture must support future integration without a rebuild.
 
 ### The Ecosystem Roadmap (Architecture Must Accommodate)
 ```
 Hiconnect Super App (Future)
-├── HiGo Ride        ← YOU ARE BUILDING THIS NOW
-├── HiGo Delivery    (Phase 3)
-├── HiGo Logistics   (Phase 4)
+├── HiGO Ride        ← YOU ARE BUILDING THIS NOW
+├── HiGO Delivery    (Phase 3)
+├── HiGO Logistics   (Phase 4)
 ├── Hiconnect Services Marketplace  (Separate contract)
 ├── Hiconnect Social Feed           (Separate contract)
 └── Hiconnect Pay (Wallet/Fintech)  (Future)
@@ -86,7 +86,7 @@ Hiconnect Super App (Future)
 ### Three Applications in This Build
 
 ```
-HiGo Platform
+HiGO Platform
 ├── 1. Passenger App (React Native — Android Phase 1, iOS Phase 2)
 ├── 2. Driver App    (React Native — Android Phase 1, iOS Phase 2)
 └── 3. Admin Dashboard (React.js Web Application)
@@ -101,7 +101,7 @@ Confirmed from Figma (Dev Ready v2.0):
 
 ```
 Authentication Flow:
-- SplashScreen (HiGo logo, green gradient, "Moving Abuja Smarter")
+- SplashScreen (HiGO logo, green gradient, "Moving Abuja Smarter")
 - Onboarding 1 (Ride Abuja Smarter — illustrated Nigerian woman + keke)
 - Onboarding 2 (Track Every Ride — live map visual)
 - Onboarding 3 (Safety First — SOS shield, verified drivers)
@@ -115,17 +115,17 @@ Core Booking Flow:
 - Confirm Ride (fare locked, payment method, confirm button)
 - Finding Driver (animated ripple, driver count, ETA)
 - Driver En Route (live map, driver card: name/rating/photo/plate, Call/Chat/Share Trip)
-- Naija Trivia (entertainment during wait — Nigerian general knowledge quiz, earns HiGo points)
+- Naija Trivia (entertainment during wait — Nigerian general knowledge quiz, earns HiGO points)
 - Trip Active (live tracking, driver info bar at bottom)
 - Trip Complete / Summary (fare breakdown, payment confirmation)
 - Rate Driver (1-5 stars, quick tags: Fast/Friendly/Clean/Quiet/On time, comment)
 
 Additional Screens:
 - Trip History (date-grouped cards, rebook option)
-- Profile (avatar, stats: trips/rating/HiGo points, account settings)
+- Profile (avatar, stats: trips/rating/HiGO points, account settings)
 - Payment Methods (add card via Paystack, USSD option)
-- Wallet (HiGo points balance, transaction history)
-- SOS Screen (RED full-screen emergency, 3 pre-set contacts + HiGo Safety Team, location share)
+- Wallet (HiGO points balance, transaction history)
+- SOS Screen (RED full-screen emergency, 3 pre-set contacts + HiGO Safety Team, location share)
 - Notifications
 - Help & FAQ
 - Chat Support (in-app)
@@ -138,7 +138,7 @@ Additional Screens:
 - Fare estimate before confirmation (no surprises)
 - Ride sharing (split fare with second passenger)
 - Share trip link via WhatsApp (safety feature)
-- SOS: sends GPS + driver details to 3 emergency contacts + HiGo ops
+- SOS: sends GPS + driver details to 3 emergency contacts + HiGO ops
 - Naija Trivia during wait time (earns loyalty points)
 - USSD payment option via Paystack (for users without data)
 - Multilingual AI interface (English primary, Pidgin/Hausa/Yoruba via AI layer)
@@ -152,7 +152,7 @@ Confirmed from Figma (Driver App, Dev Ready v2.0):
 
 ```
 Authentication & Onboarding:
-- Driver Splash (HiGo logo, dark navy variant)
+- Driver Splash (HiGO logo, dark navy variant)
 - Driver Login (email + password, social: Facebook/Instagram/TikTok)
 - KYC Upload Screen (document upload: NIN/licence/vehicle reg/insurance/road worthiness)
 - Document Verification Status (pending/approved/rejected per document)
@@ -383,10 +383,10 @@ Typography:       Poppins (Bold 700 / SemiBold 600 / Medium 500 / Regular 400)
 Border Radius:    16px (cards), 12px (inputs), 28px (buttons), 50% (avatars)
 Shadow:           0 4px 24px rgba(10,37,64,0.13)
 
-Logo:             HiGo wordmark — "Hi" in #0A2540 (navy), "Go" in #FF7A00 (orange)
+Logo:             HiGO wordmark — "Hi" in #0A2540 (navy), "Go" in #FF7A00 (orange)
                   Icon: chat bubble transitioning to forward arrow
 Sub-brand:        "Powered by Hiconnect" in smaller text below logo
-App Icon:         Green rounded square (#0B6E4F) with white HiGo icon
+App Icon:         Green rounded square (#0B6E4F) with white HiGO icon
 Tagline:          "Moving Abuja Smarter"
 ```
 
@@ -585,7 +585,7 @@ All screens listed in APPLICATION 1 section above, with:
 - AsyncStorage caching (last known location, trip in progress)
 - Share trip WhatsApp deep link generation
 - SOS: background location + multi-contact SMS + ops alert
-- Naija Trivia game component (question bank, scoring, HiGo points)
+- Naija Trivia game component (question bank, scoring, HiGO points)
 - Multilingual support (i18next: English/Pidgin/Hausa/Yoruba)
 - Accessibility: large touch targets, screen reader support
 
@@ -997,7 +997,7 @@ driver_referrals: id, referrer_driver_id (FK), referred_driver_id (FK),
   referral_code, status (pending/qualified/rewarded),
   reward_amount, rewarded_at, created_at
 
--- Driver feature interest registry (Risk 17 — HiGo Plus stubs)
+-- Driver feature interest registry (Risk 17 — HiGO Plus stubs)
 driver_feature_interest: id, driver_id (FK),
   feature_name (loan/insurance/fuel_discount/spare_parts),
   registered_at
@@ -1117,9 +1117,9 @@ and any actions required.
 ## This is not optional. Wire into every relevant agent.
 
 ### Why This Exists
-70%+ of HiGo's target driver base cannot read English fluently.
+70%+ of HiGO's target driver base cannot read English fluently.
 The HCE removes four barriers: reading, writing, language, technology literacy.
-It is HiGo's deepest competitive moat and the shared infrastructure for all future Hiconnect products.
+It is HiGO's deepest competitive moat and the shared infrastructure for all future Hiconnect products.
 
 ### New NestJS Module: apps/api/src/modules/hce/
 
@@ -1270,11 +1270,11 @@ Opus does not have conversation history. These facts must be restated in every a
 2. The MOU reference is JTL/HGS/HGO/001/2026
 3. Option A (Android only, ₦18M) is Phase 1 — but architecture must support iOS from day one
 4. Option B (full platform iOS+Android+premium, ₦34.5M) activates post-launch from revenue
-5. The app is called HiGo (consumer brand). Parent company is Hiconnect Global Services
+5. The app is called HiGO (consumer brand). Parent company is Hiconnect Global Services
 6. Infrastructure costs are Hiconnect's responsibility (separate from development cost)
 7. The ₦5M Hiconnect operational capital is NOT development budget — it covers office/ops/marketing
 8. The full Hiconnect Super App (Social + Services + Commerce) is a SEPARATE contract
-9. HiGo is designed as the Mobility module of that future Super App
+9. HiGO is designed as the Mobility module of that future Super App
 10. Abuja launch zones confirmed: Apo, Galadimawa, Lugbe, Lokogoma, Gwarimpa, Kubwa, Nyanya/Karu
 
 ---

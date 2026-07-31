@@ -71,7 +71,7 @@ export class AiService {
             Authorization: `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': 'https://higo.app',
-            'X-Title': 'HiGo Abuja',
+            'X-Title': 'HiGO Abuja',
           },
           timeout,
         },

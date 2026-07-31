@@ -5,6 +5,7 @@ import {
   IsISO8601,
   IsNotEmpty,
   IsOptional,
+  IsNumber,
   IsString,
   Min,
 } from 'class-validator';
@@ -64,4 +65,28 @@ export class UpdatePromoDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+}
+
+export class ValidatePromoDto {
+  @IsNotEmpty()
+  @IsString()
+  code!: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fareAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fare_amount?: number;
+
+  @IsOptional()
+  @IsString()
+  vehicleType?: string;
+
+  @IsOptional()
+  @IsString()
+  vehicle_type?: string;
 }

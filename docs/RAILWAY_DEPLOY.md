@@ -1,6 +1,6 @@
 # Railway Deploy Runbook (for agents)
 
-This document describes how HiGo is deployed to Railway today. Follow it when shipping code changes or helping another agent deploy.
+This document describes how HiGO is deployed to Railway today. Follow it when shipping code changes or helping another agent deploy.
 
 ## Architecture (production)
 
@@ -9,6 +9,7 @@ This document describes how HiGo is deployed to Railway today. Follow it when sh
 | **Hiconnect** | NestJS API (`main.js`) | `Dockerfile` (default) | `DATABASE_URL`, `REDIS_URL`, `FIREBASE_*`, secrets from `.env.railway` |
 | **Worker** | Bull queue worker (`worker.js`) | `Dockerfile` | Same as API + `PROCESS_ROLE=worker` |
 | **Admin** | nginx: admin + passenger + driver web | `Dockerfile.web` via `RAILWAY_DOCKERFILE_PATH` | `VITE_API_URL`, `VITE_API_BASE_URL`, `VITE_SOCKET_URL` |
+| **Base44Web** *(not yet provisioned — see below)* | nginx: Base44 frontend (`base44/base44-compat` migration target) | `Base44/Dockerfile` (separate repo) | `VITE_API_MODE`, `VITE_API_BASE_URL`, `VITE_SOCKET_URL` |
 | **PostgresPostGIS** | Database | (Railway plugin) | Referenced as `${{PostgresPostGIS.DATABASE_URL}}` |
 | **Redis** | Cache / queues | (Railway plugin) | Referenced in `REDIS_URL` |
 
@@ -16,13 +17,32 @@ This document describes how HiGo is deployed to Railway today. Follow it when sh
 
 | App | URL |
 |-----|-----|
-| API | https://hiconnect-production.up.railway.app |
-| API health | https://hiconnect-production.up.railway.app/health |
-| Admin | https://admin-production-13cc.up.railway.app/login |
-| Passenger web | https://admin-production-13cc.up.railway.app/passenger/ |
-| Driver web | https://admin-production-13cc.up.railway.app/driver/ |
+| API | https://www.hiconnectgo.com |
+| API health | https://www.hiconnectgo.com/health |
+| Admin | https://www.hiconnectgo.com/login |
+| Passenger web | https://www.hiconnectgo.com/passenger/ |
+| Driver web | https://www.hiconnectgo.com/driver/ |
+| Base44 web | *(not deployed yet — no domain assigned)* |
 
 Passenger and driver share the **Admin** service (one domain on free tier). nginx path routing is in `docker/nginx-web.conf.template`.
+
+### Base44 frontend deploy (Track 07, base44-migration — NOT yet provisioned)
+
+The Base44 migration (`architecture/BASE44_MIGRATION_PLAN.md`) replaces the Nx `passenger-app`/`admin-dashboard` scaffolds above with the more complete `Base44/` React app, talking to this same API through a compat client (`Base44/src/api/*`, `VITE_API_MODE=higo`). `Base44/` is a **separate GitHub repo** (its own remote, not a folder of this one), so it cannot reuse `Dockerfile.web`/`railway.admin.toml` directly — it needs its own Railway service linked to its own repo.
+
+Deploy artifacts for this are in the `Base44/` repo itself (added by Track 07, config-only, not yet stood up in Railway — no hosting credentials were available in that agent's sandbox):
+- `Base44/Dockerfile` — npm install → `vite build` → nginx, same shape as this repo's `Dockerfile.web`.
+- `Base44/nginx.conf.template` — SPA fallback (`try_files ... /index.html`), `/health` endpoint.
+- `Base44/railway.toml` — build/deploy config, mirrors `railway.admin.toml`.
+- `Base44/.env.example` — documents `VITE_API_MODE`, `VITE_API_BASE_URL`, `VITE_SOCKET_URL` and the (unused-by-default) legacy `VITE_BASE44_*` fallback vars.
+- `Base44/render.yaml` — documented Render-static-site fallback, same "not primary" convention as this repo's own `render.yaml`.
+- `Base44/.github/workflows/ci.yml` — lint + build on PR/push to `main`.
+
+**A human with Railway dashboard access still needs to:**
+1. Create a new service in the same Railway project as Hiconnect/Worker/Admin, linked to the Base44 GitHub repo (not this one), pointed at `Base44/Dockerfile`.
+2. Set the three `VITE_*` build-time env vars (Vite inlines them at build, not at container start — setting them as Railway runtime vars alone does nothing).
+3. Attach a domain (this doc had no domain reserved for it as of this pass — e.g. `app.hiconnectgo.com` if DNS is available).
+4. CORS is already permissive (`app.enableCors({ origin: true, credentials: true })` in `apps/api/src/main.ts:13`, reflects any request origin) — no backend change needed for a new Base44 domain. Verified by reading `main.ts` directly in this pass, not assumed.
 
 ---
 
@@ -120,14 +140,14 @@ Or open the build URL printed by `railway up`.
 
 ```powershell
 # API liveness (note: /health NOT /api/health)
-Invoke-RestMethod https://hiconnect-production.up.railway.app/health
+Invoke-RestMethod https://www.hiconnectgo.com/health
 
 # API readiness (DB + Redis)
-Invoke-RestMethod https://hiconnect-production.up.railway.app/health/ready
+Invoke-RestMethod https://www.hiconnectgo.com/health/ready
 
 # Web apps
-Invoke-WebRequest https://admin-production-13cc.up.railway.app/passenger/ -UseBasicParsing
-Invoke-WebRequest https://admin-production-13cc.up.railway.app/driver/ -UseBasicParsing
+Invoke-WebRequest https://www.hiconnectgo.com/passenger/ -UseBasicParsing
+Invoke-WebRequest https://www.hiconnectgo.com/driver/ -UseBasicParsing
 ```
 
 From repo root (API must be up):
@@ -160,9 +180,9 @@ Template: `.env.railway` (copy values into Railway dashboard — never commit re
 | Variable | Example |
 |----------|---------|
 | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.web` |
-| `VITE_API_URL` | `https://hiconnect-production.up.railway.app/api` |
-| `VITE_API_BASE_URL` | `https://hiconnect-production.up.railway.app/api` |
-| `VITE_SOCKET_URL` | `https://hiconnect-production.up.railway.app` |
+| `VITE_API_URL` | `https://www.hiconnectgo.com/api` |
+| `VITE_API_BASE_URL` | `https://www.hiconnectgo.com/api` |
+| `VITE_SOCKET_URL` | `https://www.hiconnectgo.com` |
 
 ### Worker
 
@@ -198,7 +218,7 @@ Web apps use **Firebase Phone Auth** (client sends SMS via Google), not the API 
 **Firebase Console setup** (one-time):
 
 - Authentication → Phone → **Enabled**
-- Authorized domains → `admin-production-13cc.up.railway.app`
+- Authorized domains → `www.hiconnectgo.com`
 - Project settings → copy Web API Key → `FIREBASE_WEB_API_KEY` on Hiconnect
 
 Helper script to fetch/create web app config (uses service account file locally):

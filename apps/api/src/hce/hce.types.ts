@@ -19,6 +19,35 @@ export interface HceCapabilityConfig {
   dailyLimit: number;
 }
 
+export interface HceModelConfig {
+  modelId: string;
+  label?: string;
+  enabled: boolean;
+  priority: number;
+  capabilities: string[];
+  supportedCapabilities: string[];
+  timeoutMs: number;
+  dailyLimit: number;
+  isFree: boolean;
+  availability: 'available' | 'unavailable' | 'unknown';
+  freeStatus: 'free' | 'paid' | 'unknown';
+  contextLength?: number;
+  lastCheckedAt?: string;
+  consecutiveFailures: number;
+  disabledReason?: string;
+  approvedForRouting: boolean;
+}
+
+export interface HceModelHealth {
+  modelId: string;
+  successCount: number;
+  failureCount: number;
+  averageLatencyMs: number;
+  structuredOutputRate: number;
+  cooldownUntil?: string;
+  lastError?: string;
+}
+
 export interface HceRoutingConfig {
   enabled: boolean;
   mockMode: boolean;
@@ -33,6 +62,21 @@ export interface HceRoutingConfig {
     azureTtsCharsMonthly: number;
   };
   capabilities: Record<HceCapability, HceCapabilityConfig>;
+  modelRouting: {
+    rolloutStage: 'internal' | 'pilot' | 'general';
+    paidEnabled: boolean;
+    paidModel?: string;
+    paidDailyLimit: number;
+    paidDailyBudget: number;
+    freeDailyLimit: number;
+    allowFreeRouterFallback: boolean;
+    localPhraseOnly: boolean;
+    confidenceThreshold: number;
+    maxFreeAttempts: number;
+    features: Record<string, boolean>;
+    models: HceModelConfig[];
+    health: Record<string, HceModelHealth>;
+  };
 }
 
 export interface HceRouteDecision {

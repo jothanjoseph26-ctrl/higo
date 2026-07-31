@@ -79,7 +79,7 @@ export class FirebaseService implements OnModuleInit {
     const messageId = await this.messaging.send({
       token: params.fcmToken,
       notification: {
-        title: 'HiGo Verification Code',
+        title: 'HiGO Verification Code',
         body: `Your verification code is ${params.code}. Valid for 5 minutes.`,
       },
       data: {

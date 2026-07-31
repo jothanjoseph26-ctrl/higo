@@ -1,4 +1,4 @@
-# HiGo Platform — Corrected Status Review & Parallel Agent Activation Plan
+# HiGO Platform — Corrected Status Review & Parallel Agent Activation Plan
 
 **Date:** 25 June 2026  
 **Scope:** `higo-platform/` monorepo + `architecture/` contracts  

@@ -115,7 +115,7 @@ export function FindingDriver({ navigation }: Props) {
       <View style={styles.searchingCard}>
         <ActivityIndicator size="large" color={theme.colors.accentOrange} />
         <Text style={styles.waitText}>Contacting nearest drivers. Please hold on...</Text>
-        <Text style={styles.pointsLabel}>Earned this wait: +{pointsEarned} HiGo points</Text>
+        <Text style={styles.pointsLabel}>Earned this wait: +{pointsEarned} HiGO points</Text>
       </View>
 
       <Text style={styles.triviaHeader}>🧠 Play Naija Trivia while you wait</Text>

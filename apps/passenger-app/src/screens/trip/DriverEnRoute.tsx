@@ -88,7 +88,7 @@ export function DriverEnRoute({ navigation }: Props) {
         <View style={styles.driverRow}>
           <Text style={styles.avatar}>🛺</Text>
           <View style={styles.details}>
-            <Text style={styles.name}>{driverDetails?.name || 'HiGo Partner'}</Text>
+            <Text style={styles.name}>{driverDetails?.name || 'HiGO Partner'}</Text>
             <Text style={styles.vehicle}>
               {driverDetails?.vehicleColor} {driverDetails?.vehicleModel} · {driverDetails?.vehiclePlate}
             </Text>

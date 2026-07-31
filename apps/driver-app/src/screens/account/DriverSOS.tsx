@@ -68,7 +68,7 @@ export function DriverSOS() {
           Triggering SOS during an active ride will:
           {"\n"}1. Start sharing your GPS location every 30 seconds.
           {"\n"}2. Notify your configured emergency contacts via SMS fallback.
-          {"\n"}3. Alert the HiGo Abuja Ops Control Room.
+          {"\n"}3. Alert the HiGO Abuja Ops Control Room.
         </Text>
       </View>
 

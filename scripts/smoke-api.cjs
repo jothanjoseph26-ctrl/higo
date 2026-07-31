@@ -5,7 +5,7 @@
  * Usage:
  *   node scripts/smoke-api.cjs
  *   BASE=https://your-api.up.railway.app node scripts/smoke-api.cjs
- *   ADMIN_EMAIL=admin@hiconnect.com ADMIN_PASSWORD=HiGo@Admin2024 node scripts/smoke-api.cjs
+ *   ADMIN_EMAIL=admin@hiconnect.com ADMIN_PASSWORD=HiGO@Admin2024 node scripts/smoke-api.cjs
  */
 'use strict';
 
@@ -14,7 +14,7 @@ const BASE = (process.env.BASE || process.env.API_URL || 'http://localhost:3000'
   '',
 );
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@hiconnect.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'HiGo@Admin2024';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'HiGO@Admin2024';
 
 async function check(name, fn) {
   try {

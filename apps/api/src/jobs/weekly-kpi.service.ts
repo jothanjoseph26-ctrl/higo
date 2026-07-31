@@ -147,7 +147,7 @@ export class WeeklyKpiService {
 
   formatPlainEnglishSummary(kpi: WeeklyKpi): string {
     const lines = [
-      `HiGo Weekly KPI Summary (${kpi.period.from.slice(0, 10)} to ${kpi.period.to.slice(0, 10)})`,
+      `HiGO Weekly KPI Summary (${kpi.period.from.slice(0, 10)} to ${kpi.period.to.slice(0, 10)})`,
       '',
       `1. Driver Active Rate: ${(kpi.driverActiveRate * 100).toFixed(1)}% (drivers with 3+ trips / total registered)`,
       `2. Ride Completion Rate: ${(kpi.rideCompletionRate * 100).toFixed(1)}%`,

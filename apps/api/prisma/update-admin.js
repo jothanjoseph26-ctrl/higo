@@ -15,7 +15,7 @@ async function main() {
   if (existing) {
     await prisma.adminUser.update({
       where: { id: existing.id },
-      data: { email, passwordHash, isActive: true, name: 'HiGo Admin' },
+      data: { email, passwordHash, isActive: true, name: 'HiGO Admin' },
     });
     console.log(`Updated admin user ${existing.id} -> ${email}`);
     return;
@@ -23,7 +23,7 @@ async function main() {
 
   await prisma.adminUser.create({
     data: {
-      name: 'HiGo Admin',
+      name: 'HiGO Admin',
       email,
       passwordHash,
       role: 'super_admin',

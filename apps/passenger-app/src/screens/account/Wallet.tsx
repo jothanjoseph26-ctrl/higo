@@ -112,7 +112,7 @@ export function Wallet() {
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>Trip payments via Paystack</Text>
           <Text style={styles.infoText}>
-            This screen shows your completed cashless trip fares from the API. HiGo does not operate
+            This screen shows your completed cashless trip fares from the API. HiGO does not operate
             a stored-value wallet (no CBN PSSP license).
           </Text>
         </View>
@@ -166,7 +166,7 @@ export function Wallet() {
         </View>
 
         <View style={styles.triviaSection}>
-          <Text style={styles.triviaSectionTitle}>HiGo Trivia Points</Text>
+          <Text style={styles.triviaSectionTitle}>HiGO Trivia Points</Text>
           <View style={styles.triviaCard}>
             <Text style={styles.triviaLabel}>Reward balance</Text>
             <Text style={styles.triviaValue}>{triviaPoints} pts</Text>

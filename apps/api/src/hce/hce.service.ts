@@ -510,7 +510,7 @@ export class HceService {
 
     await this.usage.consume(user, 'openrouter');
     const answer = await this.ai.prompt(
-      'You are a concise driver assistant for HiGo Abuja. Keep answers short and practical.',
+      'You are a concise driver assistant for HiGO Abuja. Keep answers short and practical.',
       question,
       { model: route.model, temperature: 0.2, maxTokens: 140 },
     );

@@ -41,7 +41,7 @@ export function LocationPermission({ navigation }: Props) {
         <Text style={styles.illustration}>📍</Text>
         <Text style={styles.title}>Enable Location Access</Text>
         <Text style={styles.subtitle}>
-          HiGo uses your location to find nearby drivers, show accurate pickup
+          HiGO uses your location to find nearby drivers, show accurate pickup
           points, and keep you safe with live trip tracking and SOS alerts.
         </Text>
       </View>

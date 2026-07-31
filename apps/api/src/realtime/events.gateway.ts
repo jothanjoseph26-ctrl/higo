@@ -290,7 +290,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
     if (client.data.type !== 'driver') return;
 
     this.logger.log(`Driver ${driverId} arrived at pickup for trip ${payload.tripId}`);
-    await this.tripService.transition(payload.tripId, TripStatus.EN_ROUTE, 'driver');
+    await this.tripService.transition(payload.tripId, TripStatus.ARRIVED, 'driver');
   }
 
   @SubscribeMessage(SOCKET_EVENTS.DRIVER_TRIP_STARTED)

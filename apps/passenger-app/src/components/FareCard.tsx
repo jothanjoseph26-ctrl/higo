@@ -19,9 +19,9 @@ interface FareCardProps {
 }
 
 const OPTIONS: FareOption[] = [
-  { type: VehicleType.KEKE, name: 'HiGo Keke', emoji: '🛺', etaMin: 3 },
-  { type: VehicleType.CAR, name: 'HiGo Car', emoji: '🚗', etaMin: 5 },
-  { type: VehicleType.BIKE, name: 'HiGo Bike', emoji: '🏍️', etaMin: 2 },
+  { type: VehicleType.KEKE, name: 'HiGO Keke', emoji: '🛺', etaMin: 3 },
+  { type: VehicleType.CAR, name: 'HiGO Car', emoji: '🚗', etaMin: 5 },
+  { type: VehicleType.BIKE, name: 'HiGO Bike', emoji: '🏍️', etaMin: 2 },
 ];
 
 export function FareCard({

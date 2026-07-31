@@ -13,7 +13,7 @@ async function bootstrap() {
   app.enableCors({ origin: true, credentials: true });
 
   app.setGlobalPrefix('api', {
-    exclude: ['health', 'health/ready', 'docs', 'docs-json', 'downloads/HiGo-Passenger.apk'],
+    exclude: ['health', 'health/ready', 'docs', 'docs-json', 'downloads/HiGO-Passenger.apk'],
   });
 
   // Back-compat for clients that probe `${API_BASE_URL}/health` (i.e. /api/health).
@@ -24,9 +24,9 @@ async function bootstrap() {
 
   // Direct APK download — interim distribution while the Play Store listing is pending.
   http.get(
-    '/downloads/HiGo-Passenger.apk',
+    '/downloads/HiGO-Passenger.apk',
     (_req: unknown, res: { sendFile: (path: string) => void }) => {
-      res.sendFile(join(__dirname, '..', 'static', 'downloads', 'HiGo-Passenger.apk'));
+      res.sendFile(join(__dirname, '..', 'static', 'downloads', 'HiGO-Passenger.apk'));
     },
   );
 
@@ -41,7 +41,7 @@ async function bootstrap() {
   const nodeEnv = process.env.NODE_ENV ?? 'development';
   if (nodeEnv !== 'production') {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('HiGo Abuja API')
+      .setTitle('HiGO Abuja API')
       .setDescription('Mobility module REST API')
       .setVersion('0.1.0')
       .addBearerAuth()

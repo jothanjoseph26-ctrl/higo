@@ -1,4 +1,4 @@
-# HiGo — Local E2E Testing & Deployment Plan
+# HiGO — Local E2E Testing & Deployment Plan
 
 **Date:** 26 June 2026  
 **Scope:** Local full-stack test → Railway → Google Play → Apple App Store  
@@ -101,7 +101,7 @@ node scripts/local-e2e-ride.cjs         # set PASSENGER_OTP / DRIVER_OTP from lo
 | A1 | `curl http://localhost:3000/health` | `{"status":"ok"}` |
 | A2 | `curl http://localhost:3000/health/ready` | HTTP 200 |
 | A3 | Worker process running | Log: `Bull dispatch worker started` |
-| A4 | Admin login at :4200 | `admin@hiconnect.com` / `HiGo@Admin2024` |
+| A4 | Admin login at :4200 | `admin@hiconnect.com` / `HiGO@Admin2024` |
 | A5 | Dashboard KPIs load | No mock fallback banner |
 
 ### Phase B — Driver onboarding (10 min)
@@ -200,8 +200,8 @@ cd apps/api && pnpm exec prisma migrate deploy && pnpm exec prisma db seed
 ```env
 NODE_ENV=production
 PORT=3000
-APP_BASE_URL=https://api.higo.ng
-APP_PAYMENT_CALLBACK_URL=https://api.higo.ng/api/payments/callback
+APP_BASE_URL=https://www.hiconnectgo.com
+APP_PAYMENT_CALLBACK_URL=https://www.hiconnectgo.com/api/payments/callback
 
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 REDIS_URL=${{Redis.REDIS_URL}}
@@ -238,25 +238,25 @@ SURGE_ENABLED=false
 
 ```bash
 pnpm nx build @higo/admin-dashboard
-# Deploy dist/ with VITE_API_URL=https://api.higo.ng
+# Deploy dist/ with VITE_API_URL=https://www.hiconnectgo.com/api
 ```
 
 **Option B — Cloudflare Pages / Vercel**
 
 - Build: `pnpm nx build @higo/admin-dashboard`
-- Env: `VITE_API_URL=https://api.higo.ng`
+- Env: `VITE_API_URL=https://www.hiconnectgo.com/api`
 
 ### 4.6 Post-deploy smoke
 
 ```bash
-BASE=https://api.higo.ng node scripts/smoke-api.cjs
+BASE=https://www.hiconnectgo.com node scripts/smoke-api.cjs
 ```
 
 ### 4.7 Mobile app env (production)
 
 ```env
-EXPO_PUBLIC_API_BASE_URL=https://api.higo.ng
-EXPO_PUBLIC_SOCKET_URL=https://api.higo.ng
+EXPO_PUBLIC_API_BASE_URL=https://www.hiconnectgo.com/api
+EXPO_PUBLIC_SOCKET_URL=https://www.hiconnectgo.com
 EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=<android/ios-restricted>
 EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY=pk_live_xxx
 EXPO_PUBLIC_SENTRY_DSN=https://...
@@ -298,8 +298,8 @@ Update `eas.json` production profile:
     "autoIncrement": true,
     "android": { "buildType": "app-bundle" },
     "env": {
-      "EXPO_PUBLIC_API_BASE_URL": "https://api.higo.ng",
-      "EXPO_PUBLIC_SOCKET_URL": "https://api.higo.ng"
+      "EXPO_PUBLIC_API_BASE_URL": "https://www.hiconnectgo.com/api",
+      "EXPO_PUBLIC_SOCKET_URL": "https://www.hiconnectgo.com"
     }
   }
 }

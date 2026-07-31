@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 /** Must match apps/api/prisma/seed.js defaults */
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@hiconnect.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'HiGo@Admin2024';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'HiGO@Admin2024';
 
 const KPI_LABELS = [
   'Active Trips',
@@ -19,7 +19,7 @@ test.describe('Admin dashboard', () => {
   test('login → dashboard KPIs → drivers list', async ({ page }) => {
     // 1. Admin login flow
     await page.goto('/login');
-    await expect(page.getByRole('heading', { name: 'HiGo Abuja Control Room' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'HiGO Abuja Control Room' })).toBeVisible();
 
     await page.getByLabel('Email Address').fill(ADMIN_EMAIL);
     await page.getByLabel('Password').fill(ADMIN_PASSWORD);

@@ -121,7 +121,7 @@ export function setupFCMHandlers(navigationRef: {
       const type = typeof data.type === 'string' ? data.type : 'general';
 
       useNotificationStore.getState().push({
-        title: content.title ?? 'HiGo',
+        title: content.title ?? 'HiGO',
         body: content.body ?? '',
         type,
         data: data as Record<string, unknown>,

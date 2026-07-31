@@ -56,13 +56,13 @@ export const Sidebar: React.FC = () => {
         {sidebarOpen ? (
           <img
             src="/logo-rectangular-dark.png"
-            alt="HiGo Logo"
+            alt="HiGO Logo"
             className="h-8 object-contain"
           />
         ) : (
           <img
             src="/logo-square.png"
-            alt="HiGo Logo"
+            alt="HiGO Logo"
             className="h-8 w-8 object-contain rounded-md"
           />
         )}

@@ -1,5 +1,5 @@
 /**
- * HiGo Abuja — Shared Domain Types
+ * HiGO Abuja — Shared Domain Types
  * Package: @higo/shared-types
  *
  * Single source of truth for domain entities consumed by:
@@ -15,6 +15,7 @@ import {
   TripStatus,
   KYCStatus,
   VehicleType,
+  RideMode,
   ZoneType,
   SubscriptionTier,
   DisputeStatus,
@@ -264,18 +265,32 @@ export interface Trip {
   baseFare: Kobo;
   distanceFare: Kobo;
   timeFare: Kobo;
+  rawFare: Kobo;
+  quotedFare: Kobo;
+  minimumFare: Kobo;
+  minimumFareApplied: boolean;
   surgeMultiplier: number;
+  modeMultiplier: number;
+  pricingVersion: string;
+  customerBookingFee: Kobo;
+  customerStatutoryLevy: Kobo;
   totalFare: Kobo;
 
   paymentMethod: PaymentMethod | null;
   paymentStatus: PaymentStatus;
   paystackReference: string | null;
+  promoCode: string | null;
+  discountAmount: Kobo;
 
   passengerRating: number | null; // 1..5 given BY driver TO passenger
   driverRating: number | null; // 1..5 given BY passenger TO driver
 
   rideSharePartnerId: UUID | null;
   isShared: boolean;
+  rideMode: RideMode;
+  negotiationId: UUID | null;
+  scheduledFor: ISODateString | null;
+  isScheduled: boolean;
 
   startedAt: ISODateString | null;
   completedAt: ISODateString | null;
@@ -472,7 +487,7 @@ export interface DriverReferral {
   createdAt: ISODateString;
 }
 
-/** Driver feature interest registry — HiGo Plus stubs (Risk 17). */
+/** Driver feature interest registry — HiGO Plus stubs (Risk 17). */
 export interface DriverFeatureInterest {
   id: UUID;
   driverId: UUID;

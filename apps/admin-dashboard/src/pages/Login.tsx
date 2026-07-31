@@ -41,10 +41,10 @@ export const Login: React.FC = () => {
         <div className="text-center mb-8">
           <img
             src="/logo-rectangular.png"
-            alt="HiGo Logo"
+            alt="HiGO Logo"
             className="h-16 mx-auto mb-4 object-contain"
           />
-          <h2 className="text-2xl font-bold text-darkNavy font-poppins">HiGo Abuja Control Room</h2>
+          <h2 className="text-2xl font-bold text-darkNavy font-poppins">HiGO Abuja Control Room</h2>
           <p className="text-xs text-gray-500 mt-1">Please enter your credentials to authenticate</p>
         </div>
 
@@ -98,7 +98,7 @@ export const Login: React.FC = () => {
         </form>
         
         <div className="mt-6 text-center text-[10px] text-gray-400">
-          HiGo Mobility Abuja Operations Platform • MOU JTL/HGS/HGO/001/2026
+          HiGO Mobility Abuja Operations Platform • MOU JTL/HGS/HGO/001/2026
         </div>
       </div>
     </div>

@@ -41,7 +41,7 @@ export function LocationPermission({ navigation }: Props) {
         <Text style={styles.illustration}>📍</Text>
         <Text style={styles.title}>Enable Location Access</Text>
         <Text style={styles.subtitle}>
-          HiGo needs your location to match you with nearby ride requests, provide
+          HiGO needs your location to match you with nearby ride requests, provide
           turn-by-turn navigation, and share live updates with passengers.
         </Text>
       </View>

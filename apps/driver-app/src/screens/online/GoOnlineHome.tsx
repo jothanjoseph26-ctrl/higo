@@ -90,7 +90,7 @@ export function GoOnlineHome({ navigation }: { navigation: any }) {
 
   return (
     <ScreenShell
-      title="HiGo Driver"
+      title="HiGO Driver"
       subtitle={isOnline ? 'You are online — waiting for matches' : 'You are offline'}
     >
       {/* Geofence restricted alert banner */}

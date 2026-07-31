@@ -1,5 +1,5 @@
 /**
- * HiGo Abuja — All Enum Definitions
+ * HiGO Abuja — All Enum Definitions
  * Package: @higo/shared-types
  *
  * Single source of truth for every enum used across the platform.
@@ -17,10 +17,19 @@
 export enum TripStatus {
   REQUESTED = 'requested',
   MATCHED = 'matched',
+  ARRIVED = 'arrived',
   EN_ROUTE = 'en_route',
   ACTIVE = 'active',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
+}
+
+export enum RideMode {
+  INSTANT = 'instant',
+  NEGOTIATE = 'negotiate',
+  SHARE = 'share',
+  SCHEDULE_FLEX = 'schedule_flex',
+  SCHEDULE_EXACT = 'schedule_exact',
 }
 
 export enum KYCStatus {
@@ -140,7 +149,7 @@ export enum ReferralStatus {
   REWARDED = 'rewarded',
 }
 
-/** HiGo Plus feature interest registry (Risk 17). */
+/** HiGO Plus feature interest registry (Risk 17). */
 export enum DriverFeatureName {
   LOAN = 'loan',
   INSURANCE = 'insurance',

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "HiGo Driver",
+    "name": "HiGO Driver",
     "slug": "higo-driver",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -22,8 +22,8 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "HiGo Driver uses the camera to capture your KYC documents.",
-          "photosPermission": "HiGo Driver needs access to your photos to upload KYC documents."
+          "cameraPermission": "HiGO Driver uses the camera to capture your KYC documents.",
+          "photosPermission": "HiGO Driver needs access to your photos to upload KYC documents."
         }
       ]
     ],

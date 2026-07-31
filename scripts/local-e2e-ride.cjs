@@ -52,7 +52,7 @@ async function loginAs(phone, userType, otpFromEnv) {
 }
 
 async function main() {
-  console.log(`\n🛺 HiGo local E2E ride test @ ${BASE}\n`);
+  console.log(`\n🛺 HiGO local E2E ride test @ ${BASE}\n`);
 
   console.log('1) Passenger login...');
   const passengerToken = await loginAs(PASSENGER_PHONE, 'passenger', PASSENGER_OTP);

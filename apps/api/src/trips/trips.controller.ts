@@ -1,7 +1,15 @@
 import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
-import { LatLng, PaginationQuery, RequestTripRequest } from '@higo/shared-types';
+import { LatLng, PaginationQuery, RequestTripRequest, VehicleType } from '@higo/shared-types';
 import { TripService } from './trips.service';
-import { RequestTripDto, QuoteTripDto, CancelTripDto, RateDriverDto, RatePassengerDto, TripSosDto } from './dto/trip.dto';
+import {
+  RequestTripDto,
+  QuoteTripDto,
+  CancelTripDto,
+  RateDriverDto,
+  RatePassengerDto,
+  TripSosDto,
+  FindSharedRideDto,
+} from './dto/trip.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { AppException } from '../common/errors/app.exception';
@@ -25,6 +33,8 @@ function normalizeRequestTripDto(dto: RequestTripDto): RequestTripRequest {
     paymentMethod: dto.paymentMethod,
     isShared: dto.isShared,
     promoCode: dto.promoCode,
+    rideMode: dto.rideMode,
+    scheduledFor: dto.scheduledFor,
   };
 }
 
@@ -49,6 +59,108 @@ export class TripsController {
       throw new AppException('FORBIDDEN', undefined, 'Only passengers can quote a trip');
     }
     return this.tripService.quoteTrip(user.sub, normalizeRequestTripDto(dto));
+  }
+
+  @Post('shared/find')
+  async findSharedRide(@CurrentUser() user: AuthUser, @Body() dto: FindSharedRideDto) {
+    if (user.type !== 'passenger') {
+      throw new AppException('FORBIDDEN', undefined, 'Only passengers can find shared rides');
+    }
+    return this.tripService.findSharedRideMatches(
+      normalizeLatLng(dto.pickup),
+      normalizeLatLng(dto.destination),
+      dto.vehicleType ?? VehicleType.KEKE,
+    );
+  }
+
+  @Post('shared/:id/join')
+  async joinSharedRide(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    if (user.type !== 'passenger') {
+      throw new AppException('FORBIDDEN', undefined, 'Only passengers can join shared rides');
+    }
+    return this.tripService.joinSharedRide(user.sub, id);
+  }
+
+  @Post('negotiation/suggestions')
+  async negotiationSuggestions(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: { estimatedFare: number },
+  ) {
+    if (user.type !== 'passenger') {
+      throw new AppException('FORBIDDEN', undefined, 'Only passengers can request negotiation suggestions');
+    }
+    return this.tripService.getFareNegotiationSuggestions(dto.estimatedFare);
+  }
+
+  @Post(':id/negotiate')
+  async createNegotiation(
+    @CurrentUser() user: AuthUser,
+    @Body()
+    dto: {
+      passengerName?: string;
+      pickup?: LatLng;
+      pickupAddress?: string;
+      destination?: LatLng;
+      destinationAddress?: string;
+      vehicleType?: VehicleType;
+      estimatedFare?: number;
+      distanceKm?: number;
+      durationMin?: number;
+      passengerOffer?: number;
+    },
+  ) {
+    if (user.type !== 'passenger') {
+      throw new AppException('FORBIDDEN', undefined, 'Only passengers can create negotiations');
+    }
+    if (
+      !dto.pickup ||
+      !dto.destination ||
+      !dto.pickupAddress ||
+      !dto.destinationAddress ||
+      !dto.estimatedFare ||
+      !dto.passengerOffer
+    ) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'Missing negotiation fields');
+    }
+
+    return this.tripService.createFareNegotiation(user.sub, {
+      passengerName: dto.passengerName,
+      pickupAddress: dto.pickupAddress,
+      pickup: normalizeLatLng(dto.pickup),
+      destinationAddress: dto.destinationAddress,
+      destination: normalizeLatLng(dto.destination),
+      vehicleType: dto.vehicleType ?? VehicleType.KEKE,
+      estimatedFare: dto.estimatedFare,
+      distanceKm: dto.distanceKm,
+      durationMin: dto.durationMin,
+      passengerOffer: dto.passengerOffer,
+    });
+  }
+
+  @Post(':id/negotiate/:negotiationId/respond')
+  async respondToNegotiation(
+    @CurrentUser() user: AuthUser,
+    @Param('negotiationId') negotiationId: string,
+    @Body()
+    dto: {
+      action?: 'driver_respond' | 'counter_offer' | 'select_driver' | 'cancel' | 'get_state';
+      responseType?: 'accept' | 'reject' | 'counter';
+      response_type?: 'accept' | 'reject' | 'counter';
+      counterAmount?: number;
+      counter_amount?: number;
+      newOffer?: number;
+      new_offer?: number;
+      driverId?: string;
+      driver_id?: string;
+    },
+  ) {
+    return this.tripService.respondToFareNegotiation(user, negotiationId, {
+      action: dto.action ?? 'get_state',
+      responseType: dto.responseType ?? dto.response_type,
+      counterAmount: dto.counterAmount ?? dto.counter_amount,
+      newOffer: dto.newOffer ?? dto.new_offer,
+      driverId: dto.driverId ?? dto.driver_id,
+    });
   }
 
   @Post('cancel')

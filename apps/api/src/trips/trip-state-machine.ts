@@ -2,8 +2,9 @@ import { TripStatus } from '@higo/shared-types';
 
 export const ALLOWED_TRANSITIONS: Record<TripStatus, TripStatus[]> = {
   [TripStatus.REQUESTED]: [TripStatus.MATCHED, TripStatus.CANCELLED],
-  [TripStatus.MATCHED]: [TripStatus.EN_ROUTE, TripStatus.CANCELLED],
-  [TripStatus.EN_ROUTE]: [TripStatus.ACTIVE, TripStatus.CANCELLED],
+  [TripStatus.MATCHED]: [TripStatus.ARRIVED, TripStatus.EN_ROUTE, TripStatus.CANCELLED],
+  [TripStatus.ARRIVED]: [TripStatus.ACTIVE, TripStatus.CANCELLED],
+  [TripStatus.EN_ROUTE]: [TripStatus.ARRIVED, TripStatus.ACTIVE, TripStatus.CANCELLED],
   [TripStatus.ACTIVE]: [TripStatus.COMPLETED, TripStatus.CANCELLED],
   [TripStatus.COMPLETED]: [],
   [TripStatus.CANCELLED]: [],

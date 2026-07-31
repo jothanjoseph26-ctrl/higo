@@ -30,11 +30,11 @@ export const envSchema = Joi.object({
   TWILIO_VERIFY_SERVICE_SID: Joi.string().allow('').default(''),
 
   TERMII_API_KEY: Joi.string().allow('').default(''),
-  TERMII_SENDER_ID: Joi.string().allow('').default('HiGo'),
+  TERMII_SENDER_ID: Joi.string().allow('').default('HiGO'),
   TERMII_BASE_URL: Joi.string().uri().default('https://api.ng.termii.com'),
   AFRICASTALKING_USERNAME: Joi.string().allow('').default(''),
   AFRICASTALKING_API_KEY: Joi.string().allow('').default(''),
-  AFRICASTALKING_SENDER_ID: Joi.string().allow('').default('HiGo'),
+  AFRICASTALKING_SENDER_ID: Joi.string().allow('').default('HiGO'),
 
   FIREBASE_SERVICE_ACCOUNT_PATH: Joi.string().default(
     'hiconnect-firebase-services-key.json',
@@ -62,7 +62,7 @@ export const envSchema = Joi.object({
   GOOGLE_MAPS_API_KEY: Joi.string().required(),
   MAPS_DIRECTIONS_ENABLED: Joi.boolean().default(true),
   RESEND_API_KEY: Joi.string().allow('').default(''),
-  EMAIL_FROM: Joi.string().default('HiGo <noreply@hiconnect.com>'),
+  EMAIL_FROM: Joi.string().default('HiGO <noreply@hiconnect.com>'),
   WEEKLY_KPI_EMAIL_RECIPIENTS: Joi.string().allow('').default(''),
   WEEKLY_MARKETING_SPEND_KOBO: Joi.number().integer().min(0).default(0),
   WEEKLY_OPERATING_COSTS_KOBO: Joi.number().integer().min(0).default(0),

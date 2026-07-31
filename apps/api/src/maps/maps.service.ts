@@ -10,6 +10,7 @@ import type {
 import { RedisService } from '../redis/redis.service';
 
 const DIRECTIONS_CACHE_TTL_SECONDS = 300;
+const PLACES_AUTOCOMPLETE_CACHE_TTL_SECONDS = 120;
 const COORD_PRECISION = 4;
 
 @Injectable()
@@ -22,6 +23,17 @@ export class MapsService {
   ) {}
 
   async placesAutocomplete(input: string): Promise<PlacesAutocompleteResponse> {
+    const normalizedInput = input.trim();
+    if (normalizedInput.length < 2) {
+      return { suggestions: [] };
+    }
+
+    const cacheKey = `maps:places:autocomplete:${normalizedInput.toLowerCase()}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached) as PlacesAutocompleteResponse;
+    }
+
     const apiKey = this.config.get<string>('GOOGLE_MAPS_API_KEY');
     if (!apiKey) {
       this.logger.warn('GOOGLE_MAPS_API_KEY not set; returning empty autocomplete');
@@ -33,10 +45,11 @@ export class MapsService {
         'https://maps.googleapis.com/maps/api/place/autocomplete/json',
         {
           params: {
-            input,
+            input: normalizedInput,
             key: apiKey,
             components: 'country:ng',
             language: 'en',
+            types: 'geocode|establishment',
           },
           timeout: 10_000,
         },
@@ -64,7 +77,13 @@ export class MapsService {
           description: prediction.description as string,
         }));
 
-      return { suggestions };
+      const result = { suggestions };
+      await this.redis.set(
+        cacheKey,
+        JSON.stringify(result),
+        PLACES_AUTOCOMPLETE_CACHE_TTL_SECONDS,
+      );
+      return result;
     } catch (error) {
       this.logger.warn(
         `Places autocomplete request failed: ${error instanceof Error ? error.message : 'unknown error'}`,

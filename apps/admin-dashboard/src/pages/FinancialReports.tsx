@@ -152,7 +152,7 @@ export const FinancialReports: React.FC = () => {
 
       {/* Printable header info */}
       <div className="hidden print:block text-xs text-dark mb-4">
-        <h2 className="text-lg font-bold text-darkNavy mb-1">HiGo Abuja Financial Statement</h2>
+        <h2 className="text-lg font-bold text-darkNavy mb-1">HiGO Abuja Financial Statement</h2>
         <p><strong>Reporting Period:</strong> {startDate?.toLocaleDateString()} to {endDate?.toLocaleDateString()}</p>
         <p><strong>Generated At:</strong> {new Date().toLocaleString()}</p>
       </div>

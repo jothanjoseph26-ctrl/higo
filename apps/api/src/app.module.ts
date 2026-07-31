@@ -35,6 +35,9 @@ import { EmailModule } from './email/email.module';
 import { JobsModule } from './jobs/jobs.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { HceModule } from './hce/hce.module';
+import { DeliveriesModule } from './deliveries/deliveries.module';
+import { LoyaltyModule } from './loyalty/loyalty.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -77,6 +80,9 @@ import { HceModule } from './hce/hce.module';
     JobsModule,
     OnboardingModule,
     HceModule,
+    DeliveriesModule,
+    LoyaltyModule,
+    NotificationsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

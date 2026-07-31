@@ -100,7 +100,7 @@ export function ConfirmRide({ navigation }: Props) {
         <View style={styles.row}>
           <Text style={styles.icon}>H</Text>
           <View style={styles.rideMeta}>
-            <Text style={styles.boldText}>HiGo {vehicleType.toUpperCase()}</Text>
+            <Text style={styles.boldText}>HiGO {vehicleType.toUpperCase()}</Text>
             {isShared && <Text style={styles.subtext}>Shared ride active</Text>}
           </View>
           <Text style={styles.price}>{getPriceLabel()}</Text>

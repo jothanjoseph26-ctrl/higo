@@ -16,6 +16,8 @@ import {
   VehicleType,
   PaymentMethod,
   PaymentStatus,
+  RideMode,
+  FareNegotiationResponse,
   QuoteTripResponse,
   RequestTripRequest,
   RequestTripResponse,
@@ -35,6 +37,18 @@ interface PreparedTripRequest {
   distanceKm: number;
   durationMin: number;
   estimate: RequestTripResponse['estimate'];
+}
+
+type DriverNegotiationResponseRow = FareNegotiationResponse['driverResponses'][number];
+
+interface NegotiationConfig {
+  isEnabled: boolean;
+  maxRounds: number;
+  maxTimeSec: number;
+  saveMorePct: number;
+  priorityPickupPct: number;
+  minFare: number;
+  maxFare: number;
 }
 
 @Injectable()
@@ -80,6 +94,113 @@ export class TripService {
     return R * c;
   }
 
+  private roundNegotiationFare(amount: number): number {
+    return Math.round(amount / 1000) * 1000;
+  }
+
+  private async getNegotiationConfig(): Promise<NegotiationConfig> {
+    const defaults: NegotiationConfig = {
+      isEnabled: true,
+      maxRounds: 3,
+      maxTimeSec: 60,
+      saveMorePct: 12,
+      priorityPickupPct: 10,
+      minFare: 20000,
+      maxFare: 1000000,
+    };
+
+    const settingsRow = await this.prisma.platformSettings.findUnique({
+      where: { id: 'default' },
+    });
+    const settings = (settingsRow?.settings ?? {}) as Record<string, any>;
+    const config = settings.negotiation ?? {};
+
+    return {
+      isEnabled: config.isEnabled ?? config.is_enabled ?? defaults.isEnabled,
+      maxRounds: config.maxRounds ?? config.max_rounds ?? defaults.maxRounds,
+      maxTimeSec: config.maxTimeSec ?? config.max_time_sec ?? defaults.maxTimeSec,
+      saveMorePct: config.saveMorePct ?? config.save_more_pct ?? defaults.saveMorePct,
+      priorityPickupPct:
+        config.priorityPickupPct ?? config.priority_pickup_pct ?? defaults.priorityPickupPct,
+      minFare: config.minFare ?? config.min_fare ?? defaults.minFare,
+      maxFare: config.maxFare ?? config.max_fare ?? defaults.maxFare,
+    };
+  }
+
+  private clampFare(amount: number, config: NegotiationConfig): number {
+    return Math.max(config.minFare, Math.min(config.maxFare, amount));
+  }
+
+  getPassengerNegotiationSuggestions(estimatedFare: number, config: NegotiationConfig) {
+    const recommended = this.clampFare(this.roundNegotiationFare(estimatedFare), config);
+    return {
+      saveMore: this.clampFare(
+        this.roundNegotiationFare(estimatedFare * (1 - config.saveMorePct / 100)),
+        config,
+      ),
+      recommended,
+      priority: this.clampFare(
+        this.roundNegotiationFare(estimatedFare * (1 + config.priorityPickupPct / 100)),
+        config,
+      ),
+    };
+  }
+
+  getDriverNegotiationSuggestions(
+    passengerOffer: number,
+    estimatedFare: number,
+    config: NegotiationConfig,
+  ) {
+    return {
+      counterRecommended: this.roundNegotiationFare(estimatedFare),
+      counterPriority: this.clampFare(
+        this.roundNegotiationFare(Math.max(passengerOffer, estimatedFare) * (1 + config.priorityPickupPct / 100)),
+        config,
+      ),
+    };
+  }
+
+  private mapNegotiation(row: any): FareNegotiationResponse {
+    const responses = (row.driverResponses ?? []) as Array<any>;
+    return {
+      id: row.id,
+      passengerId: row.passengerId,
+      passengerName: row.passengerName,
+      selectedDriverId: row.selectedDriverId,
+      selectedDriverName: row.selectedDriverName,
+      pickupAddress: row.pickupAddress,
+      pickupLat: Number(row.pickupLat),
+      pickupLng: Number(row.pickupLng),
+      destinationAddress: row.destinationAddress,
+      destinationLat: Number(row.destinationLat),
+      destinationLng: Number(row.destinationLng),
+      vehicleType: row.vehicleType as VehicleType,
+      estimatedFare: row.estimatedFare,
+      passengerOffer: row.passengerOffer,
+      finalFare: row.finalFare,
+      distanceKm: row.distanceKm === null ? null : Number(row.distanceKm),
+      durationMin: row.durationMin,
+      currentRound: row.currentRound,
+      maxRounds: row.maxRounds,
+      status: row.status,
+      driverResponses: responses.map((response) => ({
+        driverId: response.driverId ?? response.driver_id,
+        driverName: response.driverName ?? response.driver_name,
+        driverRating: Number(response.driverRating ?? response.driver_rating ?? 0),
+        driverEtaMin: Number(response.driverEtaMin ?? response.driver_eta_min ?? 0),
+        driverVerified: Boolean(response.driverVerified ?? response.driver_verified),
+        responseType: response.responseType ?? response.response_type,
+        counterAmount: response.counterAmount ?? response.counter_amount ?? null,
+        respondedAt: response.respondedAt ?? response.responded_at,
+      })),
+      closedReason: row.closedReason,
+      negotiationDurationSec: row.negotiationDurationSec,
+      expiresAt: row.expiresAt.toISOString(),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
   async assertTripAccess(tripId: string, user: AuthUser): Promise<void> {
     const trip = await this.getTrip(tripId);
     if (!trip) {
@@ -98,6 +219,9 @@ export class TripService {
   private mapTripRow(row: any): Trip {
     const pickupGeo = JSON.parse(row.pickupLocationGeoJson);
     const destGeo = JSON.parse(row.destinationLocationGeoJson);
+    const actualPickupGeo = row.actualPickupLocationGeoJson
+      ? JSON.parse(row.actualPickupLocationGeoJson)
+      : null;
 
     return {
       id: row.id,
@@ -115,19 +239,43 @@ export class TripService {
       baseFare: row.baseFare,
       distanceFare: row.distanceFare,
       timeFare: row.timeFare,
+      rawFare: row.rawFare,
+      quotedFare: row.quotedFare,
+      minimumFare: row.minimumFare,
+      minimumFareApplied: row.minimumFareApplied,
       surgeMultiplier: Number(row.surgeMultiplier),
+      modeMultiplier: Number(row.modeMultiplier),
+      pricingVersion: row.pricingVersion,
+      customerBookingFee: row.customerBookingFee,
+      customerStatutoryLevy: row.customerStatutoryLevy,
       totalFare: row.totalFare,
       paymentMethod: row.paymentMethod as PaymentMethod | null,
       paymentStatus: row.paymentStatus as PaymentStatus,
       paystackReference: row.paystackReference,
+      promoCode: row.promoCode,
+      discountAmount: row.discountAmount,
       passengerRating: row.passengerRating,
       driverRating: row.driverRating,
       rideSharePartnerId: row.rideSharePartnerId,
       isShared: row.isShared,
+      rideMode: row.rideMode as RideMode,
+      negotiationId: row.negotiationId,
+      scheduledFor: row.scheduledFor ? row.scheduledFor.toISOString() : null,
+      isScheduled: row.isScheduled,
       startedAt: row.startedAt ? row.startedAt.toISOString() : null,
       completedAt: row.completedAt ? row.completedAt.toISOString() : null,
       cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
       cancelReason: row.cancelReason,
+      pickupLandmark: row.pickupLandmark,
+      pickupVoiceNoteUrl: row.pickupVoiceNoteUrl,
+      pickupConfirmedAt: row.pickupConfirmedAt ? row.pickupConfirmedAt.toISOString() : null,
+      pickupAttempts: row.pickupAttempts,
+      actualPickupLocation: actualPickupGeo
+        ? { lng: actualPickupGeo.coordinates[0], lat: actualPickupGeo.coordinates[1] }
+        : null,
+      cashConfirmedByDriver: row.cashConfirmedByDriver,
+      cashConfirmedAt: row.cashConfirmedAt ? row.cashConfirmedAt.toISOString() : null,
+      rejectionReason: row.rejectionReason,
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -150,19 +298,41 @@ export class TripService {
         base_fare AS "baseFare",
         distance_fare AS "distanceFare",
         time_fare AS "timeFare",
+        raw_fare AS "rawFare",
+        quoted_fare AS "quotedFare",
+        minimum_fare AS "minimumFare",
+        minimum_fare_applied AS "minimumFareApplied",
         surge_multiplier AS "surgeMultiplier",
+        mode_multiplier AS "modeMultiplier",
+        pricing_version AS "pricingVersion",
+        customer_booking_fee AS "customerBookingFee",
+        customer_statutory_levy AS "customerStatutoryLevy",
         total_fare AS "totalFare",
         payment_method AS "paymentMethod",
         payment_status AS "paymentStatus",
         paystack_reference AS "paystackReference",
+        promo_code AS "promoCode",
+        discount_amount AS "discountAmount",
         passenger_rating AS "passengerRating",
         driver_rating AS "driverRating",
         ride_share_partner_id AS "rideSharePartnerId",
         is_shared AS "isShared",
+        ride_mode AS "rideMode",
+        negotiation_id AS "negotiationId",
+        scheduled_for AS "scheduledFor",
+        is_scheduled AS "isScheduled",
         started_at AS "startedAt",
         completed_at AS "completedAt",
         cancelled_at AS "cancelledAt",
         cancel_reason AS "cancelReason",
+        pickup_landmark AS "pickupLandmark",
+        pickup_voice_note_url AS "pickupVoiceNoteUrl",
+        pickup_confirmed_at AS "pickupConfirmedAt",
+        pickup_attempts AS "pickupAttempts",
+        ST_AsGeoJSON(actual_pickup_location) AS "actualPickupLocationGeoJson",
+        cash_confirmed_by_driver AS "cashConfirmedByDriver",
+        cash_confirmed_at AS "cashConfirmedAt",
+        rejection_reason AS "rejectionReason",
         created_at AS "createdAt"
       FROM trips
       WHERE id = ${tripId}::uuid
@@ -195,19 +365,41 @@ export class TripService {
         base_fare AS "baseFare",
         distance_fare AS "distanceFare",
         time_fare AS "timeFare",
+        raw_fare AS "rawFare",
+        quoted_fare AS "quotedFare",
+        minimum_fare AS "minimumFare",
+        minimum_fare_applied AS "minimumFareApplied",
         surge_multiplier AS "surgeMultiplier",
+        mode_multiplier AS "modeMultiplier",
+        pricing_version AS "pricingVersion",
+        customer_booking_fee AS "customerBookingFee",
+        customer_statutory_levy AS "customerStatutoryLevy",
         total_fare AS "totalFare",
         payment_method AS "paymentMethod",
         payment_status AS "paymentStatus",
         paystack_reference AS "paystackReference",
+        promo_code AS "promoCode",
+        discount_amount AS "discountAmount",
         passenger_rating AS "passengerRating",
         driver_rating AS "driverRating",
         ride_share_partner_id AS "rideSharePartnerId",
         is_shared AS "isShared",
+        ride_mode AS "rideMode",
+        negotiation_id AS "negotiationId",
+        scheduled_for AS "scheduledFor",
+        is_scheduled AS "isScheduled",
         started_at AS "startedAt",
         completed_at AS "completedAt",
         cancelled_at AS "cancelledAt",
         cancel_reason AS "cancelReason",
+        pickup_landmark AS "pickupLandmark",
+        pickup_voice_note_url AS "pickupVoiceNoteUrl",
+        pickup_confirmed_at AS "pickupConfirmedAt",
+        pickup_attempts AS "pickupAttempts",
+        ST_AsGeoJSON(actual_pickup_location) AS "actualPickupLocationGeoJson",
+        cash_confirmed_by_driver AS "cashConfirmedByDriver",
+        cash_confirmed_at AS "cashConfirmedAt",
+        rejection_reason AS "rejectionReason",
         created_at AS "createdAt"
       FROM trips
       WHERE passenger_id = ${passengerId}::uuid
@@ -257,8 +449,10 @@ export class TripService {
       throw new AppException('INVALID_ZONE');
     }
 
-    const distanceKm = this.haversineDistance(dto.pickup, dto.destination);
-    const durationMin = Math.max(1, Math.round(distanceKm * 2.5));
+    const { distanceKm, durationMin } = await this.pricingService.resolveRouteMetrics(
+      dto.pickup,
+      dto.destination,
+    );
 
     let estimate = await this.pricingService.estimateFare({
       vehicleType: dto.vehicleType,
@@ -266,6 +460,7 @@ export class TripService {
       durationMin,
       pickup: dto.pickup,
       isShared: dto.isShared,
+      rideMode: dto.rideMode,
     });
 
     if (dto.promoCode) {
@@ -277,6 +472,7 @@ export class TripService {
       estimate = {
         ...estimate,
         totalFare: discounted.totalFare,
+        quotedFare: originalTotalFare,
         originalTotalFare,
         promoDiscount: discounted.discountAmount,
         promoCode: discounted.promoCode,
@@ -309,6 +505,464 @@ export class TripService {
     };
   }
 
+  async findSharedRideMatches(
+    pickup: LatLng,
+    destination: LatLng,
+    vehicleType: VehicleType = VehicleType.KEKE,
+  ) {
+    const rows = await this.prisma.$queryRaw<any[]>`
+      SELECT
+        t.id,
+        t.driver_id AS "driverId",
+        t.total_fare AS "totalFare",
+        ST_DistanceSphere(
+          t.pickup_location::geometry,
+          ST_SetSRID(ST_MakePoint(${pickup.lng}, ${pickup.lat}), 4326)
+        ) AS "pickupDistanceMeters",
+        ST_DistanceSphere(
+          t.destination_location::geometry,
+          ST_SetSRID(ST_MakePoint(${destination.lng}, ${destination.lat}), 4326)
+        ) AS "destinationDistanceMeters",
+        d.name AS "driverName"
+      FROM trips t
+      LEFT JOIN drivers d ON d.id = t.driver_id
+      WHERE t.is_shared = true
+        AND t.status = 'active'
+        AND t.vehicle_type = ${vehicleType}::"VehicleType"
+        AND t.driver_id IS NOT NULL
+        AND ST_DistanceSphere(
+          t.pickup_location::geometry,
+          ST_SetSRID(ST_MakePoint(${pickup.lng}, ${pickup.lat}), 4326)
+        ) <= 1500
+        AND ST_DistanceSphere(
+          t.destination_location::geometry,
+          ST_SetSRID(ST_MakePoint(${destination.lng}, ${destination.lat}), 4326)
+        ) <= 1500
+      ORDER BY "pickupDistanceMeters" ASC
+      LIMIT 3;
+    `;
+
+    const matches = rows.map((row) => ({
+      rideId: row.id,
+      pickupDistanceM: Math.round(Number(row.pickupDistanceMeters)),
+      destinationDistanceM: Math.round(Number(row.destinationDistanceMeters)),
+      driverName: row.driverName,
+      currentPassengers: 1,
+      fareShare: Math.round(Number(row.totalFare ?? 0) / 2),
+    }));
+
+    return {
+      matches,
+      bestMatch: matches[0] ?? null,
+    };
+  }
+
+  async joinSharedRide(passengerId: string, rideId: string) {
+    const rows = await this.prisma.$queryRaw<any[]>`
+      SELECT
+        t.id,
+        t.driver_id AS "driverId",
+        t.pickup_address AS "pickupAddress",
+        ST_X(t.pickup_location::geometry) AS "pickupLng",
+        ST_Y(t.pickup_location::geometry) AS "pickupLat",
+        t.destination_address AS "destinationAddress",
+        ST_X(t.destination_location::geometry) AS "destinationLng",
+        ST_Y(t.destination_location::geometry) AS "destinationLat",
+        t.vehicle_type AS "vehicleType",
+        t.total_fare AS "totalFare"
+      FROM trips t
+      WHERE t.id = ${rideId}::uuid
+        AND t.is_shared = true
+        AND t.status = 'active'
+      LIMIT 1;
+    `;
+    const sharedRide = rows[0];
+    if (!sharedRide) {
+      throw new AppException('NOT_FOUND', undefined, 'Shared ride not found or no longer active');
+    }
+    if (!sharedRide.driverId) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'Shared ride has no assigned driver');
+    }
+
+    const tripId = crypto.randomUUID();
+    const fareShare = Math.round(Number(sharedRide.totalFare ?? 0) / 2);
+
+    await this.prisma.$executeRaw`
+      INSERT INTO trips (
+        id,
+        passenger_id,
+        driver_id,
+        pickup_location,
+        pickup_address,
+        destination_location,
+        destination_address,
+        vehicle_type,
+        status,
+        base_fare,
+        distance_fare,
+        time_fare,
+        raw_fare,
+        quoted_fare,
+        minimum_fare,
+        minimum_fare_applied,
+        surge_multiplier,
+        mode_multiplier,
+        pricing_version,
+        total_fare,
+        payment_method,
+        payment_status,
+        ride_share_partner_id,
+        is_shared,
+        ride_mode,
+        created_at
+      ) VALUES (
+        ${tripId}::uuid,
+        ${passengerId}::uuid,
+        ${sharedRide.driverId}::uuid,
+        ST_SetSRID(ST_MakePoint(${Number(sharedRide.pickupLng)}, ${Number(sharedRide.pickupLat)}), 4326)::geography,
+        ${sharedRide.pickupAddress},
+        ST_SetSRID(ST_MakePoint(${Number(sharedRide.destinationLng)}, ${Number(sharedRide.destinationLat)}), 4326)::geography,
+        ${sharedRide.destinationAddress},
+        ${sharedRide.vehicleType}::"VehicleType",
+        'matched'::"TripStatus",
+        ${fareShare},
+        0,
+        0,
+        ${fareShare},
+        ${fareShare},
+        0,
+        false,
+        1.0,
+        1.0,
+        'shared-join',
+        ${fareShare},
+        'cash'::"PaymentMethod",
+        'pending'::"PaymentStatus",
+        ${rideId}::uuid,
+        true,
+        'share'::"RideMode",
+        NOW()
+      );
+    `;
+
+    const trip = await this.getTrip(tripId);
+    if (!trip) {
+      throw new AppException('INTERNAL_ERROR', undefined, 'Failed to create shared ride');
+    }
+
+    return {
+      ride: trip,
+      sharedWith: rideId,
+      fareSplit: true,
+    };
+  }
+
+  async getFareNegotiationSuggestions(estimatedFare: number) {
+    const config = await this.getNegotiationConfig();
+    return {
+      suggestions: this.getPassengerNegotiationSuggestions(estimatedFare, config),
+      config,
+    };
+  }
+
+  async createFareNegotiation(
+    passengerId: string,
+    dto: {
+      passengerName?: string;
+      pickupAddress: string;
+      pickup: LatLng;
+      destinationAddress: string;
+      destination: LatLng;
+      vehicleType: VehicleType;
+      estimatedFare: number;
+      distanceKm?: number;
+      durationMin?: number;
+      passengerOffer: number;
+    },
+  ): Promise<{ negotiation: FareNegotiationResponse }> {
+    const config = await this.getNegotiationConfig();
+    if (!config.isEnabled) {
+      throw new AppException('FORBIDDEN', undefined, 'Negotiation is disabled');
+    }
+
+    const passenger = await this.prisma.user.findUnique({ where: { id: passengerId } });
+    const clampedOffer = this.clampFare(dto.passengerOffer, config);
+    const negotiation = await this.prisma.fareNegotiation.create({
+      data: {
+        passengerId,
+        passengerName: dto.passengerName ?? passenger?.name ?? null,
+        pickupAddress: dto.pickupAddress,
+        pickupLat: dto.pickup.lat,
+        pickupLng: dto.pickup.lng,
+        destinationAddress: dto.destinationAddress,
+        destinationLat: dto.destination.lat,
+        destinationLng: dto.destination.lng,
+        vehicleType: dto.vehicleType,
+        estimatedFare: dto.estimatedFare,
+        passengerOffer: clampedOffer,
+        distanceKm: dto.distanceKm ?? null,
+        durationMin: dto.durationMin ?? null,
+        currentRound: 1,
+        maxRounds: config.maxRounds,
+        expiresAt: new Date(Date.now() + config.maxTimeSec * 1000),
+      },
+    });
+
+    return { negotiation: this.mapNegotiation(negotiation) };
+  }
+
+  async respondToFareNegotiation(
+    user: AuthUser,
+    negotiationId: string,
+    dto: {
+      action: 'driver_respond' | 'counter_offer' | 'select_driver' | 'cancel' | 'get_state';
+      responseType?: 'accept' | 'reject' | 'counter';
+      counterAmount?: number;
+      newOffer?: number;
+      driverId?: string;
+    },
+  ): Promise<{ negotiation: FareNegotiationResponse; rideId?: string; suggestions?: unknown }> {
+    const negotiation = await this.prisma.fareNegotiation.findUnique({
+      where: { id: negotiationId },
+    });
+    if (!negotiation) {
+      throw new AppException('NOT_FOUND', undefined, 'Negotiation not found');
+    }
+
+    if (dto.action === 'get_state') {
+      const current = await this.expireNegotiationIfNeeded(negotiationId);
+      const config = await this.getNegotiationConfig();
+      const trip = await this.prisma.trip.findFirst({ where: { negotiationId } });
+      return {
+        negotiation: this.mapNegotiation(current),
+        suggestions: this.getDriverNegotiationSuggestions(
+          current.passengerOffer,
+          current.estimatedFare,
+          config,
+        ),
+        rideId: trip?.id,
+      };
+    }
+
+    if (dto.action === 'cancel') {
+      this.assertNegotiationOwner(negotiation, user);
+      const updated = await this.prisma.fareNegotiation.update({
+        where: { id: negotiationId },
+        data: { status: 'cancelled', closedReason: 'cancelled' },
+      });
+      return { negotiation: this.mapNegotiation(updated) };
+    }
+
+    const active = await this.expireNegotiationIfNeeded(negotiationId);
+    if (active.status !== 'active') {
+      throw new AppException('VALIDATION_ERROR', undefined, 'Negotiation no longer active');
+    }
+
+    if (dto.action === 'counter_offer') {
+      this.assertNegotiationOwner(active, user);
+      if (active.currentRound >= active.maxRounds) {
+        throw new AppException('VALIDATION_ERROR', undefined, 'Maximum rounds reached');
+      }
+      if (!dto.newOffer) {
+        throw new AppException('VALIDATION_ERROR', undefined, 'Missing new offer');
+      }
+      const config = await this.getNegotiationConfig();
+      const updated = await this.prisma.fareNegotiation.update({
+        where: { id: negotiationId },
+        data: {
+          passengerOffer: this.clampFare(dto.newOffer, config),
+          currentRound: active.currentRound + 1,
+          driverResponses: [],
+          expiresAt: new Date(Date.now() + config.maxTimeSec * 1000),
+        },
+      });
+      return { negotiation: this.mapNegotiation(updated) };
+    }
+
+    if (dto.action === 'driver_respond') {
+      if (user.type !== 'driver') {
+        throw new AppException('FORBIDDEN', undefined, 'Only drivers can respond to negotiations');
+      }
+      if (!dto.responseType) {
+        throw new AppException('VALIDATION_ERROR', undefined, 'Missing response type');
+      }
+      const driver = await this.prisma.driver.findUnique({ where: { id: user.sub } });
+      if (!driver) {
+        throw new AppException('NOT_FOUND', undefined, 'Driver profile not found');
+      }
+      const config = await this.getNegotiationConfig();
+      const response: DriverNegotiationResponseRow = {
+        driverId: driver.id,
+        driverName: driver.name,
+        driverRating: Number(driver.ratingAvg || 5),
+        driverEtaMin: 5,
+        driverVerified: driver.kycStatus === 'approved',
+        responseType: dto.responseType,
+        counterAmount:
+          dto.responseType === 'counter'
+            ? this.clampFare(dto.counterAmount ?? 0, config)
+            : null,
+        respondedAt: new Date().toISOString(),
+      };
+      const existing = this.mapNegotiation(active).driverResponses;
+      const nextResponses = [
+        ...existing.filter((item) => item.driverId !== driver.id),
+        response,
+      ];
+      const updated = await this.prisma.fareNegotiation.update({
+        where: { id: negotiationId },
+        data: { driverResponses: nextResponses as any },
+      });
+      return { negotiation: this.mapNegotiation(updated) };
+    }
+
+    if (dto.action === 'select_driver') {
+      this.assertNegotiationOwner(active, user);
+      if (!dto.driverId) {
+        throw new AppException('VALIDATION_ERROR', undefined, 'Missing driver ID');
+      }
+      const responses = this.mapNegotiation(active).driverResponses;
+      const response = responses.find((item) => item.driverId === dto.driverId);
+      if (!response || response.responseType === 'reject') {
+        throw new AppException('NOT_FOUND', undefined, 'Acceptable driver response not found');
+      }
+      const finalFare =
+        response.responseType === 'accept' ? active.passengerOffer : response.counterAmount;
+      if (!finalFare) {
+        throw new AppException('VALIDATION_ERROR', undefined, 'Selected response has no fare');
+      }
+
+      const durationSec = Math.round(
+        (Date.now() - active.createdAt.getTime()) / 1000,
+      );
+      const updated = await this.prisma.fareNegotiation.update({
+        where: { id: negotiationId },
+        data: {
+          status: 'accepted',
+          selectedDriverId: dto.driverId,
+          selectedDriverName: response.driverName,
+          finalFare,
+          closedReason: 'accepted',
+          negotiationDurationSec: durationSec,
+        },
+      });
+
+      const tripId = await this.createTripFromAcceptedNegotiation(updated, response, finalFare);
+      return { negotiation: this.mapNegotiation(updated), rideId: tripId };
+    }
+
+    throw new AppException('VALIDATION_ERROR', undefined, 'Unknown negotiation action');
+  }
+
+  private assertNegotiationOwner(negotiation: { passengerId: string }, user: AuthUser): void {
+    if (user.type === 'admin') return;
+    if (user.type === 'passenger' && user.sub === negotiation.passengerId) return;
+    throw new AppException('FORBIDDEN', undefined, 'You cannot modify this negotiation');
+  }
+
+  private async expireNegotiationIfNeeded(negotiationId: string) {
+    const negotiation = await this.prisma.fareNegotiation.findUniqueOrThrow({
+      where: { id: negotiationId },
+    });
+    if (negotiation.status === 'active' && negotiation.expiresAt < new Date()) {
+      return this.prisma.fareNegotiation.update({
+        where: { id: negotiationId },
+        data: { status: 'expired', closedReason: 'expired' },
+      });
+    }
+    return negotiation;
+  }
+
+  private async createTripFromAcceptedNegotiation(
+    negotiation: any,
+    response: DriverNegotiationResponseRow,
+    finalFare: number,
+  ): Promise<string> {
+    const driver = await this.prisma.driver.findUnique({ where: { id: response.driverId } });
+    const tripId = crypto.randomUUID();
+    const rawFare = negotiation.estimatedFare;
+    await this.prisma.$executeRaw`
+      INSERT INTO trips (
+        id,
+        passenger_id,
+        driver_id,
+        pickup_location,
+        pickup_address,
+        destination_location,
+        destination_address,
+        vehicle_type,
+        status,
+        base_fare,
+        distance_fare,
+        time_fare,
+        raw_fare,
+        quoted_fare,
+        minimum_fare,
+        minimum_fare_applied,
+        surge_multiplier,
+        mode_multiplier,
+        pricing_version,
+        total_fare,
+        payment_method,
+        payment_status,
+        is_shared,
+        ride_mode,
+        negotiation_id,
+        created_at
+      ) VALUES (
+        ${tripId}::uuid,
+        ${negotiation.passengerId}::uuid,
+        ${response.driverId}::uuid,
+        ST_SetSRID(ST_MakePoint(${Number(negotiation.pickupLng)}, ${Number(negotiation.pickupLat)}), 4326)::geography,
+        ${negotiation.pickupAddress},
+        ST_SetSRID(ST_MakePoint(${Number(negotiation.destinationLng)}, ${Number(negotiation.destinationLat)}), 4326)::geography,
+        ${negotiation.destinationAddress},
+        ${negotiation.vehicleType}::"VehicleType",
+        'matched'::"TripStatus",
+        ${rawFare},
+        0,
+        0,
+        ${rawFare},
+        ${finalFare},
+        0,
+        false,
+        1.0,
+        1.0,
+        'negotiated',
+        ${finalFare},
+        'cash'::"PaymentMethod",
+        'pending'::"PaymentStatus",
+        false,
+        'negotiate'::"RideMode",
+        ${negotiation.id}::uuid,
+        NOW()
+      );
+    `;
+
+    if (driver) {
+      this.eventsGateway.server
+        .to(`passenger:${negotiation.passengerId}`)
+        .emit(SOCKET_EVENTS.TRIP_MATCHED, {
+          tripId,
+          driverId: response.driverId,
+          driverDetails: {
+            driverId: driver.id,
+            name: driver.name,
+            phone: driver.phone,
+            avatarUrl: driver.avatarUrl,
+            vehiclePlate: driver.vehiclePlate,
+            vehicleModel: driver.vehicleModel,
+            vehicleColor: driver.vehicleColor,
+            ratingAvg: Number(driver.ratingAvg),
+            totalTrips: driver.totalTrips,
+          },
+          eta: response.driverEtaMin,
+        });
+    }
+
+    return tripId;
+  }
+
   async requestTrip(passengerId: string, dto: RequestTripRequest): Promise<RequestTripResponse> {
     const activeTripRows = await this.prisma.$queryRaw<any[]>`
       SELECT id FROM trips
@@ -339,11 +993,24 @@ export class TripService {
         base_fare,
         distance_fare,
         time_fare,
+        raw_fare,
+        quoted_fare,
+        minimum_fare,
+        minimum_fare_applied,
         surge_multiplier,
+        mode_multiplier,
+        pricing_version,
+        customer_booking_fee,
+        customer_statutory_levy,
         total_fare,
         payment_method,
         payment_status,
+        promo_code,
+        discount_amount,
         is_shared,
+        ride_mode,
+        scheduled_for,
+        is_scheduled,
         created_at
       ) VALUES (
         ${tripId}::uuid,
@@ -357,11 +1024,24 @@ export class TripService {
         ${estimate.baseFare},
         ${estimate.distanceFare},
         ${estimate.timeFare},
+        ${estimate.rawFare},
+        ${estimate.quotedFare},
+        ${estimate.minimumFare},
+        ${estimate.minimumFareApplied},
         ${estimate.surgeMultiplier},
+        ${estimate.modeMultiplier},
+        ${estimate.pricingVersion},
+        ${estimate.customerBookingFee},
+        ${estimate.customerStatutoryLevy},
         ${estimate.totalFare},
         ${dto.paymentMethod}::"PaymentMethod",
         'pending'::"PaymentStatus",
+        ${estimate.promoCode ?? null},
+        ${estimate.promoDiscount ?? 0},
         ${dto.isShared ?? false},
+        ${estimate.rideMode}::"RideMode",
+        ${dto.scheduledFor ? new Date(dto.scheduledFor) : null},
+        ${Boolean(dto.scheduledFor || estimate.rideMode === RideMode.SCHEDULE_FLEX || estimate.rideMode === RideMode.SCHEDULE_EXACT)},
         NOW()
       );
     `;

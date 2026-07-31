@@ -26,13 +26,13 @@ COPY . .
 # Passenger APK is gitignored (~96MB). Provide at build time via Railway build arg.
 ARG PASSENGER_APK_URL=
 RUN mkdir -p apps/api/static/downloads && \
-  if [ -f apps/api/static/downloads/HiGo-Passenger.apk ]; then \
+  if [ -f apps/api/static/downloads/HiGO-Passenger.apk ]; then \
     echo "Passenger APK present in build context"; \
   elif [ -n "$PASSENGER_APK_URL" ]; then \
     echo "Fetching passenger APK from PASSENGER_APK_URL"; \
-    wget -q -O apps/api/static/downloads/HiGo-Passenger.apk "$PASSENGER_APK_URL"; \
+    wget -q -O apps/api/static/downloads/HiGO-Passenger.apk "$PASSENGER_APK_URL"; \
   else \
-    echo "WARN: No passenger APK — /downloads/HiGo-Passenger.apk will 404 until PASSENGER_APK_URL is set"; \
+    echo "WARN: No passenger APK — /downloads/HiGO-Passenger.apk will 404 until PASSENGER_APK_URL is set"; \
   fi
 
 ENV CI=true

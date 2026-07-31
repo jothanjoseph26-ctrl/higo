@@ -87,7 +87,7 @@ export function TripReceipt({ navigation }: Props) {
     <ScreenShell title="Trip Receipt" subtitle="Detailed fare breakdown for your completed ride">
       <View style={styles.invoice}>
         <View style={styles.header}>
-          <Text style={styles.brand}>HiGo</Text>
+          <Text style={styles.brand}>HiGO</Text>
           <Text style={styles.invoiceLabel}>INVOICE</Text>
         </View>
 

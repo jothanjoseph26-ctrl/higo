@@ -1,5 +1,5 @@
 /**
- * HiGo Abuja — Shared API Request/Response DTOs
+ * HiGO Abuja — Shared API Request/Response DTOs
  * Package: @higo/shared-types
  *
  * Every REST endpoint listed in the API contract has a request and/or response
@@ -56,6 +56,7 @@ import {
   DriverFeatureName,
   HceService,
   FraudEventStatus,
+  RideMode,
 } from './enums';
 
 // ============================================================================
@@ -335,6 +336,8 @@ export interface RequestTripRequest {
   paymentMethod: PaymentMethod;
   isShared?: boolean;
   promoCode?: string;
+  rideMode?: RideMode;
+  scheduledFor?: ISODateString;
 }
 
 export type QuoteTripRequest = RequestTripRequest;
@@ -343,14 +346,106 @@ export interface FareEstimate {
   baseFare: Kobo;
   distanceFare: Kobo;
   timeFare: Kobo;
+  rawFare: Kobo;
+  minimumFare: Kobo;
+  minimumFareApplied: boolean;
   surgeMultiplier: number;
+  modeMultiplier: number;
+  quotedFare: Kobo;
   totalFare: Kobo;
+  customerBookingFee: Kobo;
+  customerStatutoryLevy: Kobo;
+  pricingVersion: string;
   distanceKm: number;
   durationMin: number;
+  rideMode: RideMode;
+  roundingIncrement: Kobo;
+  fareBasis: string;
+  modes: {
+    instant: {
+      totalFare: Kobo;
+      baseFare: Kobo;
+      bookingFee: Kobo;
+      statutoryLevy: Kobo;
+      modeMultiplier: number;
+      fareBasis: string;
+    };
+    negotiate: {
+      recommended: Kobo;
+      minimumOffer: Kobo;
+      fastMatch: Kobo;
+      modeMultiplier: number;
+    };
+    share: {
+      perSeat: Kobo;
+      baseFare: Kobo;
+      bookingFee: Kobo;
+      statutoryLevy: Kobo;
+      requiresConfirmedMatch: boolean;
+      minimumMatchedPassengers: number;
+      maximumDetourMinutes: number;
+      modeMultiplier: number;
+      fareBasis: string;
+    };
+    scheduleFlex: {
+      totalFare: Kobo;
+      baseFare: Kobo;
+      bookingFee: Kobo;
+      statutoryLevy: Kobo;
+      modeMultiplier: number;
+      fareBasis: string;
+    };
+    scheduleExact: {
+      totalFare: Kobo;
+      baseFare: Kobo;
+      bookingFee: Kobo;
+      statutoryLevy: Kobo;
+      modeMultiplier: number;
+      fareBasis: string;
+    };
+  };
   /** Present when a promo code was applied. */
   promoCode?: string;
   promoDiscount?: Kobo;
   originalTotalFare?: Kobo;
+}
+
+export interface FareNegotiationResponse {
+  id: UUID;
+  passengerId: UUID;
+  passengerName: string | null;
+  selectedDriverId: UUID | null;
+  selectedDriverName: string | null;
+  pickupAddress: string;
+  pickupLat: number;
+  pickupLng: number;
+  destinationAddress: string;
+  destinationLat: number;
+  destinationLng: number;
+  vehicleType: VehicleType;
+  estimatedFare: Kobo;
+  passengerOffer: Kobo;
+  finalFare: Kobo | null;
+  distanceKm: number | null;
+  durationMin: number | null;
+  currentRound: number;
+  maxRounds: number;
+  status: 'active' | 'accepted' | 'rejected' | 'expired' | 'cancelled';
+  driverResponses: Array<{
+    driverId: UUID;
+    driverName: string;
+    driverRating: number;
+    driverEtaMin: number;
+    driverVerified: boolean;
+    responseType: 'accept' | 'reject' | 'counter';
+    counterAmount: Kobo | null;
+    respondedAt: ISODateString;
+  }>;
+  closedReason: string | null;
+  negotiationDurationSec: number | null;
+  expiresAt: ISODateString;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
 }
 
 export interface QuoteTripResponse {
@@ -508,7 +603,7 @@ export interface GetMyReferralsResponse {
 }
 
 // ============================================================================
-// DRIVER FEATURE INTEREST (HiGo Plus stubs)
+// DRIVER FEATURE INTEREST (HiGO Plus stubs)
 // ============================================================================
 
 export interface RegisterFeatureInterestRequest {

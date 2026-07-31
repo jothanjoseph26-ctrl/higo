@@ -1,5 +1,5 @@
 // ============================================================================
-// HiGo Abuja — Prisma Schema (PostgreSQL 15 + PostGIS)
+// HiGO Abuja — Prisma Schema (PostgreSQL 15 + PostGIS)
 // Mobility module of the Hiconnect Super App
 // MOU ref: JTL/HGS/HGO/001/2026
 //
@@ -34,9 +34,26 @@ datasource db {
 enum TripStatus {
   requested
   matched
+  arrived
   en_route
   active
   completed
+  cancelled
+}
+
+enum RideMode {
+  instant
+  negotiate
+  share
+  schedule_flex
+  schedule_exact
+}
+
+enum FareNegotiationStatus {
+  active
+  accepted
+  rejected
+  expired
   cancelled
 }
 
@@ -105,6 +122,82 @@ enum PaymentStatus {
   released  // disbursed/settled after trip completion
   failed
   refunded
+}
+
+enum DeliveryStatus {
+  requested
+  accepted
+  picked_up
+  en_route
+  delivered
+  cancelled
+}
+
+enum ParcelSize {
+  small
+  medium
+  large
+}
+
+enum LoyaltyTier {
+  bronze
+  silver
+  gold
+  platinum
+}
+
+enum ReferralSourceType {
+  driver
+  staff
+}
+
+enum Base44ReferralStatus {
+  pending
+  completed
+  expired
+}
+
+enum ReferralCashoutStatus {
+  pending
+  available
+  requested
+  paid
+}
+
+enum WaitingListStatus {
+  pending
+  notified
+  activated
+}
+
+enum CityStatus {
+  active
+  inactive
+}
+
+enum FareProfileDataStatus {
+  confirmed
+  needs_verification
+}
+
+enum AIAvailability {
+  available
+  unavailable
+  unknown
+}
+
+enum AIFreeStatus {
+  free
+  paid
+  unknown
+}
+
+enum OfflineActionStatus {
+  queued
+  processed
+  failed
+  expired
+  blocked
 }
 
 enum UserType {
@@ -314,6 +407,12 @@ model User {
   fareWatchAlerts    FareWatchAlert[] @relation("FareWatchAlerts")
   languagePreference UserLanguagePreference?
   hceUsageLogs       HceUsageLog[]   @relation("HceUsageLogs")
+  fareNegotiations   FareNegotiation[]
+  deliveriesSent     Delivery[]      @relation("DeliverySender")
+  loyaltyAccount     LoyaltyAccount?
+  passengerReferrals Referral[]      @relation("ReferredUser")
+  waitingListEntries WaitingList[]
+  subscriptionCouponRedemptions SubscriptionCouponRedemption[]
 
   @@index([phone])
   @@index([email])
@@ -411,6 +510,10 @@ model Driver {
   driverVocabulary      DriverVocabulary[] @relation("DriverVocabulary")
   regulatoryAuditLogs   RegulatoryAuditLog[] @relation("RegulatoryAuditDriver")
   trainingCompletions   DriverTrainingCompletion[]
+  selectedFareNegotiations FareNegotiation[]
+  deliveriesAsRider   Delivery[]          @relation("DeliveryRider")
+  base44ReferralsReceived Referral[]      @relation("ReferralReferredDriver")
+  subscriptionCouponRedemptions SubscriptionCouponRedemption[]
 
   @@index([kycStatus])
   @@index([isSuspended])
@@ -423,6 +526,57 @@ model Driver {
   //   CREATE INDEX idx_drivers_online_location ON drivers USING GIST (current_location)
   //     WHERE is_online = true;
   @@map("drivers")
+}
+
+// ============================================================================
+// DELIVERIES
+// ============================================================================
+
+model Delivery {
+  id                  String         @id @default(uuid()) @db.Uuid
+  senderId            String         @map("sender_id") @db.Uuid
+  senderName          String?        @map("sender_name")
+  senderPhone         String?        @map("sender_phone")
+  city                String         @default("Abuja")
+  pickupLocation      Unsupported("geography(Point,4326)") @map("pickup_location")
+  pickupAddress       String         @map("pickup_address")
+  dropoffLocation     Unsupported("geography(Point,4326)") @map("dropoff_location")
+  dropoffAddress      String         @map("dropoff_address")
+  recipientName       String         @map("recipient_name")
+  recipientPhone      String         @map("recipient_phone")
+  parcelSize          ParcelSize     @default(small) @map("parcel_size")
+  parcelDescription   String?        @map("parcel_description")
+  parcelPhotoUrl      String?        @map("parcel_photo_url")
+  vehicleType         VehicleType    @default(bike) @map("vehicle_type")
+  status              DeliveryStatus @default(requested)
+  riderId             String?        @map("rider_id") @db.Uuid
+  estimatedFare       Int            @default(0) @map("estimated_fare")
+  totalFare           Int            @default(0) @map("total_fare")
+  distanceKm          Decimal?       @map("distance_km") @db.Decimal(8, 3)
+  durationMin         Int?           @map("duration_min")
+  paymentMethod       PaymentMethod  @default(cash) @map("payment_method")
+  paymentStatus       PaymentStatus  @default(pending) @map("payment_status")
+  deliveryPhotoUrl    String?        @map("delivery_photo_url")
+  recipientVerified   Boolean        @default(false) @map("recipient_verified")
+  trackingLocation    Unsupported("geography(Point,4326)")? @map("tracking_location")
+  acceptedAt          DateTime?      @map("accepted_at")
+  pickedUpAt          DateTime?      @map("picked_up_at")
+  deliveredAt         DateTime?      @map("delivered_at")
+  cancelledAt         DateTime?      @map("cancelled_at")
+  cancelReason        String?        @map("cancel_reason")
+  description         String?
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  sender              User           @relation("DeliverySender", fields: [senderId], references: [id])
+  rider               Driver?        @relation("DeliveryRider", fields: [riderId], references: [id])
+
+  @@index([status])
+  @@index([senderId])
+  @@index([riderId])
+  @@index([createdAt])
+  @@index([city])
+  @@map("deliveries")
 }
 
 model DriverApplication {
@@ -516,16 +670,30 @@ model Trip {
   timeFare             Int         @default(0) @map("time_fare")
   surgeMultiplier      Decimal     @default(1.0) @map("surge_multiplier") @db.Decimal(4, 2)
   totalFare            Int         @default(0) @map("total_fare")
+  rawFare              Int         @default(0) @map("raw_fare")
+  quotedFare           Int         @default(0) @map("quoted_fare")
+  minimumFare          Int         @default(0) @map("minimum_fare")
+  minimumFareApplied   Boolean     @default(false) @map("minimum_fare_applied")
+  modeMultiplier       Decimal     @default(1.0) @map("mode_multiplier") @db.Decimal(5, 2)
+  pricingVersion       String      @default("v2.0") @map("pricing_version")
+  customerBookingFee   Int         @default(0) @map("customer_booking_fee")
+  customerStatutoryLevy Int        @default(0) @map("customer_statutory_levy")
 
   paymentMethod        PaymentMethod? @map("payment_method")
   paymentStatus        PaymentStatus  @default(pending) @map("payment_status")
   paystackReference    String?        @unique @map("paystack_reference")
+  promoCode            String?        @map("promo_code")
+  discountAmount       Int            @default(0) @map("discount_amount")
 
   passengerRating      Int?        @map("passenger_rating") // 1..5 rating GIVEN BY driver to passenger
   driverRating         Int?        @map("driver_rating")    // 1..5 rating GIVEN BY passenger to driver
 
   rideSharePartnerId   String?     @map("ride_share_partner_id") @db.Uuid
   isShared             Boolean     @default(false) @map("is_shared")
+  rideMode             RideMode    @default(instant) @map("ride_mode")
+  negotiationId        String?     @map("negotiation_id") @db.Uuid
+  scheduledFor         DateTime?   @map("scheduled_for")
+  isScheduled          Boolean     @default(false) @map("is_scheduled")
 
   startedAt            DateTime?   @map("started_at")
   completedAt          DateTime?   @map("completed_at")
@@ -552,6 +720,7 @@ model Trip {
 
   passenger            User        @relation("PassengerTrips", fields: [passengerId], references: [id])
   driver               Driver?     @relation("DriverTrips", fields: [driverId], references: [id])
+  negotiation          FareNegotiation? @relation("TripNegotiation", fields: [negotiationId], references: [id])
   disputes             Dispute[]       @relation("TripDisputes")
   conversation         Conversation?   @relation("TripConversation")
   supportTickets       SupportTicket[] @relation("TripSupportTickets")
@@ -563,10 +732,50 @@ model Trip {
   @@index([passengerId])
   @@index([driverId])
   @@index([paymentStatus])
+  @@index([rideMode])
+  @@index([negotiationId])
   @@index([createdAt])
   // GiST on pickup_location for geofencing checks (raw SQL migration):
   //   CREATE INDEX idx_trips_pickup_location ON trips USING GIST (pickup_location);
   @@map("trips")
+}
+
+model FareNegotiation {
+  id                     String                 @id @default(uuid()) @db.Uuid
+  passengerId            String                 @map("passenger_id") @db.Uuid
+  passengerName          String?                @map("passenger_name")
+  selectedDriverId       String?                @map("selected_driver_id") @db.Uuid
+  selectedDriverName     String?                @map("selected_driver_name")
+  pickupAddress          String                 @map("pickup_address")
+  pickupLat              Decimal                @map("pickup_lat") @db.Decimal(10, 7)
+  pickupLng              Decimal                @map("pickup_lng") @db.Decimal(10, 7)
+  destinationAddress     String                 @map("destination_address")
+  destinationLat         Decimal                @map("destination_lat") @db.Decimal(10, 7)
+  destinationLng         Decimal                @map("destination_lng") @db.Decimal(10, 7)
+  vehicleType            VehicleType            @default(keke) @map("vehicle_type")
+  estimatedFare          Int                    @map("estimated_fare")
+  passengerOffer         Int                    @map("passenger_offer")
+  finalFare              Int?                   @map("final_fare")
+  distanceKm             Decimal?               @map("distance_km") @db.Decimal(8, 3)
+  durationMin            Int?                   @map("duration_min")
+  currentRound           Int                    @default(1) @map("current_round")
+  maxRounds              Int                    @default(3) @map("max_rounds")
+  status                 FareNegotiationStatus  @default(active)
+  driverResponses        Json                   @default("[]") @map("driver_responses") @db.JsonB
+  closedReason           String?                @map("closed_reason")
+  negotiationDurationSec Int?                   @map("negotiation_duration_sec")
+  expiresAt              DateTime               @map("expires_at")
+  createdAt              DateTime               @default(now()) @map("created_at")
+  updatedAt              DateTime               @updatedAt @map("updated_at")
+
+  passenger              User                   @relation(fields: [passengerId], references: [id])
+  selectedDriver         Driver?                @relation(fields: [selectedDriverId], references: [id])
+  trips                  Trip[]                 @relation("TripNegotiation")
+
+  @@index([passengerId, status])
+  @@index([selectedDriverId])
+  @@index([status, expiresAt])
+  @@map("fare_negotiations")
 }
 
 // ============================================================================
@@ -631,15 +840,33 @@ model Zone {
 // ============================================================================
 
 model PricingConfig {
-  id          String      @id @default(uuid()) @db.Uuid
-  vehicleType VehicleType @map("vehicle_type")
-  baseFare    Int         @map("base_fare")    // kobo
-  perKmFare   Int         @map("per_km_fare")  // kobo
-  perMinFare  Int         @map("per_min_fare") // kobo
-  minFare     Int         @map("min_fare")     // kobo
-  currency    String      @default("NGN")
-  isActive    Boolean     @default(true) @map("is_active")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  id                            String      @id @default(uuid()) @db.Uuid
+  vehicleType                   VehicleType @map("vehicle_type")
+  city                          String?
+  baseFare                      Int         @map("base_fare")    // kobo
+  perKmFare                     Int         @map("per_km_fare")  // kobo
+  perMinFare                    Int         @map("per_min_fare") // kobo
+  minFare                       Int         @map("min_fare")     // kobo
+  roundingIncrement             Int         @default(5000) @map("rounding_increment")
+  customerBookingFee            Int         @default(0) @map("customer_booking_fee")
+  customerStatutoryLevy         Int         @default(0) @map("customer_statutory_levy")
+  priceIsAllIn                  Boolean     @default(true) @map("price_is_all_in")
+  instantMultiplier             Decimal     @default(1.0) @map("instant_multiplier") @db.Decimal(5, 2)
+  negotiateRecommendedMultiplier Decimal    @default(1.0) @map("negotiate_recommended_multiplier") @db.Decimal(5, 2)
+  negotiateMinimumOfferMultiplier Decimal   @default(0.9) @map("negotiate_minimum_offer_multiplier") @db.Decimal(5, 2)
+  negotiateFastMatchMultiplier  Decimal     @default(1.1) @map("negotiate_fast_match_multiplier") @db.Decimal(5, 2)
+  sharePassengerMultiplier      Decimal     @default(0.66) @map("share_passenger_multiplier") @db.Decimal(5, 2)
+  shareMinimumMatchedPassengers Int         @default(2) @map("share_minimum_matched_passengers")
+  shareRequiresConfirmedMatch   Boolean     @default(true) @map("share_requires_confirmed_match")
+  shareMaximumDetourMinutes     Int         @default(8) @map("share_maximum_detour_minutes")
+  scheduleFlexibleMultiplier    Decimal     @default(0.9) @map("schedule_flexible_multiplier") @db.Decimal(5, 2)
+  scheduleExactTimeMultiplier   Decimal     @default(1.05) @map("schedule_exact_time_multiplier") @db.Decimal(5, 2)
+  surgeEnabled                  Boolean     @default(false) @map("surge_enabled")
+  surgeMaximumMultiplier        Decimal     @default(1.2) @map("surge_maximum_multiplier") @db.Decimal(4, 2)
+  pricingVersion                String      @default("v2.0") @map("pricing_version")
+  currency                      String      @default("NGN")
+  isActive                      Boolean     @default(true) @map("is_active")
+  updatedAt                     DateTime    @updatedAt @map("updated_at")
 
   @@index([vehicleType, isActive])
   // SEED DATA REQUIRED: one active row per vehicle type (keke at minimum).
@@ -752,6 +979,8 @@ model AdminUser {
   lastLogin    DateTime? @map("last_login")
   createdAt    DateTime  @default(now()) @map("created_at")
 
+  configAuditLogs ConfigAuditLog[]
+
   @@index([email])
   @@index([role])
   // SEED DATA REQUIRED: one super_admin account (credentials provided securely
@@ -816,6 +1045,29 @@ model PlatformSettings {
 }
 
 // ============================================================================
+// CONFIG AUDIT LOG (append-only) — Admin Studio instant-edit trail
+// Mirrors the FinancialAudit/ComplianceAudit append-only pattern rather than
+// inventing a new audit convention (Track 06 / BASE44_MIGRATION_PLAN.md §5).
+// ============================================================================
+
+model ConfigAuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  key           String   // top-level PlatformSettings.settings key that changed, e.g. "commission", "match", "banners"
+  previousValue Json?    @map("previous_value") @db.JsonB
+  newValue      Json?    @map("new_value") @db.JsonB
+  changedBy     String   @map("changed_by") @db.Uuid
+  changedByType String   @default("admin") @map("changed_by_type")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  admin AdminUser @relation(fields: [changedBy], references: [id])
+
+  @@index([key])
+  @@index([changedBy])
+  @@index([createdAt])
+  @@map("config_audit_logs")
+}
+
+// ============================================================================
 // PROMO CODES
 // ============================================================================
 
@@ -834,6 +1086,178 @@ model PromoCode {
   @@index([isActive])
   @@index([expiresAt])
   @@map("promo_codes")
+}
+
+model WaitingList {
+  id            String            @id @default(uuid()) @db.Uuid
+  email         String
+  phone         String?
+  cityRequested String?           @map("city_requested")
+  lat           Decimal?          @db.Decimal(10, 7)
+  lng           Decimal?          @db.Decimal(10, 7)
+  status        WaitingListStatus @default(pending)
+  userId        String?           @map("user_id") @db.Uuid
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  user          User?             @relation(fields: [userId], references: [id])
+
+  @@index([email])
+  @@index([status])
+  @@index([cityRequested])
+  @@index([createdAt])
+  @@map("waiting_list")
+}
+
+model SubscriptionCoupon {
+  id              String           @id @default(uuid()) @db.Uuid
+  code            String           @unique
+  description     String?
+  plan            SubscriptionTier @default(monthly)
+  durationDays    Int              @default(30) @map("duration_days")
+  maxUses         Int              @default(0) @map("max_uses")
+  usedCount       Int              @default(0) @map("used_count")
+  maxUsesPerUser  Int              @default(1) @map("max_uses_per_user")
+  validFrom       DateTime?        @map("valid_from")
+  validUntil      DateTime?        @map("valid_until")
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  redemptions     SubscriptionCouponRedemption[]
+
+  @@index([isActive])
+  @@index([plan])
+  @@map("subscription_coupons")
+}
+
+model SubscriptionCouponRedemption {
+  id         String             @id @default(uuid()) @db.Uuid
+  couponId   String             @map("coupon_id") @db.Uuid
+  driverId   String             @map("driver_id") @db.Uuid
+  userId     String?            @map("user_id") @db.Uuid
+  redeemedAt DateTime           @default(now()) @map("redeemed_at")
+
+  coupon     SubscriptionCoupon @relation(fields: [couponId], references: [id])
+  driver     Driver             @relation(fields: [driverId], references: [id])
+  user       User?              @relation(fields: [userId], references: [id])
+
+  @@index([couponId])
+  @@index([driverId])
+  @@index([userId])
+  @@map("subscription_coupon_redemptions")
+}
+
+model City {
+  id              String     @id @default(uuid()) @db.Uuid
+  name            String
+  state           String
+  country         String     @default("Nigeria")
+  status          CityStatus @default(active)
+  currency        String     @default("NGN")
+  timezone        String     @default("Africa/Lagos")
+  defaultLanguage String     @default("en") @map("default_language")
+  launchDate      DateTime?  @map("launch_date")
+  centerLatitude  Decimal    @map("center_latitude") @db.Decimal(10, 7)
+  centerLongitude Decimal    @map("center_longitude") @db.Decimal(10, 7)
+  defaultZoom     Int        @default(13) @map("default_zoom")
+  serviceRadiusKm Decimal    @default(15) @map("service_radius_km") @db.Decimal(6, 2)
+  logoUrl         String?    @map("logo_url")
+  description     String?
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  @@unique([name, state, country])
+  @@index([status])
+  @@map("cities")
+}
+
+model MobilityCorridor {
+  id                 String   @id @default(uuid()) @db.Uuid
+  name               String
+  city               String   @default("Abuja")
+  corridorCode       String?  @map("corridor_code")
+  startArea          String?  @map("start_area")
+  endArea            String?  @map("end_area")
+  connectedZones     Json     @default("[]") @map("connected_zones") @db.JsonB
+  allowedRoads       Json     @default("[]") @map("allowed_roads") @db.JsonB
+  restrictedRoads    Json     @default("[]") @map("restricted_roads") @db.JsonB
+  transferPoints     Json     @default("[]") @map("transfer_points") @db.JsonB
+  kekeParks          Json     @default("[]") @map("keke_parks") @db.JsonB
+  operatingHours     Json?    @map("operating_hours") @db.JsonB
+  nightRestricted    Boolean  @default(false) @map("night_restricted")
+  isExpresswayRoute  Boolean  @default(false) @map("is_expressway_route")
+  centerLat          Decimal? @map("center_lat") @db.Decimal(10, 7)
+  centerLng          Decimal? @map("center_lng") @db.Decimal(10, 7)
+  avgFareMin         Int?     @map("avg_fare_min")
+  avgFareMax         Int?     @map("avg_fare_max")
+  avgTripDurationMin Int?     @map("avg_trip_duration_min")
+  priority           Int      @default(0)
+  isActive           Boolean  @default(true) @map("is_active")
+  description        String?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([city])
+  @@index([isActive])
+  @@index([priority])
+  @@map("mobility_corridors")
+}
+
+model InspectionCenter {
+  id                    String   @id @default(uuid()) @db.Uuid
+  name                  String
+  address               String
+  lat                   Decimal? @db.Decimal(10, 7)
+  lng                   Decimal? @db.Decimal(10, 7)
+  phone                 String?
+  email                 String?
+  managerName           String?  @map("manager_name")
+  operatingHours        Json?    @map("operating_hours") @db.JsonB
+  capacityPerDay        Int      @default(50) @map("capacity_per_day")
+  vehicleTypesSupported Json     @default("[]") @map("vehicle_types_supported") @db.JsonB
+  isActive              Boolean  @default(true) @map("is_active")
+  city                  String   @default("Abuja")
+  description           String?
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([city])
+  @@index([isActive])
+  @@map("inspection_centers")
+}
+
+model FareProfile {
+  id                         String                @id @default(uuid()) @db.Uuid
+  origin                     String
+  destination                String
+  city                       String                @default("Abuja")
+  originLat                  Decimal?              @map("origin_lat") @db.Decimal(10, 7)
+  originLng                  Decimal?              @map("origin_lng") @db.Decimal(10, 7)
+  destinationLat             Decimal?              @map("destination_lat") @db.Decimal(10, 7)
+  destinationLng             Decimal?              @map("destination_lng") @db.Decimal(10, 7)
+  corridorCluster            String?               @map("corridor_cluster")
+  distanceKmEst              Decimal?              @map("distance_km_est") @db.Decimal(8, 3)
+  sharedFareLowNgn           Int?                  @map("shared_fare_low_ngn")
+  sharedFareHighNgn          Int?                  @map("shared_fare_high_ngn")
+  sharedFareMidNgn           Int?                  @map("shared_fare_mid_ngn")
+  typicalOccupancy           Int                   @default(4) @map("typical_occupancy")
+  driverGrossSharedNgn       Int?                  @map("driver_gross_shared_ngn")
+  realizationFactor          Decimal               @default(0.85) @map("realization_factor") @db.Decimal(4, 2)
+  suggestedExclusiveFareNgn  Int?                  @map("suggested_exclusive_fare_ngn")
+  demandLevel                String?               @map("demand_level")
+  peakHours                  String?               @map("peak_hours")
+  dataStatus                 FareProfileDataStatus @default(needs_verification) @map("data_status")
+  source                     String?
+  isActive                   Boolean               @default(true) @map("is_active")
+  description                String?
+  createdAt                  DateTime              @default(now()) @map("created_at")
+  updatedAt                  DateTime              @updatedAt @map("updated_at")
+
+  @@index([city])
+  @@index([origin, destination])
+  @@index([isActive])
+  @@index([dataStatus])
+  @@map("fare_profiles")
 }
 
 // ============================================================================
@@ -898,8 +1322,64 @@ model DriverReferral {
   @@map("driver_referrals")
 }
 
+model LoyaltyAccount {
+  id             String      @id @default(uuid()) @db.Uuid
+  userId         String      @unique @map("user_id") @db.Uuid
+  points         Int         @default(0)
+  tier           LoyaltyTier @default(bronze)
+  totalEarned    Int         @default(0) @map("total_earned")
+  totalRedeemed  Int         @default(0) @map("total_redeemed")
+  referralCode   String?     @unique @map("referral_code")
+  tripsCompleted Int         @default(0) @map("trips_completed")
+  description    String?
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  user           User        @relation(fields: [userId], references: [id])
+
+  @@index([tier])
+  @@map("loyalty_accounts")
+}
+
+model Referral {
+  id                  String                @id @default(uuid()) @db.Uuid
+  referrerId          String                @map("referrer_id") @db.Uuid
+  referrerName        String?               @map("referrer_name")
+  referrerType        ReferralSourceType    @default(driver) @map("referrer_type")
+  code                String
+  referredEmail       String?               @map("referred_email")
+  referredUserId      String?               @map("referred_user_id") @db.Uuid
+  referredDriverId    String?               @map("referred_driver_id") @db.Uuid
+  referrerReward      Int                   @default(50000) @map("referrer_reward")
+  referredReward      Int                   @default(50000) @map("referred_reward")
+  commissionPct       Decimal?              @map("commission_pct") @db.Decimal(5, 2)
+  subscriptionAmount  Int?                  @map("subscription_amount")
+  subscriptionPlan    SubscriptionTier?     @map("subscription_plan")
+  commissionAmount    Int?                  @map("commission_amount")
+  status              Base44ReferralStatus  @default(pending)
+  triggeredAt         DateTime?             @map("triggered_at")
+  cashoutStatus       ReferralCashoutStatus @default(pending) @map("cashout_status")
+  cashoutRequestedAt  DateTime?             @map("cashout_requested_at")
+  cashoutPaidAt       DateTime?             @map("cashout_paid_at")
+  completedAt         DateTime?             @map("completed_at")
+  description         String?
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+
+  referredUser        User?                 @relation("ReferredUser", fields: [referredUserId], references: [id])
+  referredDriver      Driver?               @relation("ReferralReferredDriver", fields: [referredDriverId], references: [id])
+
+  @@index([referrerId])
+  @@index([referredUserId])
+  @@index([referredDriverId])
+  @@index([code])
+  @@index([status])
+  @@index([cashoutStatus])
+  @@map("referrals")
+}
+
 // ============================================================================
-// DRIVER FEATURE INTEREST (Risk 17 — HiGo Plus stubs)
+// DRIVER FEATURE INTEREST (Risk 17 — HiGO Plus stubs)
 // ============================================================================
 
 model DriverFeatureInterest {

@@ -14,6 +14,11 @@ import { HceRoutingConfig } from '../hce/hce.types';
 import { parseHceConfig } from '../hce/hce-settings.service';
 import { HceUsageService } from '../hce/hce-usage.service';
 import { AiService } from '../ai/ai.service';
+import { EmailService } from '../email/email.service';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthUser } from '../common/types/auth-user';
+import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 
 const PLATFORM_SETTINGS_ID = 'default';
 
@@ -23,7 +28,129 @@ const DEFAULT_PLATFORM_SETTINGS = {
   fcmServerKey: '',
   maintenanceMode: false,
   hce: DEFAULT_HCE_CONFIG,
+  negotiation: {
+    isEnabled: true,
+    maxRounds: 3,
+    maxTimeSec: 60,
+    saveMorePct: 12,
+    priorityPickupPct: 10,
+    minFare: 20000,
+    maxFare: 1000000,
+  },
+  referral: {
+    commissionPct: 15,
+    staffCommissionPct: 20,
+    referredDriverReward: 0,
+    minCashoutAmount: 100000,
+    triggerEvent: 'subscription_paid' as 'subscription_paid' | 'first_trip_completed',
+    isActive: true,
+  },
+  // Admin Studio (Track 06) instant-edit config sections — see
+  // architecture/agent-instructions/base44-migration/06-admin-studio-control-panel.md
+  commission: {
+    ratePct: 10, // ADR "Year 1 10%" pattern
+    effectiveDate: '2026-01-01',
+    nextRatePct: 12 as number | null, // ADR "Year 2+ 12%" pattern
+    nextEffectiveDate: null as string | null,
+  },
+  // NOTE: radiusMeters/offerTimeoutSec/ctsWeights mirror the current hardcoded
+  // values in geo.repository.ts / matching.service.ts / cts.service.ts, but
+  // are NOT yet read by that matching code (store + UI only — wiring a live
+  // read path is Track 01/03's call per BASE44_MIGRATION_PLAN.md §4, mapping.md §2).
+  match: {
+    radiusMeters: 5000,
+    offerTimeoutSec: 15,
+    ctsWeights: {
+      ninVerifiedPoints: 25,
+      trips100Points: 10,
+      trips500Points: 20,
+      trips1000Points: 30,
+      ratingAbove48Points: 20,
+      estateEndorsementPoints: 15,
+      referralApprovedPoints: 10,
+    },
+  },
+  // Gateway/method toggles only — never store live secret keys here
+  // (see mapping.md §"CommissionConfig, MatchConfig, PaymentConfig..." item 10).
+  payment: {
+    paystackEnabled: true,
+    paystackTestMode: true,
+    cashEnabled: true,
+    ussdEnabled: true,
+    bankTransferEnabled: false,
+  },
+  promoDefaults: {
+    discountType: 'percent' as 'percent' | 'fixed',
+    discountValue: 10,
+    maxUses: null as number | null,
+    expiryDays: 30,
+  },
+  zoneEditor: {
+    defaultSurgeMultiplier: 1.0,
+    availableZoneTypes: ['permitted', 'restricted', 'surge'] as string[],
+  },
+  kycThresholds: {
+    reviewSlaHours: 48,
+    requireEstateEndorsement: false,
+    fastTrackVerificationTier: 'tier_2' as 'tier_0' | 'tier_1' | 'tier_2' | 'tier_3',
+  },
+  banners: {
+    items: [] as Array<{
+      id: string;
+      message: string;
+      level: 'info' | 'warning' | 'critical';
+      isActive: boolean;
+      startAt: string | null;
+      endAt: string | null;
+    }>,
+  },
+  faq: {
+    items: [] as Array<{
+      id: string;
+      question: string;
+      answer: string;
+      category: string;
+      order: number;
+    }>,
+  },
+  appCopy: {
+    welcomeMessage: 'Welcome to HiGO',
+    supportEmail: 'support@hiconnectgo.com',
+    aboutText: '',
+  } as Record<string, string>,
+  featureFlags: {
+    fareNegotiation: true,
+    sharedRides: true,
+    deliveries: true,
+    loyaltyProgram: true,
+  } as Record<string, boolean>,
+  driverTraining: {
+    items: [] as Array<{ id: string; title: string; content: string; order: number }>,
+  },
+  termsPolicy: {
+    termsText: '',
+    privacyText: '',
+    version: '1.0',
+    lastUpdated: null as string | null,
+  },
+  onboardingCopy: {
+    steps: [] as Array<{ id: string; title: string; body: string; order: number }>,
+  },
 };
+
+type NegotiationSettings = typeof DEFAULT_PLATFORM_SETTINGS.negotiation;
+type ReferralSettings = typeof DEFAULT_PLATFORM_SETTINGS.referral;
+type CommissionSettings = typeof DEFAULT_PLATFORM_SETTINGS.commission;
+type MatchSettings = typeof DEFAULT_PLATFORM_SETTINGS.match;
+type PaymentSettings = typeof DEFAULT_PLATFORM_SETTINGS.payment;
+type PromoDefaultsSettings = typeof DEFAULT_PLATFORM_SETTINGS.promoDefaults;
+type ZoneEditorSettings = typeof DEFAULT_PLATFORM_SETTINGS.zoneEditor;
+type KycThresholdsSettings = typeof DEFAULT_PLATFORM_SETTINGS.kycThresholds;
+type BannersSettings = typeof DEFAULT_PLATFORM_SETTINGS.banners;
+type FaqSettings = typeof DEFAULT_PLATFORM_SETTINGS.faq;
+type DriverTrainingSettings = typeof DEFAULT_PLATFORM_SETTINGS.driverTraining;
+type TermsPolicySettings = typeof DEFAULT_PLATFORM_SETTINGS.termsPolicy;
+type OnboardingCopySettings = typeof DEFAULT_PLATFORM_SETTINGS.onboardingCopy;
 
 type PlatformSettingsPayload = {
   googleMapsOriginRestriction: string;
@@ -31,7 +158,42 @@ type PlatformSettingsPayload = {
   fcmServerKey: string;
   maintenanceMode: boolean;
   hce: HceRoutingConfig;
+  negotiation: NegotiationSettings;
+  referral: ReferralSettings;
+  commission: CommissionSettings;
+  match: MatchSettings;
+  payment: PaymentSettings;
+  promoDefaults: PromoDefaultsSettings;
+  zoneEditor: ZoneEditorSettings;
+  kycThresholds: KycThresholdsSettings;
+  banners: BannersSettings;
+  faq: FaqSettings;
+  appCopy: Record<string, string>;
+  featureFlags: Record<string, boolean>;
+  driverTraining: DriverTrainingSettings;
+  termsPolicy: TermsPolicySettings;
+  onboardingCopy: OnboardingCopySettings;
 };
+
+// Categories that only a super_admin may write — money, matching, compliance
+// and platform-security-adjacent config. Everything else (copy/content
+// categories) is writable by 'admin' too. See DoD item on RBAC in
+// 06-admin-studio-control-panel.md and Plan §4.2's instant-edit boundary.
+const SUPER_ADMIN_ONLY_SETTINGS_KEYS = new Set<keyof PlatformSettingsPayload>([
+  'googleMapsOriginRestriction',
+  'smsGatewayChannel',
+  'fcmServerKey',
+  'maintenanceMode',
+  'hce',
+  'negotiation',
+  'referral',
+  'commission',
+  'match',
+  'payment',
+  'promoDefaults',
+  'zoneEditor',
+  'kycThresholds',
+]);
 
 const FCM_KEY_MASK = '••••••••••••••••••••••••••••••••';
 
@@ -47,7 +209,321 @@ function parsePlatformSettings(raw: unknown): PlatformSettingsPayload {
     fcmServerKey: typeof data.fcmServerKey === 'string' ? data.fcmServerKey : '',
     maintenanceMode: Boolean(data.maintenanceMode),
     hce: parseHceConfig((data as any).hce),
+    negotiation: parseNegotiationSettings((data as any).negotiation),
+    referral: parseReferralSettings((data as any).referral),
+    commission: parseCommissionSettings((data as any).commission),
+    match: parseMatchSettings((data as any).match),
+    payment: parsePaymentSettings((data as any).payment),
+    promoDefaults: parsePromoDefaults((data as any).promoDefaults),
+    zoneEditor: parseZoneEditorSettings((data as any).zoneEditor),
+    kycThresholds: parseKycThresholds((data as any).kycThresholds),
+    banners: parseBanners((data as any).banners),
+    faq: parseFaq((data as any).faq),
+    appCopy: parseStringRecord((data as any).appCopy, DEFAULT_PLATFORM_SETTINGS.appCopy),
+    featureFlags: parseBooleanRecord((data as any).featureFlags, DEFAULT_PLATFORM_SETTINGS.featureFlags),
+    driverTraining: parseDriverTraining((data as any).driverTraining),
+    termsPolicy: parseTermsPolicy((data as any).termsPolicy),
+    onboardingCopy: parseOnboardingCopy((data as any).onboardingCopy),
   };
+}
+
+function parseNegotiationSettings(raw: unknown): NegotiationSettings {
+  const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    isEnabled:
+      typeof data.isEnabled === 'boolean'
+        ? data.isEnabled
+        : typeof data.is_enabled === 'boolean'
+          ? data.is_enabled
+          : DEFAULT_PLATFORM_SETTINGS.negotiation.isEnabled,
+    maxRounds:
+      typeof data.maxRounds === 'number'
+        ? data.maxRounds
+        : typeof data.max_rounds === 'number'
+          ? data.max_rounds
+          : DEFAULT_PLATFORM_SETTINGS.negotiation.maxRounds,
+    maxTimeSec:
+      typeof data.maxTimeSec === 'number'
+        ? data.maxTimeSec
+        : typeof data.max_time_sec === 'number'
+          ? data.max_time_sec
+          : DEFAULT_PLATFORM_SETTINGS.negotiation.maxTimeSec,
+    saveMorePct:
+      typeof data.saveMorePct === 'number'
+        ? data.saveMorePct
+        : typeof data.save_more_pct === 'number'
+          ? data.save_more_pct
+          : DEFAULT_PLATFORM_SETTINGS.negotiation.saveMorePct,
+    priorityPickupPct:
+      typeof data.priorityPickupPct === 'number'
+        ? data.priorityPickupPct
+        : typeof data.priority_pickup_pct === 'number'
+          ? data.priority_pickup_pct
+          : DEFAULT_PLATFORM_SETTINGS.negotiation.priorityPickupPct,
+    minFare:
+      typeof data.minFare === 'number'
+        ? data.minFare
+        : typeof data.min_fare === 'number'
+          ? data.min_fare
+          : DEFAULT_PLATFORM_SETTINGS.negotiation.minFare,
+    maxFare:
+      typeof data.maxFare === 'number'
+        ? data.maxFare
+        : typeof data.max_fare === 'number'
+          ? data.max_fare
+          : DEFAULT_PLATFORM_SETTINGS.negotiation.maxFare,
+  };
+}
+
+function parseReferralSettings(raw: unknown): ReferralSettings {
+  const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const triggerEvent =
+    data.triggerEvent === 'first_trip_completed' || data.trigger_event === 'first_trip_completed'
+      ? 'first_trip_completed'
+      : 'subscription_paid';
+  return {
+    commissionPct:
+      typeof data.commissionPct === 'number'
+        ? data.commissionPct
+        : typeof data.commission_pct === 'number'
+          ? data.commission_pct
+          : DEFAULT_PLATFORM_SETTINGS.referral.commissionPct,
+    staffCommissionPct:
+      typeof data.staffCommissionPct === 'number'
+        ? data.staffCommissionPct
+        : typeof data.staff_commission_pct === 'number'
+          ? data.staff_commission_pct
+          : DEFAULT_PLATFORM_SETTINGS.referral.staffCommissionPct,
+    referredDriverReward:
+      typeof data.referredDriverReward === 'number'
+        ? data.referredDriverReward
+        : typeof data.referred_driver_reward === 'number'
+          ? data.referred_driver_reward
+          : DEFAULT_PLATFORM_SETTINGS.referral.referredDriverReward,
+    minCashoutAmount:
+      typeof data.minCashoutAmount === 'number'
+        ? data.minCashoutAmount
+        : typeof data.min_cashout_amount === 'number'
+          ? data.min_cashout_amount
+          : DEFAULT_PLATFORM_SETTINGS.referral.minCashoutAmount,
+    triggerEvent,
+    isActive:
+      typeof data.isActive === 'boolean'
+        ? data.isActive
+        : typeof data.is_active === 'boolean'
+          ? data.is_active
+          : DEFAULT_PLATFORM_SETTINGS.referral.isActive,
+  };
+}
+
+function obj(v: unknown): Record<string, unknown> {
+  return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+}
+function str(v: unknown, fallback: string): string {
+  return typeof v === 'string' ? v : fallback;
+}
+function strOrNull(v: unknown, fallback: string | null): string | null {
+  if (v === null) return null;
+  return typeof v === 'string' ? v : fallback;
+}
+function num(v: unknown, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+function numOrNull(v: unknown, fallback: number | null): number | null {
+  if (v === null) return null;
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+function bool(v: unknown, fallback: boolean): boolean {
+  return typeof v === 'boolean' ? v : fallback;
+}
+
+function parseCommissionSettings(raw: unknown): CommissionSettings {
+  const d = obj(raw);
+  return {
+    ratePct: num(d.ratePct, DEFAULT_PLATFORM_SETTINGS.commission.ratePct),
+    effectiveDate: str(d.effectiveDate, DEFAULT_PLATFORM_SETTINGS.commission.effectiveDate),
+    nextRatePct: numOrNull(d.nextRatePct, DEFAULT_PLATFORM_SETTINGS.commission.nextRatePct),
+    nextEffectiveDate: strOrNull(d.nextEffectiveDate, DEFAULT_PLATFORM_SETTINGS.commission.nextEffectiveDate),
+  };
+}
+
+function parseMatchSettings(raw: unknown): MatchSettings {
+  const d = obj(raw);
+  const w = obj(d.ctsWeights);
+  const defaults = DEFAULT_PLATFORM_SETTINGS.match;
+  return {
+    radiusMeters: num(d.radiusMeters, defaults.radiusMeters),
+    offerTimeoutSec: num(d.offerTimeoutSec, defaults.offerTimeoutSec),
+    ctsWeights: {
+      ninVerifiedPoints: num(w.ninVerifiedPoints, defaults.ctsWeights.ninVerifiedPoints),
+      trips100Points: num(w.trips100Points, defaults.ctsWeights.trips100Points),
+      trips500Points: num(w.trips500Points, defaults.ctsWeights.trips500Points),
+      trips1000Points: num(w.trips1000Points, defaults.ctsWeights.trips1000Points),
+      ratingAbove48Points: num(w.ratingAbove48Points, defaults.ctsWeights.ratingAbove48Points),
+      estateEndorsementPoints: num(w.estateEndorsementPoints, defaults.ctsWeights.estateEndorsementPoints),
+      referralApprovedPoints: num(w.referralApprovedPoints, defaults.ctsWeights.referralApprovedPoints),
+    },
+  };
+}
+
+function parsePaymentSettings(raw: unknown): PaymentSettings {
+  const d = obj(raw);
+  const defaults = DEFAULT_PLATFORM_SETTINGS.payment;
+  return {
+    paystackEnabled: bool(d.paystackEnabled, defaults.paystackEnabled),
+    paystackTestMode: bool(d.paystackTestMode, defaults.paystackTestMode),
+    cashEnabled: bool(d.cashEnabled, defaults.cashEnabled),
+    ussdEnabled: bool(d.ussdEnabled, defaults.ussdEnabled),
+    bankTransferEnabled: bool(d.bankTransferEnabled, defaults.bankTransferEnabled),
+  };
+}
+
+function parsePromoDefaults(raw: unknown): PromoDefaultsSettings {
+  const d = obj(raw);
+  const defaults = DEFAULT_PLATFORM_SETTINGS.promoDefaults;
+  return {
+    discountType: d.discountType === 'fixed' ? 'fixed' : 'percent',
+    discountValue: num(d.discountValue, defaults.discountValue),
+    maxUses: numOrNull(d.maxUses, defaults.maxUses),
+    expiryDays: num(d.expiryDays, defaults.expiryDays),
+  };
+}
+
+function parseZoneEditorSettings(raw: unknown): ZoneEditorSettings {
+  const d = obj(raw);
+  const defaults = DEFAULT_PLATFORM_SETTINGS.zoneEditor;
+  return {
+    defaultSurgeMultiplier: num(d.defaultSurgeMultiplier, defaults.defaultSurgeMultiplier),
+    availableZoneTypes:
+      Array.isArray(d.availableZoneTypes) && d.availableZoneTypes.every((v) => typeof v === 'string')
+        ? (d.availableZoneTypes as string[])
+        : defaults.availableZoneTypes,
+  };
+}
+
+function parseKycThresholds(raw: unknown): KycThresholdsSettings {
+  const d = obj(raw);
+  const defaults = DEFAULT_PLATFORM_SETTINGS.kycThresholds;
+  const tier = d.fastTrackVerificationTier;
+  return {
+    reviewSlaHours: num(d.reviewSlaHours, defaults.reviewSlaHours),
+    requireEstateEndorsement: bool(d.requireEstateEndorsement, defaults.requireEstateEndorsement),
+    fastTrackVerificationTier:
+      tier === 'tier_0' || tier === 'tier_1' || tier === 'tier_2' || tier === 'tier_3'
+        ? tier
+        : defaults.fastTrackVerificationTier,
+  };
+}
+
+function parseBannerItem(raw: unknown) {
+  const d = obj(raw);
+  if (typeof d.message !== 'string' || !d.message) return null;
+  const level = d.level === 'warning' || d.level === 'critical' ? d.level : 'info';
+  return {
+    id: str(d.id, crypto.randomUUID()),
+    message: d.message,
+    level: level as 'info' | 'warning' | 'critical',
+    isActive: bool(d.isActive, true),
+    startAt: strOrNull(d.startAt, null),
+    endAt: strOrNull(d.endAt, null),
+  };
+}
+
+function parseBanners(raw: unknown): BannersSettings {
+  const d = obj(raw);
+  const items = Array.isArray(d.items)
+    ? d.items.map(parseBannerItem).filter((x): x is NonNullable<typeof x> => x !== null)
+    : [];
+  return { items };
+}
+
+function parseFaqItem(raw: unknown) {
+  const d = obj(raw);
+  if (typeof d.question !== 'string' || !d.question) return null;
+  return {
+    id: str(d.id, crypto.randomUUID()),
+    question: d.question,
+    answer: str(d.answer, ''),
+    category: str(d.category, 'general'),
+    order: num(d.order, 0),
+  };
+}
+
+function parseFaq(raw: unknown): FaqSettings {
+  const d = obj(raw);
+  const items = Array.isArray(d.items)
+    ? d.items.map(parseFaqItem).filter((x): x is NonNullable<typeof x> => x !== null)
+    : [];
+  return { items };
+}
+
+function parseStringRecord(raw: unknown, fallback: Record<string, string>): Record<string, string> {
+  const d = obj(raw);
+  const out: Record<string, string> = {};
+  for (const key of Object.keys(d)) {
+    const value = d[key];
+    if (typeof value === 'string') out[key] = value;
+  }
+  return Object.keys(out).length ? out : { ...fallback };
+}
+
+function parseBooleanRecord(raw: unknown, fallback: Record<string, boolean>): Record<string, boolean> {
+  const d = obj(raw);
+  const out: Record<string, boolean> = {};
+  for (const key of Object.keys(d)) {
+    const value = d[key];
+    if (typeof value === 'boolean') out[key] = value;
+  }
+  return Object.keys(out).length ? out : { ...fallback };
+}
+
+function parseDriverTrainingItem(raw: unknown) {
+  const d = obj(raw);
+  if (typeof d.title !== 'string' || !d.title) return null;
+  return {
+    id: str(d.id, crypto.randomUUID()),
+    title: d.title,
+    content: str(d.content, ''),
+    order: num(d.order, 0),
+  };
+}
+
+function parseDriverTraining(raw: unknown): DriverTrainingSettings {
+  const d = obj(raw);
+  const items = Array.isArray(d.items)
+    ? d.items.map(parseDriverTrainingItem).filter((x): x is NonNullable<typeof x> => x !== null)
+    : [];
+  return { items };
+}
+
+function parseTermsPolicy(raw: unknown): TermsPolicySettings {
+  const d = obj(raw);
+  const defaults = DEFAULT_PLATFORM_SETTINGS.termsPolicy;
+  return {
+    termsText: str(d.termsText, defaults.termsText),
+    privacyText: str(d.privacyText, defaults.privacyText),
+    version: str(d.version, defaults.version),
+    lastUpdated: strOrNull(d.lastUpdated, defaults.lastUpdated),
+  };
+}
+
+function parseOnboardingStep(raw: unknown) {
+  const d = obj(raw);
+  if (typeof d.title !== 'string' || !d.title) return null;
+  return {
+    id: str(d.id, crypto.randomUUID()),
+    title: d.title,
+    body: str(d.body, ''),
+    order: num(d.order, 0),
+  };
+}
+
+function parseOnboardingCopy(raw: unknown): OnboardingCopySettings {
+  const d = obj(raw);
+  const steps = Array.isArray(d.steps)
+    ? d.steps.map(parseOnboardingStep).filter((x): x is NonNullable<typeof x> => x !== null)
+    : [];
+  return { steps };
 }
 
 function maskFcmServerKey(settings: PlatformSettingsPayload): PlatformSettingsPayload {
@@ -101,6 +577,7 @@ export class AdminController {
     private readonly weeklyKpi: WeeklyKpiService,
     private readonly hceUsage: HceUsageService,
     private readonly ai: AiService,
+    private readonly email: EmailService,
   ) {}
 
   @Get('weekly-kpis')
@@ -757,8 +1234,24 @@ export class AdminController {
   }
 
   @Put('settings')
-  @Roles('super_admin')
-  async updateSettings(@Body() dto: Partial<PlatformSettingsPayload>) {
+  @Roles('admin', 'super_admin')
+  async updateSettings(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: Partial<PlatformSettingsPayload>,
+  ) {
+    const requestedKeys = Object.keys(dto) as (keyof PlatformSettingsPayload)[];
+
+    if (user.role !== 'super_admin') {
+      const forbiddenKeys = requestedKeys.filter((key) => SUPER_ADMIN_ONLY_SETTINGS_KEYS.has(key));
+      if (forbiddenKeys.length) {
+        throw new AppException(
+          'FORBIDDEN',
+          undefined,
+          `Requires super_admin to edit: ${forbiddenKeys.join(', ')}`,
+        );
+      }
+    }
+
     const existingRow = await this.prisma.platformSettings.findUnique({
       where: { id: PLATFORM_SETTINGS_ID },
     });
@@ -783,7 +1276,37 @@ export class AdminController {
       maintenanceMode:
         typeof dto.maintenanceMode === 'boolean' ? dto.maintenanceMode : current.maintenanceMode,
       hce: dto.hce ? parseHceConfig(dto.hce) : current.hce,
+      negotiation: dto.negotiation ? parseNegotiationSettings(dto.negotiation) : current.negotiation,
+      referral: dto.referral ? parseReferralSettings(dto.referral) : current.referral,
+      commission: dto.commission ? parseCommissionSettings(dto.commission) : current.commission,
+      match: dto.match ? parseMatchSettings(dto.match) : current.match,
+      payment: dto.payment ? parsePaymentSettings(dto.payment) : current.payment,
+      promoDefaults: dto.promoDefaults ? parsePromoDefaults(dto.promoDefaults) : current.promoDefaults,
+      zoneEditor: dto.zoneEditor ? parseZoneEditorSettings(dto.zoneEditor) : current.zoneEditor,
+      kycThresholds: dto.kycThresholds ? parseKycThresholds(dto.kycThresholds) : current.kycThresholds,
+      banners: dto.banners ? parseBanners(dto.banners) : current.banners,
+      faq: dto.faq ? parseFaq(dto.faq) : current.faq,
+      appCopy: dto.appCopy ? parseStringRecord(dto.appCopy, current.appCopy) : current.appCopy,
+      featureFlags: dto.featureFlags
+        ? parseBooleanRecord(dto.featureFlags, current.featureFlags)
+        : current.featureFlags,
+      driverTraining: dto.driverTraining ? parseDriverTraining(dto.driverTraining) : current.driverTraining,
+      termsPolicy: dto.termsPolicy ? parseTermsPolicy(dto.termsPolicy) : current.termsPolicy,
+      onboardingCopy: dto.onboardingCopy ? parseOnboardingCopy(dto.onboardingCopy) : current.onboardingCopy,
     };
+
+    const auditRows = requestedKeys
+      .filter((key) => JSON.stringify(current[key]) !== JSON.stringify(next[key]))
+      .map((key) => {
+        const isSecret = key === 'fcmServerKey';
+        return {
+          key,
+          previousValue: (isSecret ? (current[key] ? FCM_KEY_MASK : '') : current[key]) as any,
+          newValue: (isSecret ? (next[key] ? FCM_KEY_MASK : '') : next[key]) as any,
+          changedBy: user.sub,
+          changedByType: user.type,
+        };
+      });
 
     const row = await this.prisma.platformSettings.upsert({
       where: { id: PLATFORM_SETTINGS_ID },
@@ -791,6 +1314,84 @@ export class AdminController {
       update: { settings: next as any },
     });
 
+    if (auditRows.length) {
+      await this.prisma.configAuditLog.createMany({ data: auditRows });
+    }
+
     return maskFcmServerKey(parsePlatformSettings(row.settings));
+  }
+
+  @Get('settings/audit')
+  @Roles('super_admin')
+  async getSettingsAudit(
+    @Query('key') key?: string,
+    @Query('limit') limit: number = 25,
+    @Query('offset') offset: number = 0,
+  ) {
+    const where: any = {};
+    if (key) where.key = key;
+
+    const [logs, total] = await Promise.all([
+      this.prisma.configAuditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: Number(limit),
+        skip: Number(offset),
+        include: { admin: { select: { id: true, name: true, email: true, role: true } } },
+      }),
+      this.prisma.configAuditLog.count({ where }),
+    ]);
+
+    return { logs, total, limit: Number(limit), offset: Number(offset) };
+  }
+
+  @Post('users/invite')
+  @Roles('super_admin')
+  async inviteAdminUser(
+    @Body() dto: { email?: string; name?: string; role?: 'admin' | 'moderator' | 'super_admin' },
+  ) {
+    if (!dto.email) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'Email is required');
+    }
+
+    const email = dto.email.trim().toLowerCase();
+    const existing = await this.prisma.adminUser.findUnique({ where: { email } });
+    if (existing) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'Admin user already exists');
+    }
+
+    const temporaryPassword = crypto.randomBytes(12).toString('base64url');
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+    const admin = await this.prisma.adminUser.create({
+      data: {
+        email,
+        name: dto.name ?? email,
+        role: dto.role ?? 'admin',
+        passwordHash,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    const emailSent = await this.email.send({
+      to: email,
+      subject: 'Your HiGO admin invitation',
+      html: `<p>You have been invited to HiGO Admin.</p><p>Temporary password: <strong>${temporaryPassword}</strong></p>`,
+      text: `You have been invited to HiGO Admin. Temporary password: ${temporaryPassword}`,
+    });
+
+    return {
+      admin,
+      invited: true,
+      emailSent,
+      temporaryPassword: emailSent ? undefined : temporaryPassword,
+    };
   }
 }

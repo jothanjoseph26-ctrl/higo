@@ -178,7 +178,7 @@ export class DisbursementService {
         amount,
         driver.paystackRecipientCode,
         reference,
-        'HiGo driver payout',
+        'HiGO driver payout',
       );
 
       let status: WithdrawResponse['status'] = 'processing';

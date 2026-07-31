@@ -1,5 +1,8 @@
-# Render.com blueprint — aligned with HiGo's actual stack (Railway is primary).
+# Render.com blueprint — aligned with HiGO's actual stack (Railway is primary).
 # Use this only if deploying to Render instead of Railway.
+#
+# Base44 frontend equivalent (Track 07, base44-migration): Base44/render.yaml
+# in the separate Base44 repo, same "documented fallback, not primary" status.
 
 databases:
   - name: higo-postgres

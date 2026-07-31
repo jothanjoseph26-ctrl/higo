@@ -27,7 +27,7 @@ export class AiFeaturesService {
 
   async generateSupportReply(passengerMessage: string): Promise<string | null> {
     return this.ai.prompt(
-      `You are HiGo Abuja customer support. Be concise, helpful, and warm. 
+      `You are HiGO Abuja customer support. Be concise, helpful, and warm. 
 Use simple English; light Nigerian Pidgin is OK. Never promise refunds without admin review.
 For emergencies tell user to use in-app SOS. Max 3 sentences.`,
       `Passenger message: "${passengerMessage}"`,

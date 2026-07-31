@@ -47,9 +47,22 @@ export class CtsService {
     // Check if referral reputational invite is approved
     const referralPoints = kycDocs.referralApproved === true ? 10 : 0;
 
-    // Sum points (0..100)
-    const totalPoints = ninPoints + historyPoints + ratingPoints + estatePoints + referralPoints;
-    const total = totalPoints / 100; // Map to 0..1 scale for CompositeTrustScore type compatibility
+    // 6. Geo Proximity (+20 max): linear decay from the pickup point out to the
+    // 5km candidate-search radius used by GeoRepository.findNearestOnlineDrivers.
+    // A driver at the pickup point scores the full 20; a driver at or beyond 5km
+    // scores 0. Previously computed but never added into totalPoints, so proximity
+    // had no effect on ranking beyond the exact-CTS-tie distance tiebreaker in
+    // MatchingService.findCandidates — differently-scored drivers at very different
+    // distances were ranked purely on trust points, ignoring how much further away
+    // the higher-scored driver might be.
+    const geoProximityScore = 1.0 - Math.min(1.0, Math.max(0.0, ctx.distanceMeters / 5000.0));
+    const geoPoints = geoProximityScore * 20;
+
+    // Sum points (0..120, since geo proximity is now included)
+    const MAX_POINTS = 120;
+    const totalPoints =
+      ninPoints + historyPoints + ratingPoints + estatePoints + referralPoints + geoPoints;
+    const total = totalPoints / MAX_POINTS; // Map to 0..1 scale for CompositeTrustScore type compatibility
 
     return {
       driverId,
@@ -58,7 +71,7 @@ export class CtsService {
       completionRate: historyPoints / 30, // mapping history weight to float
       recencyActivity: 1.0,
       ratingScore: ratingPoints / 20,
-      geoProximity: 1.0 - Math.min(1.0, Math.max(0.0, ctx.distanceMeters / 5000.0)),
+      geoProximity: geoProximityScore,
       verificationTier: ninPoints / 25,
       jobVolumeSignal: historyPoints / 30,
       total: Math.min(1.0, Math.max(0.0, total)),

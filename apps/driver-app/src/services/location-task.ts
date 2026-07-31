@@ -49,7 +49,7 @@ export async function startBackgroundLocation(isActiveTrip: boolean) {
     timeInterval,
     distanceInterval,
     foregroundService: {
-      notificationTitle: 'HiGo Driver Active',
+      notificationTitle: 'HiGO Driver Active',
       notificationBody: 'Sharing location for ride matching and safety.',
       notificationColor: '#00D85A',
     },

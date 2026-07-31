@@ -144,7 +144,7 @@ export function ChatSupport() {
           contentContainerStyle={styles.chatContent}
           ListEmptyComponent={
             <Text style={styles.emptyText}>
-              Welcome to HiGo Support. Send a message and our team will respond shortly.
+              Welcome to HiGO Support. Send a message and our team will respond shortly.
             </Text>
           }
         />

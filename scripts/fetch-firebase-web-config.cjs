@@ -26,7 +26,7 @@ async function main() {
     const created = await client.request({
       url: `https://firebase.googleapis.com/v1beta1/projects/${project}/webApps`,
       method: 'POST',
-      data: { displayName: 'HiGo Web' },
+      data: { displayName: 'HiGO Web' },
     });
 
     let operation = created.data;

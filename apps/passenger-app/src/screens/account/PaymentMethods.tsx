@@ -90,7 +90,7 @@ export function PaymentMethods() {
 
     setLinkingCard(true);
     try {
-      const [firstName, ...rest] = (user?.name ?? 'HiGo Rider').split(' ');
+      const [firstName, ...rest] = (user?.name ?? 'HiGO Rider').split(' ');
       const lastName = rest.join(' ') || 'Passenger';
       await launchCardSaveIntent({
         email,
