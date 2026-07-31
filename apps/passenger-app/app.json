@@ -11,7 +11,10 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.higopassenger"
+      "bundleIdentifier": "com.higopassenger",
+      "config": {
+        "googleMapsApiKey": "AIzaSyAdGR4OqjWjO6NG4cbpNKffbRhEqlhH4Tw"
+      }
     },
     "android": {
       "package": "com.higopassenger",

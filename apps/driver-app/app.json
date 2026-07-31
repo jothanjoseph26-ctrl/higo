@@ -12,7 +12,10 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.driverapp"
+      "bundleIdentifier": "com.driverapp",
+      "config": {
+        "googleMapsApiKey": "AIzaSyAdGR4OqjWjO6NG4cbpNKffbRhEqlhH4Tw"
+      }
     },
     "plugins": [
       "@react-native-firebase/app",
@@ -36,7 +39,7 @@
       },
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyAhVQGmTIcqNTBe1SopUeLGXGFgDj4Fc5w"
+          "apiKey": "AIzaSyAfmoovUBAAMK2hLAFYf0ZUcZaPZupJ2dA"
         }
       },
       "permissions": [
