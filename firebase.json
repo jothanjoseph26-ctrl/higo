@@ -1,0 +1,17 @@
+{
+  "auth": {
+    "authorizedDomains": [
+      "localhost",
+      "hiconnect-production-da57.up.railway.app",
+      "admin-production-7392.up.railway.app"
+    ],
+    "providers": {
+      "anonymous": false,
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "HiGO",
+        "supportEmail": "jobegraphdrill@gmail.com"
+      }
+    }
+  }
+}
