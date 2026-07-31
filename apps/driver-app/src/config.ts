@@ -1,5 +1,5 @@
-const PROD_API = 'https://www.hiconnectgo.com/api';
-const PROD_WS = 'https://www.hiconnectgo.com';
+const PROD_API = 'https://api.hiconnectgo.com/api';
+const PROD_WS = 'https://api.hiconnectgo.com';
 
 // EXPO_PUBLIC_* vars are inlined by Expo's Babel preset on native; the web
 // build injects the same keys through Vite's `define` (see vite.config.mts).

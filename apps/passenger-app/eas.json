@@ -14,8 +14,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://www.hiconnectgo.com/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://www.hiconnectgo.com",
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.hiconnectgo.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://api.hiconnectgo.com",
         "EXPO_PUBLIC_MAPS_MOCK": "false",
         "EXPO_PUBLIC_PUSH_MOCK": "false",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAfmoovUBAAMK2hLAFYf0ZUcZaPZupJ2dA"
@@ -27,6 +27,8 @@
         "buildType": "app-bundle"
       },
       "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.hiconnectgo.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://api.hiconnectgo.com",
         "EXPO_PUBLIC_MAPS_MOCK": "false",
         "EXPO_PUBLIC_PUSH_MOCK": "false",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAfmoovUBAAMK2hLAFYf0ZUcZaPZupJ2dA"
