@@ -6,6 +6,24 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
+// Tesseract.js spawns a node:worker_threads Worker whose entry script doesn't
+// resolve correctly under this webpack/Docker bundling (see OcrService). That
+// failure surfaces as an async 'error' event on the worker, which Node
+// reports as an uncaughtException *outside* OcrService's own try/catch,
+// killing the whole process. OCR is already best-effort (KYC upload works
+// fine without it), so this specific, well-understood failure should never
+// take the API down - anything else still crashes normally.
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'MODULE_NOT_FOUND' && err.message?.includes('worker-script')) {
+    Logger.error(
+      `Tesseract OCR worker failed to load (known bundling issue) - OCR unavailable, API continuing: ${err.message}`,
+    );
+    return;
+  }
+  Logger.error('Uncaught exception, exiting', err.stack);
+  process.exit(1);
+});
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
 
