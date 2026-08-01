@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Pressable, Platform } from 'react-native';
+import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
@@ -22,8 +22,9 @@ const ACTIVE_TRIP_STATUSES: TripStatus[] = [
 
 const NEARBY_DRIVERS_POLL_MS = 30_000;
 
+// Only gates the fake nearby-drivers demo data - the real nearby-drivers
+// fetch below is a plain HTTP call to our backend, not a native map SDK.
 function isMapsMock(): boolean {
-  if (Platform.OS === 'web') return true;
   return process.env.EXPO_PUBLIC_MAPS_MOCK === 'true';
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, Pressable, FlatList, Alert, Platform } from 'react-native';
+import { StyleSheet, Text, View, Pressable, FlatList, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { Input } from '../../components/Input';
@@ -32,8 +32,10 @@ const LOCAL_SUGGESTIONS: PlaceSuggestion[] = [
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 350;
 
+// Only gates the fake canned suggestions used for demo/offline builds - the
+// real Places API calls below work the same on web and native since they're
+// plain HTTP requests to our backend, not a native map SDK.
 function isMapsMock(): boolean {
-  if (Platform.OS === 'web') return true;
   return process.env.EXPO_PUBLIC_MAPS_MOCK === 'true';
 }
 
