@@ -107,6 +107,8 @@ enum AdminRole {
   super_admin
   admin
   moderator
+  supervisor
+  inspection_centre
 }
 
 enum PaymentMethod {
@@ -970,14 +972,15 @@ model Notification {
 // ============================================================================
 
 model AdminUser {
-  id           String    @id @default(uuid()) @db.Uuid
-  name         String
-  email        String    @unique
-  passwordHash String    @map("password_hash")
-  role         AdminRole @default(moderator)
-  isActive     Boolean   @default(true) @map("is_active")
-  lastLogin    DateTime? @map("last_login")
-  createdAt    DateTime  @default(now()) @map("created_at")
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  role            AdminRole @default(moderator)
+  isActive        Boolean   @default(true) @map("is_active")
+  supervisorEmail String?   @map("supervisor_email")
+  lastLogin       DateTime? @map("last_login")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   configAuditLogs ConfigAuditLog[]
 

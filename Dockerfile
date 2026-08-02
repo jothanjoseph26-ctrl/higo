@@ -66,4 +66,4 @@ EXPOSE 3000
 
 # PROCESS_ROLE=worker on the Worker Railway service selects worker.js.
 # Run pending Prisma migrations before serving (DB uses Railway private network).
-CMD ["sh", "-c", "cd apps/api && npx prisma migrate deploy && if [ \"$PROCESS_ROLE\" = \"worker\" ]; then exec node dist/worker.js; else exec node dist/main.js; fi"]
+CMD ["sh", "-c", "cd apps/api && npx prisma migrate deploy && (node prisma/seed-admin-users.js || echo 'admin seed failed, continuing'); if [ \"$PROCESS_ROLE\" = \"worker\" ]; then exec node dist/worker.js; else exec node dist/main.js; fi"]
