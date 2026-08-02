@@ -4,6 +4,7 @@
     "slug": "passengerapp",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./src/assets/app-icon.png",
     "scheme": "higopassenger",
     "platforms": [
       "ios",
@@ -19,6 +20,10 @@
     "android": {
       "package": "com.higopassenger",
       "googleServicesFile": "./android/app/google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
