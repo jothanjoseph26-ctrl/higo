@@ -3,6 +3,7 @@ import type {
   GetDirectionsResponse,
   PlaceDetailsResponse,
   PlacesAutocompleteResponse,
+  ReverseGeocodeResponse,
 } from '@higo/shared-types';
 import { RateLimit } from '../common/guards/rate-limit.guard';
 import { AppException } from '../common/errors/app.exception';
@@ -10,6 +11,7 @@ import { MapsService } from './maps.service';
 import { DirectionsQueryDto } from './dto/directions-query.dto';
 import { PlacesAutocompleteQueryDto } from './dto/places-autocomplete-query.dto';
 import { PlacesDetailsQueryDto } from './dto/places-details-query.dto';
+import { ReverseGeocodeQueryDto } from './dto/reverse-geocode-query.dto';
 
 @Controller('maps')
 export class MapsController {
@@ -59,5 +61,22 @@ export class MapsController {
       throw new AppException('NOT_FOUND', undefined, 'Place not found');
     }
     return details;
+  }
+
+  @Get('reverse-geocode')
+  @RateLimit({
+    scope: 'maps-reverse-geocode',
+    limit: 60,
+    windowSeconds: 60,
+    keyFrom: 'user',
+  })
+  async reverseGeocode(
+    @Query() query: ReverseGeocodeQueryDto,
+  ): Promise<ReverseGeocodeResponse> {
+    const resolved = await this.mapsService.reverseGeocode(query.lat, query.lng);
+    if (!resolved) {
+      throw new AppException('NOT_FOUND', undefined, 'Location not found');
+    }
+    return resolved;
   }
 }

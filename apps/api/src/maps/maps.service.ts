@@ -6,11 +6,13 @@ import type {
   LatLng,
   PlaceDetailsResponse,
   PlacesAutocompleteResponse,
+  ReverseGeocodeResponse,
 } from '@higo/shared-types';
 import { RedisService } from '../redis/redis.service';
 
 const DIRECTIONS_CACHE_TTL_SECONDS = 300;
 const PLACES_AUTOCOMPLETE_CACHE_TTL_SECONDS = 120;
+const REVERSE_GEOCODE_CACHE_TTL_SECONDS = 300;
 const COORD_PRECISION = 4;
 
 @Injectable()
@@ -144,6 +146,68 @@ export class MapsService {
     } catch (error) {
       this.logger.warn(
         `Places details request failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+      return null;
+    }
+  }
+
+  async reverseGeocode(lat: number, lng: number): Promise<ReverseGeocodeResponse | null> {
+    const cacheKey = `maps:reverse-geocode:${roundCoord(lat)},${roundCoord(lng)}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached) as ReverseGeocodeResponse;
+    }
+
+    const apiKey = this.config.get<string>('GOOGLE_MAPS_API_KEY');
+    if (!apiKey) {
+      this.logger.warn('GOOGLE_MAPS_API_KEY not set; cannot reverse geocode');
+      return null;
+    }
+
+    try {
+      const response = await axios.get(
+        'https://maps.googleapis.com/maps/api/geocode/json',
+        {
+          params: {
+            latlng: `${lat},${lng}`,
+            key: apiKey,
+            language: 'en',
+          },
+          timeout: 10_000,
+        },
+      );
+
+      const data = response.data as {
+        status?: string;
+        results?: Array<{
+          formatted_address?: string;
+          geometry?: { location?: { lat?: number; lng?: number } };
+        }>;
+      };
+
+      const result = data.results?.[0];
+      if (data.status !== 'OK' || !result?.formatted_address) {
+        this.logger.warn(
+          `Reverse geocode returned status=${data.status ?? 'unknown'} for ${lat},${lng}`,
+        );
+        return null;
+      }
+
+      const resolved: ReverseGeocodeResponse = {
+        description: result.formatted_address,
+        lat: result.geometry?.location?.lat ?? lat,
+        lng: result.geometry?.location?.lng ?? lng,
+      };
+
+      await this.redis.set(
+        cacheKey,
+        JSON.stringify(resolved),
+        REVERSE_GEOCODE_CACHE_TTL_SECONDS,
+      );
+      return resolved;
+    } catch (error) {
+      this.logger.warn(
+        `Reverse geocode request failed: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
       return null;
     }

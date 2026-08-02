@@ -1024,6 +1024,12 @@ export interface PlaceDetailsResponse {
   lng: number;
 }
 
+export interface ReverseGeocodeResponse {
+  description: string;
+  lat: number;
+  lng: number;
+}
+
 export interface NearbyDriver {
   id: string;
   lat: number;
