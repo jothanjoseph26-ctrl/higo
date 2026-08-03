@@ -38,7 +38,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_APP_URL": "https://driver.hiconnectgo.com",
+        "EXPO_PUBLIC_APP_URL": "https://pilot.hiconnectgo.com",
         "EXPO_PUBLIC_API_BASE_URL": "https://api.hiconnectgo.com/api",
         "EXPO_PUBLIC_SOCKET_URL": "https://api.hiconnectgo.com",
         "EXPO_PUBLIC_MAPS_MOCK": "false",
