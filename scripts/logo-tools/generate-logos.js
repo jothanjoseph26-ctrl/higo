@@ -56,13 +56,15 @@ function isOrangeish(r, g, b) {
 }
 
 /**
- * Recolor green pixels to `variant` ('passenger'|'driver') brand color and
- * orange pixels to the canonical accent orange, preserving each pixel's
- * original lightness (keeps shading/highlights from the source art).
+ * Recolor green pixels to `variant` ('passenger'|'driver'|'white') brand
+ * color and orange pixels to the canonical accent orange, preserving each
+ * pixel's original lightness (keeps shading/highlights from the source art).
+ * 'white' flattens the green mark to solid white (s=0) -- for icon
+ * foregrounds meant to sit on a colored (not white) background.
  */
 async function recolor(inputBuffer, variant) {
   const targetH = variant === 'driver' ? navyH : greenH;
-  const targetS = variant === 'driver' ? navyS : greenS;
+  const targetS = variant === 'white' ? 0 : variant === 'driver' ? navyS : greenS;
   const img = sharp(inputBuffer).ensureAlpha();
   const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
   const { width, height, channels } = info;
@@ -71,7 +73,8 @@ async function recolor(inputBuffer, variant) {
     if (a < 5) continue;
     if (isGreenish(r, g, b)) {
       const [, , l] = rgbToHsl(r, g, b);
-      const [nr, ng, nb] = hslToRgb(targetH, targetS, l);
+      const targetL = variant === 'white' ? 0.96 : l;
+      const [nr, ng, nb] = hslToRgb(targetH, targetS, targetL);
       data[i] = nr; data[i + 1] = ng; data[i + 2] = nb;
     } else if (isOrangeish(r, g, b)) {
       const [, , l] = rgbToHsl(r, g, b);
@@ -145,13 +148,19 @@ async function main() {
     // icon mark only, recolored, for app-icon.png / adaptive-icon.png
     const iconOnly = await cropWithPadding(SQUARE_SOURCE, ICON_ONLY_BOX, 0.10);
     const iconColored = await recolor(iconOnly, variant);
+    const iconWhite = await recolor(iconOnly, 'white');
 
-    // app-icon.png: 1024x1024, white background (iOS requires opaque, no alpha)
+    // app-icon.png: 1024x1024, white background, colored mark (iOS requires
+    // opaque, no alpha -- and iOS/Play-listing icons are conventionally a
+    // mark-on-white card, so this one is unaffected by the launcher fix below)
     const appIcon = await squareIconCanvas(iconColored, 1024, 0.62, { r: 255, g: 255, b: 255, alpha: 1 });
     await sharp(appIcon).toFile(`${outDir}/app-icon.png`);
 
-    // adaptive-icon.png: 1024x1024, transparent background (Android supplies backgroundColor via app.json)
-    const adaptiveIcon = await squareIconCanvas(iconColored, 1024, 0.55, { r: 0, g: 0, b: 0, alpha: 0 });
+    // adaptive-icon.png: white mark on transparent -- app.json now sets
+    // backgroundColor to the brand color per variant (see app.json edits),
+    // so the Android home-screen/launcher icon reads as a branded colored
+    // tile instead of "logo mark stranded on a flat white circle."
+    const adaptiveIcon = await squareIconCanvas(iconWhite, 1024, 0.55, { r: 0, g: 0, b: 0, alpha: 0 });
     await sharp(adaptiveIcon).toFile(`${outDir}/adaptive-icon.png`);
 
     console.log(`${variant}: wrote logo-rectangular.png, logo-rectangular-dark.png, logo-square.png, app-icon.png, adaptive-icon.png`);

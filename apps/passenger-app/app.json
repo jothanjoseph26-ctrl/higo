@@ -22,7 +22,7 @@
       "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
+        "backgroundColor": "#0B6E4F"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",

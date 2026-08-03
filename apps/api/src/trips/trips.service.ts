@@ -975,6 +975,20 @@ export class TripService {
       throw new AppException('TRIP_ALREADY_ACTIVE');
     }
 
+    // Card payments aren't wired end-to-end yet: no authorization is captured/stored
+    // anywhere (PaymentMethods.jsx's "Add card" flow is just a wallet top-up checkout,
+    // nothing persists the returned Paystack authorization for reuse), and dispatch
+    // below only fires for CASH -- a CARD trip would otherwise sit in `requested`
+    // forever while the passenger sees a normal "finding driver" screen. Reject it
+    // server-side too since the frontend selector is not an authorization boundary.
+    if (dto.paymentMethod === PaymentMethod.CARD) {
+      throw new AppException(
+        'VALIDATION_ERROR',
+        undefined,
+        'Card payments are not available yet -- please select Cash.',
+      );
+    }
+
     const { distanceKm, durationMin, estimate } = await this.prepareTripRequest(dto, {
       redeemPromo: true,
     });
