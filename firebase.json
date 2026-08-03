@@ -2,8 +2,10 @@
   "auth": {
     "authorizedDomains": [
       "localhost",
-      "hiconnect-production-da57.up.railway.app",
-      "admin-production-7392.up.railway.app"
+      "hiconnectgo.com",
+      "ride.hiconnectgo.com",
+      "pilot.hiconnectgo.com",
+      "portal.hiconnectgo.com"
     ],
     "providers": {
       "anonymous": false,
