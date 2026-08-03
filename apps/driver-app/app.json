@@ -17,7 +17,9 @@
         "googleMapsApiKey": "AIzaSyAdGR4OqjWjO6NG4cbpNKffbRhEqlhH4Tw"
       },
       "infoPlist": {
-        "UIBackgroundModes": ["location"],
+        "UIBackgroundModes": [
+          "location"
+        ],
         "NSLocationAlwaysAndWhenInUseUsageDescription": "HiGO Driver shares your location with passengers and dispatch while a trip is active, including when the app is in the background.",
         "NSLocationWhenInUseUsageDescription": "HiGO Driver uses your location to match you with nearby ride requests and navigate trips."
       }
@@ -66,7 +68,7 @@
         "FOREGROUND_SERVICE_LOCATION",
         "RECEIVE_BOOT_COMPLETED"
       ],
-      "versionCode": 3
+      "versionCode": 6
     },
     "extra": {
       "eas": {
