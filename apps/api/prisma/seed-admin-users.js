@@ -8,7 +8,11 @@ const admins = [
     email: 'support@hiconnectgo.com',
     password: 'M1cr0s0ft@8!',
     name: 'Support Admin',
-    role: 'supervisor',
+    // 'supervisor' is below the RolesGuard threshold for the main admin
+    // dashboard (@Roles('admin', 'super_admin') on AdminController) - this
+    // account is the one used to log into portal.hiconnectgo.com, so it
+    // needs full admin access, not the more limited supervisor tier.
+    role: 'admin',
     supervisorEmail: 'rebecca.adenike@hiconnectgo.com',
   },
   {
