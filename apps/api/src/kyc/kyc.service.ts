@@ -16,7 +16,6 @@ import {
   ReviewKycResponse,
   VerificationTier,
 } from '@higo/shared-types';
-import { AesService } from '../common/crypto/aes.service';
 import { AppException } from '../common/errors/app.exception';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -30,10 +29,9 @@ import {
   canReupload,
   computeOverallKycStatus,
   computeVerificationTier,
+  getRequiredKycDocs,
   KycDocumentsMap,
-  REQUIRED_KYC_DOCS,
 } from './kyc-state-machine';
-import { OcrService } from './ocr.service';
 import { EmailService } from '../email/email.service';
 
 const MAX_RAW_BYTES = 5 * 1024 * 1024;
@@ -57,8 +55,6 @@ export class KYCService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly s3: OssService,
-    private readonly aes: AesService,
-    private readonly ocr: OcrService,
     private readonly email: EmailService,
     private readonly compliance: ComplianceService,
     private readonly backgroundCheck: BackgroundCheckService,
@@ -68,6 +64,7 @@ export class KYCService {
     driverId: string,
     docType: KycDocType,
     file: UploadedKycFile,
+    identityDocType?: string,
   ): Promise<KycUploadResponse> {
     this.validateFile(file);
 
@@ -98,22 +95,14 @@ export class KYCService {
       );
     }
 
-    let ocrFields: Record<string, string> = {};
-    try {
-      ocrFields = await Promise.race([
-        this.ocr.extractForm(s3Key, docType),
-        new Promise<Record<string, string>>((_, reject) =>
-          setTimeout(() => reject(new Error('OCR Timeout')), 8000),
-        ),
-      ]);
-    } catch (err) {
-      this.logger.warn(
-        `OCR extraction failed or timed out: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      ocrFields = {};
-    }
+    // OCR auto-fill is disabled: Tesseract's worker thread can't load in this
+    // deployment (see main.ts's uncaughtException handler for the known
+    // bundling issue), so every upload was paying an 8s dead timeout for a
+    // feature that never actually ran. Revisit once the worker bundling is
+    // fixed - until then, KYC review is manual (admin reviews the image).
+    const ocrFields: Record<string, string> = identityDocType
+      ? { identityType: identityDocType }
+      : {};
 
     const driver = await this.prisma.driver.findUnique({ where: { id: driverId } });
     if (!driver) {
@@ -139,23 +128,14 @@ export class KYCService {
     };
 
     const updatedDocs = applyDocumentUpload(docs, meta);
-    const kycStatus = computeOverallKycStatus(updatedDocs);
-    const verificationTier = computeVerificationTier(updatedDocs);
+    const kycStatus = computeOverallKycStatus(updatedDocs, driver.vehicleType);
+    const verificationTier = computeVerificationTier(updatedDocs, driver.vehicleType);
 
     const updateData: Prisma.DriverUpdateInput = {
       kycDocuments: updatedDocs as unknown as Prisma.InputJsonValue,
       kycStatus,
       verificationTier,
     };
-
-    if (docType === KycDocType.NIN) {
-      const nin = this.extractNin(ocrFields);
-      if (nin) {
-        updateData.ninEncrypted = this.aes.encrypt(
-          nin,
-        ) as unknown as Prisma.InputJsonValue;
-      }
-    }
 
     await this.prisma.driver.update({
       where: { id: driverId },
@@ -188,7 +168,7 @@ export class KYCService {
     return {
       kycStatus: driver.kycStatus as KYCStatus,
       verificationTier: driver.verificationTier as VerificationTier,
-      documents: REQUIRED_KYC_DOCS.map((docType) => {
+      documents: getRequiredKycDocs(driver.vehicleType).map((docType) => {
         const doc = docs[docType];
         return {
           docType,
@@ -214,8 +194,12 @@ export class KYCService {
         throw new BadRequestException('rejectionCode required when rejecting');
       }
 
+      // Bulk "approve/reject all" sends every possible doc type regardless
+      // of vehicle type - a keke driver never uploads license/insurance/
+      // roadworthiness at all, so those entries just don't exist here. Skip
+      // rather than fail the whole batch over docs that were never required.
       if (!docs[item.docType]) {
-        throw new AppException('VALIDATION_ERROR');
+        continue;
       }
 
       docs = applyReviewDecision(
@@ -244,8 +228,8 @@ export class KYCService {
       });
     }
 
-    const kycStatus = computeOverallKycStatus(docs);
-    const verificationTier = computeVerificationTier(docs);
+    const kycStatus = computeOverallKycStatus(docs, driver.vehicleType);
+    const verificationTier = computeVerificationTier(docs, driver.vehicleType);
 
     await this.prisma.driver.update({
       where: { id: driverId },
@@ -278,7 +262,10 @@ export class KYCService {
     const results: Array<{ docType: KycDocType; url: string; status: KYCStatus }> =
       [];
 
-    for (const docType of REQUIRED_KYC_DOCS) {
+    // Iterate every possible doc type, not just this driver's required set -
+    // admins should still see docs uploaded before a vehicle-type change, or
+    // any doc type at all, without them disappearing from the review screen.
+    for (const docType of Object.values(KycDocType)) {
       const doc = docs[docType];
       if (!doc?.s3Key) continue;
       const url = await this.s3.getPresignedUrl(doc.s3Key, 3600);
@@ -291,8 +278,8 @@ export class KYCService {
   async recomputeTier(driverId: string): Promise<VerificationTier> {
     const driver = await this.requireDriver(driverId);
     const docs = this.parseDocuments(driver.kycDocuments);
-    const tier = computeVerificationTier(docs);
-    const kycStatus = computeOverallKycStatus(docs);
+    const tier = computeVerificationTier(docs, driver.vehicleType);
+    const kycStatus = computeOverallKycStatus(docs, driver.vehicleType);
 
     await this.prisma.driver.update({
       where: { id: driverId },
@@ -333,17 +320,6 @@ export class KYCService {
       throw new AppException('NOT_FOUND');
     }
     return driver;
-  }
-
-  private extractNin(ocr: Record<string, string>): string | null {
-    for (const [key, value] of Object.entries(ocr)) {
-      if (/nin/i.test(key) && value.replace(/\D/g, '').length >= 10) {
-        return value.replace(/\D/g, '');
-      }
-    }
-    const flat = Object.values(ocr).join(' ');
-    const match = flat.match(/\b\d{11}\b/);
-    return match?.[0] ?? null;
   }
 
   private async notifyDriver(

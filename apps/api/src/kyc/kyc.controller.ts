@@ -44,11 +44,16 @@ export class KycController {
     if (!file) {
       throw new BadRequestException('file is required');
     }
-    return this.kyc.uploadDocument(user.sub, dto.docType, {
-      buffer: file.buffer,
-      mimetype: file.mimetype,
-      originalname: file.originalname,
-    });
+    return this.kyc.uploadDocument(
+      user.sub,
+      dto.docType,
+      {
+        buffer: file.buffer,
+        mimetype: file.mimetype,
+        originalname: file.originalname,
+      },
+      dto.identityDocType,
+    );
   }
 
   @RequireUserTypes('driver')

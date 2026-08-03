@@ -2,9 +2,11 @@ import {
   KYCStatus,
   KycDocType,
   KycDocumentMeta,
+  VehicleType,
   VerificationTier,
 } from '@higo/shared-types';
 
+/** Full document set for car/bike drivers - a keke has no license/insurance/roadworthiness expectation. */
 export const REQUIRED_KYC_DOCS: KycDocType[] = [
   KycDocType.NIN,
   KycDocType.DRIVERS_LICENCE,
@@ -12,6 +14,20 @@ export const REQUIRED_KYC_DOCS: KycDocType[] = [
   KycDocType.ROAD_WORTHINESS,
   KycDocType.INSURANCE,
 ];
+
+/** Keke (tricycle) drivers only need identity + proof of vehicle ownership. */
+const KEKE_REQUIRED_KYC_DOCS: KycDocType[] = [
+  KycDocType.NIN,
+  KycDocType.VEHICLE_REG,
+];
+
+export function getRequiredKycDocs(
+  vehicleType?: VehicleType | string | null,
+): KycDocType[] {
+  return vehicleType === VehicleType.KEKE
+    ? KEKE_REQUIRED_KYC_DOCS
+    : REQUIRED_KYC_DOCS;
+}
 
 export type KycDocumentsMap = Partial<Record<KycDocType, KycDocumentMeta>>;
 
@@ -24,12 +40,18 @@ export function isApproved(
 
 export function computeVerificationTier(
   docs: KycDocumentsMap,
+  vehicleType?: VehicleType | string | null,
 ): VerificationTier {
+  const required = getRequiredKycDocs(vehicleType);
   const nin = isApproved(docs, KycDocType.NIN);
   const licence = isApproved(docs, KycDocType.DRIVERS_LICENCE);
-  const allFive = REQUIRED_KYC_DOCS.every((type) => isApproved(docs, type));
+  const allRequired = required.every((type) => isApproved(docs, type));
 
-  if (allFive) return VerificationTier.TIER_3;
+  if (allRequired) return VerificationTier.TIER_3;
+  if (vehicleType === VehicleType.KEKE) {
+    // No licence concept for keke - identity-only verification caps at TIER_1.
+    return nin ? VerificationTier.TIER_1 : VerificationTier.TIER_0;
+  }
   if (nin && licence) return VerificationTier.TIER_2;
   if (nin) return VerificationTier.TIER_1;
   return VerificationTier.TIER_0;
@@ -37,20 +59,20 @@ export function computeVerificationTier(
 
 export function computeOverallKycStatus(
   docs: KycDocumentsMap,
+  vehicleType?: VehicleType | string | null,
 ): KYCStatus {
-  const uploaded = REQUIRED_KYC_DOCS.filter((type) => docs[type]);
+  const required = getRequiredKycDocs(vehicleType);
+  const uploaded = required.filter((type) => docs[type]);
   if (uploaded.length === 0) {
     return KYCStatus.PENDING;
   }
 
-  const allApproved = REQUIRED_KYC_DOCS.every((type) =>
-    isApproved(docs, type),
-  );
+  const allApproved = required.every((type) => isApproved(docs, type));
   if (allApproved) {
     return KYCStatus.APPROVED;
   }
 
-  const anyRejected = REQUIRED_KYC_DOCS.some(
+  const anyRejected = required.some(
     (type) => docs[type]?.status === KYCStatus.REJECTED,
   );
   if (anyRejected) {
