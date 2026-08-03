@@ -36,7 +36,9 @@
       }
     },
     "plugins": [
-      "@sentry/react-native"
+      "@sentry/react-native",
+      "expo-secure-store",
+      "expo-sharing"
     ]
   }
 }

@@ -6,7 +6,15 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_APP_URL": "https://ride.hiconnectgo.com",
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.hiconnectgo.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://api.hiconnectgo.com",
+        "EXPO_PUBLIC_MAPS_MOCK": "false",
+        "EXPO_PUBLIC_PUSH_MOCK": "false",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAfmoovUBAAMK2hLAFYf0ZUcZaPZupJ2dA"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -14,6 +22,7 @@
         "buildType": "apk"
       },
       "env": {
+        "EXPO_PUBLIC_APP_URL": "https://ride.hiconnectgo.com",
         "EXPO_PUBLIC_API_BASE_URL": "https://api.hiconnectgo.com/api",
         "EXPO_PUBLIC_SOCKET_URL": "https://api.hiconnectgo.com",
         "EXPO_PUBLIC_MAPS_MOCK": "false",
@@ -27,6 +36,7 @@
         "buildType": "app-bundle"
       },
       "env": {
+        "EXPO_PUBLIC_APP_URL": "https://ride.hiconnectgo.com",
         "EXPO_PUBLIC_API_BASE_URL": "https://api.hiconnectgo.com/api",
         "EXPO_PUBLIC_SOCKET_URL": "https://api.hiconnectgo.com",
         "EXPO_PUBLIC_MAPS_MOCK": "false",

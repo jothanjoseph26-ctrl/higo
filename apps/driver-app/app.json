@@ -15,6 +15,11 @@
       "bundleIdentifier": "com.driverapp",
       "config": {
         "googleMapsApiKey": "AIzaSyAdGR4OqjWjO6NG4cbpNKffbRhEqlhH4Tw"
+      },
+      "infoPlist": {
+        "UIBackgroundModes": ["location"],
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "HiGO Driver shares your location with passengers and dispatch while a trip is active, including when the app is in the background.",
+        "NSLocationWhenInUseUsageDescription": "HiGO Driver uses your location to match you with nearby ride requests and navigate trips."
       }
     },
     "plugins": [
@@ -27,6 +32,17 @@
         {
           "cameraPermission": "HiGO Driver uses the camera to capture your KYC documents.",
           "photosPermission": "HiGO Driver needs access to your photos to upload KYC documents."
+        }
+      ],
+      "expo-secure-store",
+      "expo-sharing",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "HiGO Driver shares your location with passengers and dispatch while a trip is active, including when the app is in the background.",
+          "locationWhenInUsePermission": "HiGO Driver uses your location to match you with nearby ride requests and navigate trips.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true
         }
       ]
     ],
@@ -45,11 +61,12 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION",
         "RECEIVE_BOOT_COMPLETED"
       ],
-      "versionCode": 2
+      "versionCode": 3
     },
     "extra": {
       "eas": {

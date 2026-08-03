@@ -8,6 +8,14 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_APP_URL": "https://pilot.hiconnectgo.com",
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.hiconnectgo.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://api.hiconnectgo.com",
+        "EXPO_PUBLIC_MAPS_MOCK": "false",
+        "EXPO_PUBLIC_PUSH_MOCK": "false",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "preview": {
@@ -16,6 +24,7 @@
         "buildType": "apk"
       },
       "env": {
+        "EXPO_PUBLIC_APP_URL": "https://pilot.hiconnectgo.com",
         "EXPO_PUBLIC_API_BASE_URL": "https://api.hiconnectgo.com/api",
         "EXPO_PUBLIC_SOCKET_URL": "https://api.hiconnectgo.com",
         "EXPO_PUBLIC_MAPS_MOCK": "false",
@@ -29,6 +38,7 @@
         "buildType": "app-bundle"
       },
       "env": {
+        "EXPO_PUBLIC_APP_URL": "https://driver.hiconnectgo.com",
         "EXPO_PUBLIC_API_BASE_URL": "https://api.hiconnectgo.com/api",
         "EXPO_PUBLIC_SOCKET_URL": "https://api.hiconnectgo.com",
         "EXPO_PUBLIC_MAPS_MOCK": "false",
