@@ -49,7 +49,7 @@
       ]
     ],
     "android": {
-      "package": "com.driverapp",
+      "package": "com.hiconnectgo.driver",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon.png",

@@ -21,6 +21,48 @@
       "api_key": [
         {
           "current_key": "AIzaSyAfmoovUBAAMK2hLAFYf0ZUcZaPZupJ2dA"
+        },
+        {
+          "current_key": "AIzaSyBhvSVH6yU3_0FpsNQaTRN5rl5ICeWgrhE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "185175886719-60qlu973cosb25gf036bgnk6etk4d1rc.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "185175886719-aca2ckpd7948amksfi6r4hkqesfpc8fk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.higopassenger"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:185175886719:android:51c9cc094f1aaf6349a84a",
+        "android_client_info": {
+          "package_name": "com.hiconnectgo.driver"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "185175886719-60qlu973cosb25gf036bgnk6etk4d1rc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAfmoovUBAAMK2hLAFYf0ZUcZaPZupJ2dA"
+        },
+        {
+          "current_key": "AIzaSyBhvSVH6yU3_0FpsNQaTRN5rl5ICeWgrhE"
         }
       ],
       "services": {
@@ -57,6 +99,9 @@
       "api_key": [
         {
           "current_key": "AIzaSyAfmoovUBAAMK2hLAFYf0ZUcZaPZupJ2dA"
+        },
+        {
+          "current_key": "AIzaSyBhvSVH6yU3_0FpsNQaTRN5rl5ICeWgrhE"
         }
       ],
       "services": {
