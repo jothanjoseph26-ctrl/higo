@@ -53,6 +53,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "185175886719-goqi3kqbd36690lk8p0p3vkt9gpsti7f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.hiconnectgo.driver",
+            "certificate_hash": "2fc34c704564aee5a9633de95d7ce2a984c41c94"
+          }
+        },
+        {
           "client_id": "185175886719-60qlu973cosb25gf036bgnk6etk4d1rc.apps.googleusercontent.com",
           "client_type": 3
         }
