@@ -68,7 +68,7 @@
         "FOREGROUND_SERVICE_LOCATION",
         "RECEIVE_BOOT_COMPLETED"
       ],
-      "versionCode": 6
+      "versionCode": 7
     },
     "extra": {
       "eas": {
