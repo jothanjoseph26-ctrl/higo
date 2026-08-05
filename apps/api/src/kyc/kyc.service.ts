@@ -190,8 +190,22 @@ export class KYCService {
     let docs = this.parseDocuments(driver.kycDocuments);
 
     for (const item of dto.documents) {
+      // Validated by hand rather than class-validator decorators on the DTO -
+      // see kyc.dto.ts's ReviewKycDto for why.
+      if (!Object.values(KycDocType).includes(item.docType as KycDocType)) {
+        throw new BadRequestException(`invalid docType: ${item.docType}`);
+      }
+      if (item.decision !== 'approve' && item.decision !== 'reject') {
+        throw new BadRequestException(`invalid decision: ${item.decision}`);
+      }
       if (item.decision === 'reject' && !item.rejectionCode) {
         throw new BadRequestException('rejectionCode required when rejecting');
+      }
+      if (
+        item.decision === 'reject' &&
+        !Object.values(KycRejectionCode).includes(item.rejectionCode as KycRejectionCode)
+      ) {
+        throw new BadRequestException(`invalid rejectionCode: ${item.rejectionCode}`);
       }
 
       // Bulk "approve/reject all" sends every possible doc type regardless

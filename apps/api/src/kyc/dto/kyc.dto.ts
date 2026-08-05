@@ -1,20 +1,11 @@
-import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
   IsEnum,
-  IsIn,
   IsOptional,
-  IsString,
   IsUUID,
-  ValidateIf,
-  ValidateNested,
 } from 'class-validator';
-import {
-  KycDocType,
-  KycRejectionCode,
-  ReviewKycRequest,
-} from '@higo/shared-types';
+import { KycDocType, KycRejectionCode } from '@higo/shared-types';
 
 /** Which physical ID a driver submitted for the NIN/identity document slot. */
 export enum IdentityDocSubtype {
@@ -36,28 +27,23 @@ export class UploadKycDto {
   identityDocType?: IdentityDocSubtype;
 }
 
-export class ReviewKycDocumentDto {
-  @IsEnum(KycDocType)
-  docType!: KycDocType;
-
-  @IsIn(['approve', 'reject'])
-  decision!: 'approve' | 'reject';
-
-  @ValidateIf((o: ReviewKycDocumentDto) => o.decision === 'reject')
-  @IsEnum(KycRejectionCode)
+export interface ReviewKycDocumentItem {
+  docType: KycDocType;
+  decision: 'approve' | 'reject';
   rejectionCode?: KycRejectionCode;
-
-  @IsOptional()
-  @IsString()
   rejectionReason?: string;
 }
 
-export class ReviewKycDto implements ReviewKycRequest {
+export class ReviewKycDto {
+  // Deliberately not @ValidateNested()/@Type(ReviewKycDocumentDto) here - that
+  // combination reproducibly triggered NestJS's whitelist stripping to reject
+  // docType/decision as "should not exist" on every single call in this
+  // deployment (100% failure rate, confirmed against live logs), for reasons
+  // that didn't resolve with straightforward fixes. KYCService.review()
+  // validates each item's shape itself instead.
   @IsArray()
   @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => ReviewKycDocumentDto)
-  documents!: ReviewKycDocumentDto[];
+  documents!: ReviewKycDocumentItem[];
 }
 
 export class SetOperatingZonesDto {
