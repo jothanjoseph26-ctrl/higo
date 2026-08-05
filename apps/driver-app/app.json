@@ -27,6 +27,7 @@
     "plugins": [
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
+      "@react-native-firebase/crashlytics",
       "expo-audio",
       "@sentry/react-native",
       [
@@ -68,7 +69,7 @@
         "FOREGROUND_SERVICE_LOCATION",
         "RECEIVE_BOOT_COMPLETED"
       ],
-      "versionCode": 7
+      "versionCode": 8
     },
     "extra": {
       "eas": {
