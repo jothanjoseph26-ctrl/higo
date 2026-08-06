@@ -30,11 +30,14 @@ export class SubscriptionService {
   }
 
   private getTierAmount(tier: SubscriptionTier): Kobo {
-    // Standard tiers pricing in kobo (e.g. Daily = ₦500 -> 50000 kobo, Weekly = ₦3000 -> 300000 kobo, Monthly = ₦10000 -> 1000000 kobo)
-    // We can define these or fetch them dynamically. Let's provide standard default amounts.
-    if (tier === SubscriptionTier.DAILY) return 50000;
-    if (tier === SubscriptionTier.WEEKLY) return 300000;
-    return 1000000;
+    // Must match the prices actually shown to drivers before checkout -
+    // Base44's DriverSubscription.jsx plans array: Daily ₦200, Weekly
+    // ₦1,000, Monthly ₦2,000. This previously charged ₦500/₦3,000/₦10,000 -
+    // 2.5x-5x what was displayed - a real overcharge on every subscription
+    // purchased, not a display bug.
+    if (tier === SubscriptionTier.DAILY) return 20000;
+    if (tier === SubscriptionTier.WEEKLY) return 100000;
+    return 200000;
   }
 
   private calculateExpiry(tier: SubscriptionTier, fromDate = new Date()): Date {
