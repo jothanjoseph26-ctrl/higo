@@ -12,6 +12,7 @@ import {
   Kobo,
 } from '@higo/shared-types';
 import { AppException } from '../common/errors/app.exception';
+import { CreateCouponDto, UpdateCouponDto } from './dto/coupon.dto';
 
 @Injectable()
 export class SubscriptionService {
@@ -219,6 +220,75 @@ export class SubscriptionService {
       message: `Free ${coupon.plan} subscription activated for ${coupon.durationDays} days`,
       expiresAt: expiresAt.toISOString(),
     };
+  }
+
+  async createCoupon(adminId: string, dto: CreateCouponDto) {
+    const code = dto.code.trim().toUpperCase();
+    const existing = await this.prisma.subscriptionCoupon.findUnique({ where: { code } });
+    if (existing) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'A coupon with this code already exists');
+    }
+
+    const coupon = await this.prisma.subscriptionCoupon.create({
+      data: {
+        code,
+        description: dto.description,
+        plan: dto.plan,
+        durationDays: dto.durationDays,
+        maxUses: dto.maxUses ?? 0,
+        maxUsesPerUser: dto.maxUsesPerUser ?? 1,
+        validFrom: dto.validFrom ? new Date(dto.validFrom) : null,
+        validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
+      },
+    });
+
+    await this.audit.logEvent({
+      action: 'subscription.coupon_created',
+      actorId: adminId,
+      actorType: 'admin',
+      reference: `COUPON-${code}`,
+      amount: 0,
+      beforeStatus: 'n/a',
+      afterStatus: 'active',
+      metadata: { couponId: coupon.id, code, plan: dto.plan, durationDays: dto.durationDays },
+    });
+
+    return coupon;
+  }
+
+  async listCoupons() {
+    return this.prisma.subscriptionCoupon.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async updateCoupon(adminId: string, couponId: string, dto: UpdateCouponDto) {
+    const coupon = await this.prisma.subscriptionCoupon.findUnique({ where: { id: couponId } });
+    if (!coupon) {
+      throw new AppException('NOT_FOUND', undefined, 'Coupon not found');
+    }
+
+    const updated = await this.prisma.subscriptionCoupon.update({
+      where: { id: couponId },
+      data: {
+        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.validUntil !== undefined && { validUntil: new Date(dto.validUntil) }),
+      },
+    });
+
+    await this.audit.logEvent({
+      action: 'subscription.coupon_updated',
+      actorId: adminId,
+      actorType: 'admin',
+      reference: `COUPON-${coupon.code}`,
+      amount: 0,
+      beforeStatus: coupon.isActive ? 'active' : 'inactive',
+      afterStatus: updated.isActive ? 'active' : 'inactive',
+      metadata: { couponId, changes: dto },
+    });
+
+    return updated;
   }
 
   /**

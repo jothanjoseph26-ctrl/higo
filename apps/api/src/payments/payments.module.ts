@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { PaymentsController } from './payments.controller';
 import { AdminFinancialController } from './admin-financial.controller';
 import { AdminFinanceController } from './admin-finance.controller';
+import { AdminCouponsController } from './admin-coupons.controller';
 import { AdminFinanceService } from './admin-finance.service';
 import { PaymentService } from './payment.service';
 import { DisbursementService } from './disbursement.service';
@@ -18,7 +19,7 @@ import { MatchingModule } from '../matching/matching.module';
 
 @Module({
   imports: [PrismaModule, RedisModule, CryptoModule, AiModule, forwardRef(() => MatchingModule)],
-  controllers: [PaymentsController, AdminFinancialController, AdminFinanceController],
+  controllers: [PaymentsController, AdminFinancialController, AdminFinanceController, AdminCouponsController],
   providers: [
     AdminFinanceService,
     PaymentService,
