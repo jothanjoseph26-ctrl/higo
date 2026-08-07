@@ -15,6 +15,7 @@ import { parseHceConfig } from '../hce/hce-settings.service';
 import { HceUsageService } from '../hce/hce-usage.service';
 import { AiService } from '../ai/ai.service';
 import { EmailService } from '../email/email.service';
+import { OtpService } from '../auth/otp.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import * as bcrypt from 'bcryptjs';
@@ -578,7 +579,17 @@ export class AdminController {
     private readonly hceUsage: HceUsageService,
     private readonly ai: AiService,
     private readonly email: EmailService,
+    private readonly otp: OtpService,
   ) {}
+
+  @Get('users/otp/:phone')
+  async getUserOtp(@Param('phone') phone: string) {
+    const code = await this.otp.getOtp(phone);
+    if (!code) {
+      throw new AppException('NOT_FOUND', undefined, 'No active OTP found for this phone number');
+    }
+    return { phone, code };
+  }
 
   @Get('weekly-kpis')
   async getWeeklyKpis(

@@ -19,6 +19,10 @@ export class OtpService {
     await this.redis.set(`otp:${phone}`, code, OTP_TTL_SECONDS);
   }
 
+  async getOtp(phone: string): Promise<string | null> {
+    return this.redis.get(`otp:${phone}`);
+  }
+
   async verifyOtp(phone: string, code: string): Promise<void> {
     const attemptsKey = `otp:attempts:${phone}`;
     const attempts = Number((await this.redis.get(attemptsKey)) ?? '0');

@@ -9,6 +9,7 @@ import { JobsModule } from '../jobs/jobs.module';
 import { HceModule } from '../hce/hce.module';
 import { AiModule } from '../ai/ai.module';
 import { EmailModule } from '../email/email.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { EmailModule } from '../email/email.module';
     HceModule,
     AiModule,
     EmailModule,
+    AuthModule,
   ],
   controllers: [AdminController],
 })

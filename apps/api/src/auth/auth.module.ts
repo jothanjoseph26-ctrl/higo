@@ -11,6 +11,6 @@ import { OtpService } from './otp.service';
   imports: [PassportModule.register({ defaultStrategy: 'jwt' }), JwtModule.register({}), SmsModule],
   controllers: [AuthController],
   providers: [AuthService, OtpService, JwtStrategy],
-  exports: [AuthService, JwtModule, PassportModule],
+  exports: [AuthService, OtpService, JwtModule, PassportModule],
 })
 export class AuthModule {}
