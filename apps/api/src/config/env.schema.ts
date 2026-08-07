@@ -7,6 +7,10 @@ export const envSchema = Joi.object({
   PORT: Joi.number().default(3000),
   APP_BASE_URL: Joi.string().uri().required(),
   APP_PAYMENT_CALLBACK_URL: Joi.string().uri().required(),
+  // Driver subscription payments redirect back into the driver PWA
+  // specifically, not the passenger one - falls back to
+  // APP_PAYMENT_CALLBACK_URL if unset.
+  APP_DRIVER_PAYMENT_CALLBACK_URL: Joi.string().uri().optional(),
 
   DATABASE_URL: Joi.string().required(),
   REDIS_URL: Joi.string().uri().required(),

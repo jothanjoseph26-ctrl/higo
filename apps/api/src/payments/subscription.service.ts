@@ -69,7 +69,12 @@ export class SubscriptionService {
     // When the customer completes the transaction, Paystack automatically subscribes them to the plan.
     // This is the standard, safest checkout flow for cards/bank/ussd in Nigeria.
     const reference = `sub_init_${driverId}_${Date.now()}`;
-    const callbackUrl = this.config.getOrThrow<string>('APP_PAYMENT_CALLBACK_URL');
+    // Driver subscriptions redirect back into the driver PWA specifically -
+    // APP_PAYMENT_CALLBACK_URL (used by passenger trip payments) would send
+    // a driver to the passenger app's domain instead.
+    const callbackUrl =
+      this.config.get<string>('APP_DRIVER_PAYMENT_CALLBACK_URL') ||
+      this.config.getOrThrow<string>('APP_PAYMENT_CALLBACK_URL');
 
     // We initialize a transaction on Paystack linked to the subscription plan
     const transaction = await this.paystack.initializeTransaction(
