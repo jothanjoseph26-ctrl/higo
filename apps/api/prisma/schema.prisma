@@ -496,6 +496,13 @@ model Driver {
   // Subscription loyalty
   subscriptionLoyaltyMonths Int          @default(0) @map("subscription_loyalty_months")
 
+  // Fare negotiation auto-respond settings
+  autoAcceptThreshold    Decimal?  @map("auto_accept_threshold") @db.Decimal(10, 2) // auto-accept offers >= this
+  autoCounterThreshold   Decimal?  @map("auto_counter_threshold") @db.Decimal(10, 2) // auto-counter when offer < this
+  autoCounterAmount      Decimal?  @map("auto_counter_amount") @db.Decimal(10, 2) // amount to counter with
+  maxNegotiationDistKm   Decimal?  @map("max_negotiation_dist_km") @db.Decimal(5, 1) // max dist for negotiation offers
+  maxPickupTimeMin       Int?      @map("max_pickup_time_min") // max pickup ETA for negotiation offers
+
   createdAt             DateTime         @default(now()) @map("created_at")
   updatedAt             DateTime         @updatedAt @map("updated_at")
 

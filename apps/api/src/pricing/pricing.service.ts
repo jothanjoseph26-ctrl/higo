@@ -7,6 +7,19 @@ import { VehicleType, FareEstimate, LatLng, RideMode } from '@higo/shared-types'
 import { AppException } from '../common/errors/app.exception';
 
 const DEFAULT_ROUNDING_KOBO = 5000; // Base44 DEFAULT_ROUNDING=50 naira.
+const MATCH_RADIUS_KM = 2.5;
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 @Injectable()
 export class PricingService {
@@ -32,15 +45,24 @@ export class PricingService {
     distanceKm: number;
     durationMin: number;
     pickup: LatLng;
+    destination?: LatLng;
     isShared?: boolean;
     rideMode?: RideMode;
+    promoCode?: string;
+    city?: string;
+    rideType?: string;
   }): Promise<FareEstimate> {
-    const pricingConfig = await this.prisma.pricingConfig.findFirst({
-      where: {
-        vehicleType: input.vehicleType,
-        isActive: true,
-      },
-    });
+    // --- City-based PricingConfig lookup (city first, fallback to global) ---
+    let pricingConfig = input.city
+      ? await this.prisma.pricingConfig.findFirst({
+          where: { vehicleType: input.vehicleType, isActive: true, city: input.city },
+        })
+      : null;
+    if (!pricingConfig) {
+      pricingConfig = await this.prisma.pricingConfig.findFirst({
+        where: { vehicleType: input.vehicleType, isActive: true },
+      });
+    }
 
     if (!pricingConfig) {
       throw new AppException(
@@ -75,6 +97,7 @@ export class PricingService {
     const surgeEnabled =
       pricingConfig.surgeEnabled || this.config.get<boolean>('SURGE_ENABLED', false);
     let surgeMultiplier = 1.0;
+    let surgeZone: string | null = null;
     if (surgeEnabled) {
       surgeMultiplier = await this.surgeRepo.getSurgeMultiplier(input.pickup);
       const maxSurge = Number(pricingConfig.surgeMaximumMultiplier || 1.2);
@@ -148,6 +171,98 @@ export class PricingService {
 
     const selected = this.selectModeFare(rideMode, modes);
 
+    // --- FareProfile corridor matching for shared rides ---
+    let fareProfile: any = null;
+    let sharedFareFromProfile: number | null = null;
+    if (input.destination) {
+      try {
+        const profileWhere: any = { isActive: true, sharedFareMidNgn: { not: null } };
+        if (input.city) profileWhere.city = input.city;
+        const profiles = await this.prisma.fareProfile.findMany({ where: profileWhere });
+        let bestMatchDist = Infinity;
+        for (const p of profiles) {
+          if (!p.originLat || !p.destinationLat || !p.sharedFareMidNgn) continue;
+          const oLat = Number(p.originLat);
+          const oLng = Number(p.originLng);
+          const dLat = Number(p.destinationLat);
+          const dLng = Number(p.destinationLng);
+          const originDist = haversineKm(input.pickup.lat, input.pickup.lng, oLat, oLng);
+          const destDist = haversineKm(input.destination.lat, input.destination.lng, dLat, dLng);
+          const totalDist = originDist + destDist;
+          const revOriginDist = haversineKm(input.pickup.lat, input.pickup.lng, dLat, dLng);
+          const revDestDist = haversineKm(input.destination.lat, input.destination.lng, oLat, oLng);
+          const revTotalDist = revOriginDist + revDestDist;
+          if (originDist < MATCH_RADIUS_KM && destDist < MATCH_RADIUS_KM && totalDist < bestMatchDist) {
+            bestMatchDist = totalDist;
+            fareProfile = p;
+          } else if (revOriginDist < MATCH_RADIUS_KM && revDestDist < MATCH_RADIUS_KM && revTotalDist < bestMatchDist) {
+            bestMatchDist = revTotalDist;
+            fareProfile = p;
+          }
+        }
+        if (fareProfile) {
+          sharedFareFromProfile = this.roundToIncrement(
+            Number(fareProfile.sharedFareMidNgn) * 100 * surgeMultiplier, // convert NGN to kobo
+            roundingIncrement,
+          );
+          if (minimumFare && sharedFareFromProfile < minimumFare) {
+            sharedFareFromProfile = minimumFare;
+          }
+          // Override the share mode per-seat fare with corridor profile price
+          modes.share = {
+            ...modes.share,
+            perSeat: (sharedFareFromProfile ?? modes.share.perSeat) + customerBookingFee + customerStatutoryLevy,
+            baseFare: sharedFareFromProfile ?? modes.share.baseFare,
+            fareBasis: fareProfile.dataStatus === 'confirmed' ? 'confirmed_profile_shared' : 'estimated_profile_shared',
+          };
+        }
+      } catch {
+        // FareProfile lookup is best-effort; don't fail the estimate
+      }
+    }
+
+    // --- Apply promo code (to instant fare by default) ---
+    let discount = 0;
+    let promoApplied: { code: string; discount: number; description?: string | null } | null = null;
+    if (input.promoCode) {
+      try {
+        const promo = await this.prisma.promoCode.findUnique({
+          where: { code: input.promoCode.toUpperCase() },
+        });
+        if (promo && promo.isActive) {
+          const now = new Date();
+          const withinDate = !promo.expiresAt || promo.expiresAt >= now;
+          const usesAvailable = promo.maxUses === null || promo.usedCount < promo.maxUses;
+          if (withinDate && usesAvailable) {
+            if (promo.discountType === 'percent') {
+              discount = Math.round((modes.instant.totalFare * promo.discountValue) / 10000);
+            } else {
+              discount = Math.min(promo.discountValue, modes.instant.totalFare);
+            }
+            modes.instant = { ...modes.instant, totalFare: modes.instant.totalFare - discount };
+            promoApplied = { code: promo.code, discount, description: null };
+          }
+        }
+      } catch {
+        // Promo lookup is best-effort; don't fail the estimate
+      }
+    }
+
+    // --- Backward compat: resolve primary fare from ride_type if provided ---
+    let totalFareFromRideType = selected.totalFare;
+    if (input.rideType === 'negotiate' || input.rideType === 'negotiated') {
+      totalFareFromRideType = modes.negotiate.recommended;
+    } else if (input.rideType === 'share_ride' || input.rideType === 'shared' || input.rideType === 'share') {
+      totalFareFromRideType = modes.share.perSeat;
+    } else if (input.rideType === 'schedule_flex') {
+      totalFareFromRideType = modes.scheduleFlex.totalFare;
+    } else if (input.rideType === 'schedule_exact' || input.rideType === 'schedule_ride') {
+      totalFareFromRideType = modes.scheduleExact.totalFare;
+    }
+
+    const negotiateRangeLow = this.roundToIncrement(instantFare * Number(pricingConfig.negotiateMinimumOfferMultiplier ?? 0.9), roundingIncrement) + customerBookingFee + customerStatutoryLevy;
+    const negotiateRangeHigh = this.roundToIncrement(instantFare * Number(pricingConfig.negotiateFastMatchMultiplier ?? 1.1), roundingIncrement) + customerBookingFee + customerStatutoryLevy;
+
     return {
       baseFare,
       distanceFare,
@@ -156,11 +271,15 @@ export class PricingService {
       minimumFare,
       minimumFareApplied,
       surgeMultiplier,
+      surgeZone,
+      surgeEnabled,
       modeMultiplier: selected.modeMultiplier,
       quotedFare: selected.totalFare,
       totalFare: selected.totalFare,
       customerBookingFee,
       customerStatutoryLevy,
+      priceIsAllIn: pricingConfig.priceIsAllIn ?? true,
+      currency: pricingConfig.currency || 'NGN',
       pricingVersion: pricingConfig.pricingVersion || 'v2.0',
       distanceKm: input.distanceKm,
       durationMin: input.durationMin,
@@ -168,6 +287,13 @@ export class PricingService {
       roundingIncrement,
       fareBasis: selected.fareBasis,
       modes,
+      totalFareFromRideType,
+      negotiationRangeLow: negotiateRangeLow,
+      negotiationRangeHigh: negotiateRangeHigh,
+      sharedFare: sharedFareFromProfile,
+      fareProfileMatched: !!fareProfile,
+      fareProfileRoute: fareProfile ? `${fareProfile.origin} → ${fareProfile.destination}` : null,
+      ...(promoApplied ? { promoCode: promoApplied.code, promoDiscount: promoApplied.discount, originalTotalFare: selected.totalFare + discount } : {}),
     };
   }
 

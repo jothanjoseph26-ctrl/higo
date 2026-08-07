@@ -350,17 +350,28 @@ export interface FareEstimate {
   minimumFare: Kobo;
   minimumFareApplied: boolean;
   surgeMultiplier: number;
+  surgeZone?: string | null;
+  surgeEnabled: boolean;
   modeMultiplier: number;
   quotedFare: Kobo;
   totalFare: Kobo;
   customerBookingFee: Kobo;
   customerStatutoryLevy: Kobo;
+  priceIsAllIn: boolean;
+  currency: string;
   pricingVersion: string;
   distanceKm: number;
   durationMin: number;
   rideMode: RideMode;
   roundingIncrement: Kobo;
   fareBasis: string;
+  /** Backward-compat: top-level fare resolved from ride_type override. */
+  totalFareFromRideType?: Kobo;
+  negotiationRangeLow?: Kobo;
+  negotiationRangeHigh?: Kobo;
+  sharedFare?: Kobo | null;
+  fareProfileMatched?: boolean;
+  fareProfileRoute?: string | null;
   modes: {
     instant: {
       totalFare: Kobo;

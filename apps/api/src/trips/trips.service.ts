@@ -161,6 +161,86 @@ export class TripService {
     };
   }
 
+  private async generateAutoResponses(
+    vehicleType: VehicleType,
+    pickup: LatLng,
+    clampedOffer: number,
+  ): Promise<DriverNegotiationResponseRow[]> {
+    const drivers = await this.prisma.driver.findMany({
+      where: {
+        isOnline: true,
+        vehicleType,
+        kycStatus: 'approved',
+        isSuspended: false,
+      },
+    });
+
+    const autoResponses: DriverNegotiationResponseRow[] = [];
+    for (const driver of drivers) {
+      if (!driver.currentLocation) continue;
+      // Parse PostGIS geography point: "lat,lng" or use raw coordinates
+      let driverLat: number;
+      let driverLng: number;
+      try {
+        const loc = driver.currentLocation as any;
+        if (typeof loc === 'object' && loc.coordinates) {
+          // GeoJSON format: [lng, lat]
+          driverLng = loc.coordinates[0];
+          driverLat = loc.coordinates[1];
+        } else if (typeof loc === 'string') {
+          // WKT format
+          const match = loc.match(/[\d.-]+/g);
+          if (!match || match.length < 2) continue;
+          driverLng = parseFloat(match[0]);
+          driverLat = parseFloat(match[1]);
+        } else {
+          continue;
+        }
+      } catch {
+        continue;
+      }
+
+      const maxDist = Number(driver.maxNegotiationDistKm || 5);
+      const maxPickupTime = driver.maxPickupTimeMin || 8;
+      const dLat = (driverLat - pickup.lat) * 111;
+      const dLng = (driverLng - pickup.lng) * 111 * Math.cos((pickup.lat * Math.PI) / 180);
+      const dkm = Math.sqrt(dLat * dLat + dLng * dLng);
+      if (dkm > maxDist) continue;
+      const eta = Math.max(1, Math.ceil(dkm / 0.4));
+      if (eta > maxPickupTime) continue;
+
+      if (driver.autoAcceptThreshold && clampedOffer >= Number(driver.autoAcceptThreshold)) {
+        autoResponses.push({
+          driverId: driver.id,
+          driverName: driver.name,
+          driverRating: Number(driver.ratingAvg || 5),
+          driverEtaMin: eta,
+          driverVerified: driver.kycStatus === 'approved',
+          responseType: 'accept' as const,
+          counterAmount: null,
+          respondedAt: new Date().toISOString(),
+        });
+      } else if (
+        driver.autoCounterThreshold &&
+        clampedOffer < Number(driver.autoCounterThreshold) &&
+        driver.autoCounterAmount
+      ) {
+        autoResponses.push({
+          driverId: driver.id,
+          driverName: driver.name,
+          driverRating: Number(driver.ratingAvg || 5),
+          driverEtaMin: eta,
+          driverVerified: driver.kycStatus === 'approved',
+          responseType: 'counter' as const,
+          counterAmount: this.clampFare(Number(driver.autoCounterAmount), await this.getNegotiationConfig()),
+          respondedAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    return autoResponses;
+  }
+
   private mapNegotiation(row: any): FareNegotiationResponse {
     const responses = (row.driverResponses ?? []) as Array<any>;
     return {
@@ -709,6 +789,24 @@ export class TripService {
       },
     });
 
+    // Auto-respond from nearby drivers with auto-accept/counter settings
+    try {
+      const autoResponses = await this.generateAutoResponses(
+        dto.vehicleType,
+        dto.pickup,
+        clampedOffer,
+      );
+      if (autoResponses.length > 0) {
+        await this.prisma.fareNegotiation.update({
+          where: { id: negotiation.id },
+          data: { driverResponses: autoResponses as any },
+        });
+        return { negotiation: this.mapNegotiation({ ...negotiation, driverResponses: autoResponses as any }) };
+      }
+    } catch {
+      // Auto-respond is best-effort; don't fail the negotiation creation
+    }
+
     return { negotiation: this.mapNegotiation(negotiation) };
   }
 
@@ -768,15 +866,36 @@ export class TripService {
         throw new AppException('VALIDATION_ERROR', undefined, 'Missing new offer');
       }
       const config = await this.getNegotiationConfig();
+      const clampedOffer = this.clampFare(dto.newOffer, config);
       const updated = await this.prisma.fareNegotiation.update({
         where: { id: negotiationId },
         data: {
-          passengerOffer: this.clampFare(dto.newOffer, config),
+          passengerOffer: clampedOffer,
           currentRound: active.currentRound + 1,
           driverResponses: [],
           expiresAt: new Date(Date.now() + config.maxTimeSec * 1000),
         },
       });
+
+      // Re-run auto-respond for the new offer
+      try {
+        const autoResponses = await this.generateAutoResponses(
+          active.vehicleType as VehicleType,
+          { lat: Number(active.pickupLat), lng: Number(active.pickupLng) },
+          clampedOffer,
+        );
+        if (autoResponses.length > 0) {
+          const refetched = await this.prisma.fareNegotiation.findUnique({ where: { id: negotiationId } });
+          await this.prisma.fareNegotiation.update({
+            where: { id: negotiationId },
+            data: { driverResponses: autoResponses as any },
+          });
+          return { negotiation: this.mapNegotiation({ ...refetched!, driverResponses: autoResponses as any }) };
+        }
+      } catch {
+        // Auto-respond is best-effort
+      }
+
       return { negotiation: this.mapNegotiation(updated) };
     }
 
