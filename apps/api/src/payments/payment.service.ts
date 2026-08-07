@@ -238,6 +238,19 @@ export class PaymentService {
     switch (eventType) {
       case 'charge.success': {
         const amount = data.amount; // in kobo
+
+        // Subscription purchases (subscription.service.ts's create()/renew())
+        // aren't linked to a real Paystack plan - PAYSTACK_PLAN_* are still
+        // placeholder values, so subscription.create/subscription.disable
+        // webhook events never fire for them. charge.success is the only
+        // event guaranteed to arrive for these, so subscriptions are
+        // activated directly from it instead of depending on plan-linked
+        // events that this deployment can't actually produce.
+        if (reference.startsWith('sub_init_')) {
+          await this.activateSubscriptionFromCharge(reference, amount);
+          return;
+        }
+
         const trip = await this.prisma.trip.findUnique({
           where: { paystackReference: reference },
         });
@@ -456,5 +469,62 @@ export class PaymentService {
       default:
         this.logger.log(`Unhandled webhook event type: ${eventType}`);
     }
+  }
+
+  /**
+   * Activates a driver subscription from a successful charge. subscription.service.ts's
+   * create()/renew() already inserts a matching pending (isActive: false)
+   * Subscription row before redirecting to Paystack - this just finds that
+   * row and flips it on, rather than recreating it from scratch, so tier/
+   * amount/autoRenew stay exactly what the driver actually agreed to.
+   */
+  private async activateSubscriptionFromCharge(reference: string, amount: Kobo): Promise<void> {
+    const match = reference.match(/^sub_init_(.+)_(\d+)$/);
+    const driverId = match?.[1];
+    if (!driverId) {
+      this.logger.error(`Could not parse driverId from subscription reference=${reference}`);
+      return;
+    }
+
+    const driver = await this.prisma.driver.findUnique({ where: { id: driverId } });
+    if (!driver) {
+      this.logger.error(`Driver not found for subscription reference=${reference}`);
+      return;
+    }
+
+    const pending = await this.prisma.subscription.findFirst({
+      where: { driverId, isActive: false, amount },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!pending) {
+      this.logger.error(
+        `No matching pending subscription for driverId=${driverId} amount=${amount} reference=${reference}`,
+      );
+      return;
+    }
+
+    await this.prisma.subscription.update({
+      where: { id: pending.id },
+      data: { isActive: true },
+    });
+
+    await this.prisma.driver.update({
+      where: { id: driverId },
+      data: {
+        subscriptionTier: pending.tier,
+        subscriptionExpiresAt: pending.expiresAt,
+      },
+    });
+
+    await this.audit.logEvent({
+      action: 'subscription.activate',
+      actorId: driverId,
+      actorType: 'driver',
+      reference,
+      amount,
+      beforeStatus: 'pending',
+      afterStatus: 'active',
+      metadata: { tier: pending.tier, subscriptionId: pending.id },
+    });
   }
 }
