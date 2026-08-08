@@ -641,11 +641,23 @@ export class AdminController {
   ) {}
 
   @Get('users/otp/:phone')
-  async getUserOtp(@Param('phone') phone: string) {
+  async getUserOtp(
+    @Param('phone') phone: string,
+    @CurrentUser() admin: AuthUser,
+  ) {
     const code = await this.otp.getOtp(phone);
     if (!code) {
       throw new AppException('NOT_FOUND', undefined, 'No active OTP found for this phone number');
     }
+    // Audit log: admin viewed an OTP code
+    await this.prisma.configAuditLog.create({
+      data: {
+        key: 'admin.otp.view',
+        newValue: { phone },
+        changedBy: admin.sub,
+        changedByType: 'admin',
+      },
+    });
     return { phone, code };
   }
 
@@ -882,19 +894,41 @@ export class AdminController {
   async suspendDriver(
     @Param('id') id: string,
     @Body() dto: { reason?: string },
+    @CurrentUser() admin: AuthUser,
   ) {
     const driver = await this.prisma.driver.update({
       where: { id },
       data: { isSuspended: true, isOnline: false },
     });
+    await this.prisma.configAuditLog.create({
+      data: {
+        key: 'admin.driver.suspend',
+        previousValue: { isSuspended: false, isOnline: driver.isOnline },
+        newValue: { isSuspended: true, isOnline: false, reason: dto.reason ?? null },
+        changedBy: admin.sub,
+        changedByType: 'admin',
+      },
+    });
     return { driverId: driver.id, isSuspended: driver.isSuspended, reason: dto.reason ?? null };
   }
 
   @Put('drivers/:id/reinstate')
-  async reinstateDriver(@Param('id') id: string) {
+  async reinstateDriver(
+    @Param('id') id: string,
+    @CurrentUser() admin: AuthUser,
+  ) {
     const driver = await this.prisma.driver.update({
       where: { id },
       data: { isSuspended: false },
+    });
+    await this.prisma.configAuditLog.create({
+      data: {
+        key: 'admin.driver.reinstate',
+        previousValue: { isSuspended: true },
+        newValue: { isSuspended: false },
+        changedBy: admin.sub,
+        changedByType: 'admin',
+      },
     });
     return { driverId: driver.id, isSuspended: driver.isSuspended };
   }
@@ -927,9 +961,28 @@ export class AdminController {
   }
 
   @Delete('drivers/:id')
-  async deleteDriver(@Param('id') id: string) {
-    await this.prisma.driver.delete({ where: { id } });
-    return { success: true };
+  async deleteDriver(
+    @Param('id') id: string,
+    @CurrentUser() admin: AuthUser,
+  ) {
+    const driver = await this.prisma.driver.findUnique({ where: { id } });
+    if (!driver) throw new AppException('NOT_FOUND', undefined, 'Driver not found');
+
+    // Soft delete: deactivate instead of hard delete (trips/subscriptions reference this record)
+    await this.prisma.driver.update({
+      where: { id },
+      data: { isActive: false, isOnline: false, isSuspended: true },
+    });
+    await this.prisma.configAuditLog.create({
+      data: {
+        key: 'admin.driver.soft_delete',
+        previousValue: { isActive: driver.isActive, isSuspended: driver.isSuspended },
+        newValue: { isActive: false, isOnline: false, isSuspended: true },
+        changedBy: admin.sub,
+        changedByType: 'admin',
+      },
+    });
+    return { success: true, driverId: id, action: 'deactivated' };
   }
 
   @Get('kyc')
@@ -1295,13 +1348,39 @@ export class AdminController {
   }
 
   @Put('users/:id/block')
-  async blockUser(@Param('id') id: string) {
-    return this.prisma.user.update({ where: { id }, data: { isBlocked: true } });
+  async blockUser(
+    @Param('id') id: string,
+    @CurrentUser() admin: AuthUser,
+  ) {
+    const user = await this.prisma.user.update({ where: { id }, data: { isBlocked: true } });
+    await this.prisma.configAuditLog.create({
+      data: {
+        key: 'admin.user.block',
+        previousValue: { isBlocked: false },
+        newValue: { isBlocked: true },
+        changedBy: admin.sub,
+        changedByType: 'admin',
+      },
+    });
+    return user;
   }
 
   @Put('users/:id/unblock')
-  async unblockUser(@Param('id') id: string) {
-    return this.prisma.user.update({ where: { id }, data: { isBlocked: false } });
+  async unblockUser(
+    @Param('id') id: string,
+    @CurrentUser() admin: AuthUser,
+  ) {
+    const user = await this.prisma.user.update({ where: { id }, data: { isBlocked: false } });
+    await this.prisma.configAuditLog.create({
+      data: {
+        key: 'admin.user.unblock',
+        previousValue: { isBlocked: true },
+        newValue: { isBlocked: false },
+        changedBy: admin.sub,
+        changedByType: 'admin',
+      },
+    });
+    return user;
   }
 
   @Get('settings')

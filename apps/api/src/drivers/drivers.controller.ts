@@ -154,7 +154,6 @@ export class DriversController {
       isSuspended: driver.isSuspended,
       ratingAvg: driver.ratingAvg,
       totalTrips: driver.totalTrips,
-      higoPoints: driver.higoPoints,
       createdAt: driver.createdAt,
     };
   }
