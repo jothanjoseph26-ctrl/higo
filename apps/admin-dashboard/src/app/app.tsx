@@ -4,13 +4,12 @@ import { useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 
 export function App() {
-  const { setInitializing } = useAuthStore();
+  const { restoreSession } = useAuthStore();
 
   useEffect(() => {
-    // Perform initial session checks (cookie handles JWT refresh automatically)
-    // Simply set initializing to false on mount to let route protection run refresh logic
-    setInitializing(false);
-  }, [setInitializing]);
+    // Attempt to restore admin session from httpOnly cookie on app mount
+    void restoreSession();
+  }, [restoreSession]);
 
   return <RouterProvider router={router} />;
 }

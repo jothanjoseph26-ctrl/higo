@@ -159,22 +159,31 @@ export class HigoClient {
       return null;
     }
 
-    try {
-      const body: RefreshTokenRequest = { refreshToken };
-      const response = await this.http.post<ApiResponse<RefreshTokenResponse>>(
-        '/auth/refresh',
-        body,
-      );
-      const data = unwrap(response.data);
-      await this.options.tokenStorage.setAccessToken(data.accessToken);
-      if (data.refreshToken) {
-        await this.options.tokenStorage.setRefreshToken(data.refreshToken);
+    const maxRetries = 1;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const body: RefreshTokenRequest = { refreshToken };
+        const response = await this.http.post<ApiResponse<RefreshTokenResponse>>(
+          '/auth/refresh',
+          body,
+        );
+        const data = unwrap(response.data);
+        await this.options.tokenStorage.setAccessToken(data.accessToken);
+        if (data.refreshToken) {
+          await this.options.tokenStorage.setRefreshToken(data.refreshToken);
+        }
+        return data.accessToken;
+      } catch {
+        if (attempt < maxRetries) {
+          // Wait 500ms before retry
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
+        await this.options.tokenStorage.clear();
+        return null;
       }
-      return data.accessToken;
-    } catch {
-      await this.options.tokenStorage.clear();
-      return null;
     }
+    return null;
   }
 
   async getFirebaseConfig(): Promise<FirebaseWebConfig> {

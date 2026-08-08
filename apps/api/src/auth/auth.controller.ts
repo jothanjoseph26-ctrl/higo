@@ -8,6 +8,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthGuard } from '../common/guards/auth.guard';
@@ -27,7 +28,10 @@ const REFRESH_COOKIE = 'higo_rt';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly config: ConfigService,
+  ) {}
 
   @Public()
   @Get('firebase-config')
@@ -124,7 +128,7 @@ export class AuthController {
   ) {
     const cookieToken = req.cookies?.[REFRESH_COOKIE] as string | undefined;
     const result = await this.auth.logout(dto, cookieToken);
-    res.clearCookie(REFRESH_COOKIE);
+    res.clearCookie(REFRESH_COOKIE, { path: '/' });
     return result;
   }
 
@@ -142,11 +146,13 @@ export class AuthController {
   }
 
   private setRefreshCookie(res: Response, token: string): void {
+    const refreshTtl = this.config.get<number>('JWT_REFRESH_TTL', 2592000);
     res.cookie(REFRESH_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: refreshTtl * 1000,
     });
   }
 }

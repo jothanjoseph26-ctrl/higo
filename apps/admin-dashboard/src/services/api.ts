@@ -222,7 +222,7 @@ api.interceptors.response.use(
       try {
         const response = await axios.post<ApiResponse<{ accessToken: string }>>(
           `${api.defaults.baseURL}/auth/refresh`,
-          { refreshToken: 'cookie' }, // Mock body, backend reads httpOnly cookie
+          {}, // Empty body — backend reads httpOnly cookie via cookieToken fallback
           {
             withCredentials: true,
             headers: {

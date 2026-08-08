@@ -18,7 +18,7 @@ export const envSchema = Joi.object({
   JWT_ACCESS_SECRET: Joi.string().min(32).required(),
   JWT_REFRESH_SECRET: Joi.string().min(32).required(),
   JWT_ACCESS_TTL: Joi.number().default(900),
-  JWT_REFRESH_TTL: Joi.number().default(604800),
+  JWT_REFRESH_TTL: Joi.number().default(2592000),
   ENCRYPTION_KEY: Joi.string().base64().length(44).required(),
   GOOGLE_OAUTH_CLIENT_ID: Joi.string().required(),
 
