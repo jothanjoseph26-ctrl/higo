@@ -171,16 +171,28 @@ export class KYCService {
     return {
       kycStatus: driver.kycStatus as KYCStatus,
       verificationTier: computedTier,
-      documents: getRequiredKycDocs(driver.vehicleType).map((docType) => {
-        const doc = docs[docType];
-        return {
-          docType,
-          status: doc?.status ?? KYCStatus.PENDING,
-          rejectionCode: doc?.rejectionCode,
-          rejectionReason: doc?.rejectionReason,
-          uploadedAt: doc?.uploadedAt ?? null,
-        };
-      }),
+      // Only report documents that actually exist. KYCStatus has no "not
+      // uploaded" member, so a required-but-missing doc was previously
+      // defaulting to KYCStatus.PENDING here - indistinguishable from a
+      // document that had genuinely been submitted and was awaiting review.
+      // That made every brand-new driver's KYC screen show "Pending Review"
+      // for documents they'd never uploaded, which also hides the upload
+      // button (only shown for "missing"/"rejected"), leaving no way to
+      // actually submit anything. Omitting the entry lets the frontend's
+      // existing find(...) || "missing" fallback work correctly instead.
+      documents: getRequiredKycDocs(driver.vehicleType)
+        .map((docType) => {
+          const doc = docs[docType];
+          if (!doc) return null;
+          return {
+            docType,
+            status: doc.status,
+            rejectionCode: doc.rejectionCode,
+            rejectionReason: doc.rejectionReason,
+            uploadedAt: doc.uploadedAt ?? null,
+          };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null),
     };
   }
 
