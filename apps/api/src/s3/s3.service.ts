@@ -22,9 +22,7 @@ export class OssService {
       );
     }
     const accessKeyId = config.getOrThrow<string>('CLOUDFLARE_ACCESS_KEY_ID');
-    const secretAccessKey =
-      config.get<string>('CLOUDFLARE_SECRET_ACCESS_KEY') ??
-      config.getOrThrow<string>('CLOUDFLARE_SECRET_ACESS_KEY');
+    const secretAccessKey = config.getOrThrow<string>('CLOUDFLARE_SECRET_ACCESS_KEY');
 
     const configuredEndpoint = config.get<string>('CLOUDFLARE_R2_ENDPOINT')?.trim();
     const endpoint =

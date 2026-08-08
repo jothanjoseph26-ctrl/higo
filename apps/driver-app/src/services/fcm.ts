@@ -2,7 +2,6 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { api } from './api';
-import { navigateToTripRequest } from '../navigation/navigationRef';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -112,10 +111,7 @@ export function setupFCMHandlers(): () => void {
   const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data as Record<string, unknown>;
     const type = typeof data?.type === 'string' ? data.type : '';
-
-    if (type === 'trip:new_request') {
-      navigateToTripRequest();
-    }
+    console.log('Notification tapped', type);
   });
 
   return () => {

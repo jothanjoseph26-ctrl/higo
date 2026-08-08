@@ -186,14 +186,14 @@ export class TripsController {
       activeTrip = await this.prisma.trip.findFirst({
         where: {
           passengerId: user.sub,
-          status: { in: ['requested', 'matched', 'en_route', 'active'] },
+          status: { in: ['requested', 'matched', 'arrived', 'en_route', 'active'] },
         },
       });
     } else if (user.type === 'driver') {
       activeTrip = await this.prisma.trip.findFirst({
         where: {
           driverId: user.sub,
-          status: { in: ['matched', 'en_route', 'active'] },
+          status: { in: ['matched', 'arrived', 'en_route', 'active'] },
         },
       });
     }
@@ -280,6 +280,45 @@ export class TripsController {
       contactsNotified: 2,
       controlRoomNotified: true,
     };
+  }
+
+  @Post(':id/arrived')
+  async driverArrived(
+    @CurrentUser() user: AuthUser,
+    @Param('id') tripId: string,
+  ) {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can confirm arrival');
+    }
+    await this.tripService.assertTripAccess(tripId, user);
+    await this.tripService.transition(tripId, 'arrived' as any, 'driver');
+    return { success: true };
+  }
+
+  @Post(':id/start')
+  async startTrip(
+    @CurrentUser() user: AuthUser,
+    @Param('id') tripId: string,
+  ) {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can start a trip');
+    }
+    await this.tripService.assertTripAccess(tripId, user);
+    await this.tripService.transition(tripId, 'active' as any, 'driver');
+    return { success: true };
+  }
+
+  @Post(':id/complete')
+  async completeTrip(
+    @CurrentUser() user: AuthUser,
+    @Param('id') tripId: string,
+  ) {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can complete a trip');
+    }
+    await this.tripService.assertTripAccess(tripId, user);
+    await this.tripService.transition(tripId, 'completed' as any, 'driver');
+    return { success: true };
   }
 
   @Post(':id/dispute')

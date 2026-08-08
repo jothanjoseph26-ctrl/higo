@@ -165,9 +165,12 @@ export class KYCService {
     const driver = await this.requireDriver(driverId);
     const docs = this.parseDocuments(driver.kycDocuments);
 
+    // Recompute tier on-the-fly to prevent staleness from admin bypass
+    const computedTier = computeVerificationTier(docs, driver.vehicleType);
+
     return {
       kycStatus: driver.kycStatus as KYCStatus,
-      verificationTier: driver.verificationTier as VerificationTier,
+      verificationTier: computedTier,
       documents: getRequiredKycDocs(driver.vehicleType).map((docType) => {
         const doc = docs[docType];
         return {

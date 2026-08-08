@@ -9,7 +9,6 @@ import {
   TripStatus,
 } from '@higo/shared-types';
 import { useTripStore } from '../stores/tripStore';
-import { navigateToTab, navigateToTripRequest } from '../navigation/navigationRef';
 
 const getBaseUrl = () => {
   return Platform.OS === 'android' ? API_BASE_URL_ANDROID_EMULATOR : API_BASE_URL;
@@ -27,7 +26,6 @@ function registerSocketHandlers(sock: Socket<ServerToClientEvents, ClientToServe
   sock.on(SOCKET_EVENTS.TRIP_NEW_REQUEST, (payload) => {
     console.log('Received new trip request via socket', payload);
     void useTripStore.getState().setIncomingRequest(payload);
-    navigateToTripRequest();
   });
 
   sock.on(SOCKET_EVENTS.TRIP_STARTED, (payload) => {
@@ -40,7 +38,6 @@ function registerSocketHandlers(sock: Socket<ServerToClientEvents, ClientToServe
 
   sock.on(SOCKET_EVENTS.TRIP_CANCELLED, (payload) => {
     void useTripStore.getState().handleTripCancelled(payload);
-    navigateToTab();
   });
 
   sock.on(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED, (payload) => {

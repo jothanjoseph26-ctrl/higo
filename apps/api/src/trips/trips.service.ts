@@ -1439,6 +1439,10 @@ export class TripService {
           driverId: driverId!,
         },
       });
+    } else if (to === TripStatus.ARRIVED) {
+      this.eventsGateway.server
+        .to(`trip:${tripId}`)
+        .emit(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED, { tripId });
     } else if (to === TripStatus.EN_ROUTE) {
       this.eventsGateway.server
         .to(`trip:${tripId}`)

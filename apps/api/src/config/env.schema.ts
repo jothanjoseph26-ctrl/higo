@@ -53,7 +53,6 @@ export const envSchema = Joi.object({
   CLOUDFLARE_R2_ENDPOINT: Joi.string().uri().allow('').default(''),
   CLOUDFLARE_ACCESS_KEY_ID: Joi.string().required(),
   CLOUDFLARE_SECRET_ACCESS_KEY: Joi.string().allow('').default(''),
-  CLOUDFLARE_SECRET_ACESS_KEY: Joi.string().allow('').default(''),
 
   PAYSTACK_SECRET_KEY: Joi.string().required(),
   PAYSTACK_PUBLIC_KEY: Joi.string().required(),
@@ -116,12 +115,10 @@ export const envSchema = Joi.object({
     }
   }
 
-  const r2Secret =
-    value.CLOUDFLARE_SECRET_ACCESS_KEY || value.CLOUDFLARE_SECRET_ACESS_KEY;
+  const r2Secret = value.CLOUDFLARE_SECRET_ACCESS_KEY;
   if (!r2Secret) {
     return helpers.error('any.custom', {
-      message:
-        'CLOUDFLARE_SECRET_ACCESS_KEY (or CLOUDFLARE_SECRET_ACESS_KEY) is required',
+      message: 'CLOUDFLARE_SECRET_ACCESS_KEY is required',
     });
   }
 

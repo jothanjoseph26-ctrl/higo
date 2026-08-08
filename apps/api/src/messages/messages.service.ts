@@ -16,6 +16,7 @@ import { AppException } from '../common/errors/app.exception';
 import { AuthUser } from '../common/types/auth-user';
 import { EventsGateway } from '../realtime/events.gateway';
 import { AiFeaturesService } from '../ai/ai-features.service';
+import { PushService } from '../push/push.service';
 
 const ACTIVE_TRIP_STATUSES: PrismaTripStatus[] = [
   'matched',
@@ -31,6 +32,7 @@ export class MessagesService {
     private readonly prisma: PrismaService,
     private readonly eventsGateway: EventsGateway,
     private readonly aiFeatures: AiFeaturesService,
+    private readonly pushService: PushService,
   ) {}
 
   async getTripMessages(tripId: string, user: AuthUser) {
@@ -71,6 +73,30 @@ export class MessagesService {
 
     const mapped = this.mapMessage(message);
     this.eventsGateway.emitTripMessageNew(tripId, mapped);
+
+    // Send push notification to the other party
+    const senderLabel = senderType === 'driver' ? 'Driver' : 'Passenger';
+    const truncatedBody = body.trim().length > 100
+      ? body.trim().substring(0, 100) + '...'
+      : body.trim();
+
+    if (senderType === 'passenger' && trip.driverId) {
+      void this.pushService.sendToDriver(trip.driverId, {
+        title: `New message from passenger`,
+        body: truncatedBody,
+        data: { type: 'chat', tripId },
+      });
+      // Create in-app notification for driver
+      void this.createChatNotification(trip.driverId, 'driver', senderLabel, truncatedBody, tripId);
+    } else if (senderType === 'driver') {
+      void this.pushService.sendToPassenger(trip.passengerId, {
+        title: `New message from driver`,
+        body: truncatedBody,
+        data: { type: 'chat', tripId },
+      });
+      // Create in-app notification for passenger
+      void this.createChatNotification(trip.passengerId, 'passenger', senderLabel, truncatedBody, tripId);
+    }
 
     return { message: mapped };
   }
@@ -235,6 +261,29 @@ export class MessagesService {
         type: 'support',
       },
     });
+  }
+
+  private async createChatNotification(
+    userId: string,
+    userType: 'passenger' | 'driver',
+    senderLabel: string,
+    body: string,
+    tripId: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.notification.create({
+        data: {
+          userId,
+          userType,
+          title: `New message from ${senderLabel}`,
+          body,
+          type: 'chat',
+          data: { tripId, type: 'chat' },
+        },
+      });
+    } catch (err) {
+      this.logger.warn(`Failed to create chat notification: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private mapConversation(conversation: PrismaConversation): Conversation {

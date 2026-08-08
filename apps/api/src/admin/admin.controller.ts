@@ -592,7 +592,7 @@ function maskFcmServerKey(settings: PlatformSettingsPayload): PlatformSettingsPa
   };
 }
 
-const COMMISSION_RATE = 0.05;
+const COMMISSION_RATE = Number(process.env.PLATFORM_COMMISSION_RATE ?? 0.10);
 const ACTIVE_TRIP_STATUSES = ['requested', 'matched', 'en_route', 'active'] as const;
 
 function parseGeoPoint(geoJson: string | null | undefined): { lat: number; lng: number } | null {
@@ -1016,9 +1016,27 @@ export class AdminController {
     @Param('id') id: string,
     @Body() dto: { kycStatus: string },
   ) {
+    // Recompute verification tier to prevent staleness
+    const driver = await this.prisma.driver.findUnique({ where: { id } });
+    if (!driver) throw new AppException('NOT_FOUND', undefined, 'Driver not found');
+
+    const docs = (driver.kycDocuments ?? {}) as Record<string, { status?: string }>;
+    const { computeVerificationTier, getRequiredKycDocs } = await import('../kyc/kyc-state-machine');
+
+    // Build the KycDocumentsMap from the JSONB blob
+    const docsMap: Record<string, { status?: string }> = {};
+    for (const [key, val] of Object.entries(docs)) {
+      docsMap[key] = { status: val?.status };
+    }
+
+    const newTier = computeVerificationTier(docsMap as any, driver.vehicleType);
+
     return this.prisma.driver.update({
       where: { id },
-      data: { kycStatus: dto.kycStatus as any },
+      data: {
+        kycStatus: dto.kycStatus as any,
+        verificationTier: newTier,
+      },
     });
   }
 

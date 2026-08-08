@@ -82,7 +82,7 @@ export function WebViewShell({ appUrl = APP_URL }: Props) {
         }
         case 'OPEN_EXTERNAL_URL': {
           const url = typeof payload?.url === 'string' ? payload.url : '';
-          if (url.startsWith('https://') || url.startsWith('http://')) {
+          if (url.startsWith('tel:') || url.startsWith('https://') || url.startsWith('http://')) {
             await Linking.openURL(url);
             respond(requestId, { ok: true });
           } else {
