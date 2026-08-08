@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { IsOptional, IsString, IsArray, IsEnum } from 'class-validator';
 import { LatLng, PaginationQuery, RequestTripRequest, VehicleType } from '@higo/shared-types';
 import { TripService } from './trips.service';
 import {
@@ -15,6 +16,20 @@ import { AuthUser } from '../common/types/auth-user';
 import { AppException } from '../common/errors/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import * as crypto from 'crypto';
+
+// ─── Dispute DTO ─────────────────────────────────────────────────────────────
+
+export class CreateDisputeDto {
+  @IsString()
+  type!: string; // fare_dispute, no_show, safety, payment
+
+  @IsString()
+  description!: string;
+
+  @IsOptional()
+  @IsArray()
+  evidenceUrls?: string[];
+}
 
 function normalizeLatLng(point: LatLng): LatLng {
   return {
@@ -265,5 +280,26 @@ export class TripsController {
       contactsNotified: 2,
       controlRoomNotified: true,
     };
+  }
+
+  @Post(':id/dispute')
+  async createDispute(
+    @CurrentUser() user: AuthUser,
+    @Param('id') tripId: string,
+    @Body() dto: CreateDisputeDto,
+  ) {
+    await this.tripService.assertTripAccess(tripId, user);
+
+    const dispute = await this.prisma.dispute.create({
+      data: {
+        tripId,
+        raisedBy: user.type === 'driver' ? 'driver' : 'passenger',
+        type: dto.type,
+        description: dto.description,
+        evidenceUrls: dto.evidenceUrls ?? [],
+      },
+    });
+
+    return { disputeId: dispute.id, status: dispute.status };
   }
 }

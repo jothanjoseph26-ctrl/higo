@@ -38,6 +38,7 @@ import { HceModule } from './hce/hce.module';
 import { DeliveriesModule } from './deliveries/deliveries.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { SupportModule } from './support/support.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     DeliveriesModule,
     LoyaltyModule,
     NotificationsModule,
+    SupportModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
