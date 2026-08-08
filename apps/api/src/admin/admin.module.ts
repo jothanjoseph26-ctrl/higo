@@ -10,6 +10,7 @@ import { HceModule } from '../hce/hce.module';
 import { AiModule } from '../ai/ai.module';
 import { EmailModule } from '../email/email.module';
 import { AuthModule } from '../auth/auth.module';
+import { PlatformSettingsModule } from './platform-settings.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { AuthModule } from '../auth/auth.module';
     AiModule,
     EmailModule,
     AuthModule,
+    PlatformSettingsModule,
   ],
   controllers: [AdminController],
 })

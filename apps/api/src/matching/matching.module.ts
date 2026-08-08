@@ -8,6 +8,7 @@ import { MatchingService } from './matching.service';
 import { CtsService } from './cts.service';
 import { GeoRepository } from './geo.repository';
 import { PushModule } from '../push/push.module';
+import { PlatformSettingsModule } from '../admin/platform-settings.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PushModule } from '../push/push.module';
     BullModule.registerQueue({
       name: 'dispatch',
     }),
+    PlatformSettingsModule,
   ],
   providers: [GeoRepository, CtsService, MatchingService],
   exports: [MatchingService, GeoRepository],

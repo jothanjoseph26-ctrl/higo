@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PlatformSettingsReader } from '../admin/platform-settings-reader.service';
 import { LatLng, CompositeTrustScore } from '@higo/shared-types';
 
 export interface CtsContext {
@@ -9,7 +10,10 @@ export interface CtsContext {
 
 @Injectable()
 export class CtsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: PlatformSettingsReader,
+  ) {}
 
   async computeCTS(driverId: string, ctx: CtsContext): Promise<CompositeTrustScore> {
     const driver = await this.prisma.driver.findUnique({
@@ -20,60 +24,58 @@ export class CtsService {
       throw new Error(`Driver not found for CTS calculation: ${driverId}`);
     }
 
-    // 1. Identity Verification: NIN Verified (+25)
-    // tier_1, tier_2, tier_3 mean NIN is verified
-    const ninPoints = driver.verificationTier !== 'tier_0' ? 25 : 0;
+    const { ctsWeights, radiusMeters } = await this.settings.getMatchSettings();
 
-    // 2. Driver History: 100 Trips (+10), 500 Trips (+20), 1000 Trips (+30)
+    // 1. Identity Verification: NIN Verified (+N)
+    const ninPoints = driver.verificationTier !== 'tier_0' ? ctsWeights.ninVerifiedPoints : 0;
+
+    // 2. Driver History: tiered points based on trip count
     let historyPoints = 0;
     if (driver.totalTrips >= 1000) {
-      historyPoints = 30;
+      historyPoints = ctsWeights.trips1000Points;
     } else if (driver.totalTrips >= 500) {
-      historyPoints = 20;
+      historyPoints = ctsWeights.trips500Points;
     } else if (driver.totalTrips >= 100) {
-      historyPoints = 10;
+      historyPoints = ctsWeights.trips100Points;
     }
 
-    // 3. Passenger Ratings: 4.8+ (+20)
+    // 3. Passenger Ratings
     const ratingVal = Number(driver.ratingAvg);
-    const ratingPoints = ratingVal >= 4.8 ? 20 : 0;
+    const ratingPoints = ratingVal >= 4.8 ? ctsWeights.ratingAbove48Points : 0;
 
-    // 4. Estate Endorsement (+15)
-    // Check if estate endorsement is verified/approved in driver kycDocuments
+    // 4. Estate Endorsement
     const kycDocs = (driver.kycDocuments as any) || {};
-    const estatePoints = kycDocs.estateEndorsementApproved === true ? 15 : 0;
+    const estatePoints = kycDocs.estateEndorsementApproved === true ? ctsWeights.estateEndorsementPoints : 0;
 
-    // 5. Referral Reputation (+10)
-    // Check if referral reputational invite is approved
-    const referralPoints = kycDocs.referralApproved === true ? 10 : 0;
+    // 5. Referral Reputation
+    const referralPoints = kycDocs.referralApproved === true ? ctsWeights.referralApprovedPoints : 0;
 
-    // 6. Geo Proximity (+20 max): linear decay from the pickup point out to the
-    // 5km candidate-search radius used by GeoRepository.findNearestOnlineDrivers.
-    // A driver at the pickup point scores the full 20; a driver at or beyond 5km
-    // scores 0. Previously computed but never added into totalPoints, so proximity
-    // had no effect on ranking beyond the exact-CTS-tie distance tiebreaker in
-    // MatchingService.findCandidates — differently-scored drivers at very different
-    // distances were ranked purely on trust points, ignoring how much further away
-    // the higher-scored driver might be.
-    const geoProximityScore = 1.0 - Math.min(1.0, Math.max(0.0, ctx.distanceMeters / 5000.0));
+    // 6. Geo Proximity (+20 max): linear decay from pickup to search radius
+    const geoProximityScore = 1.0 - Math.min(1.0, Math.max(0.0, ctx.distanceMeters / radiusMeters));
     const geoPoints = geoProximityScore * 20;
 
-    // Sum points (0..120, since geo proximity is now included)
-    const MAX_POINTS = 120;
+    const maxPossible =
+      ctsWeights.ninVerifiedPoints +
+      ctsWeights.trips1000Points +
+      ctsWeights.ratingAbove48Points +
+      ctsWeights.estateEndorsementPoints +
+      ctsWeights.referralApprovedPoints +
+      20; // geo proximity max
+
     const totalPoints =
       ninPoints + historyPoints + ratingPoints + estatePoints + referralPoints + geoPoints;
-    const total = totalPoints / MAX_POINTS; // Map to 0..1 scale for CompositeTrustScore type compatibility
+    const total = totalPoints / maxPossible;
 
     return {
       driverId,
-      referralProximity: referralPoints / 10,
-      estateEndorsement: estatePoints / 15,
-      completionRate: historyPoints / 30, // mapping history weight to float
+      referralProximity: referralPoints / ctsWeights.referralApprovedPoints,
+      estateEndorsement: estatePoints / ctsWeights.estateEndorsementPoints,
+      completionRate: historyPoints / ctsWeights.trips1000Points,
       recencyActivity: 1.0,
-      ratingScore: ratingPoints / 20,
+      ratingScore: ratingPoints / ctsWeights.ratingAbove48Points,
       geoProximity: geoProximityScore,
-      verificationTier: ninPoints / 25,
-      jobVolumeSignal: historyPoints / 30,
+      verificationTier: ninPoints / ctsWeights.ninVerifiedPoints,
+      jobVolumeSignal: historyPoints / ctsWeights.trips1000Points,
       total: Math.min(1.0, Math.max(0.0, total)),
     };
   }

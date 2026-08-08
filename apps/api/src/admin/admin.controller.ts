@@ -17,6 +17,7 @@ import { HceUsageService } from '../hce/hce-usage.service';
 import { AiService } from '../ai/ai.service';
 import { EmailService } from '../email/email.service';
 import { OtpService } from '../auth/otp.service';
+import { PlatformSettingsReader } from './platform-settings-reader.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import * as bcrypt from 'bcryptjs';
@@ -592,7 +593,6 @@ function maskFcmServerKey(settings: PlatformSettingsPayload): PlatformSettingsPa
   };
 }
 
-const COMMISSION_RATE = Number(process.env.PLATFORM_COMMISSION_RATE ?? 0.10);
 const ACTIVE_TRIP_STATUSES = ['requested', 'matched', 'en_route', 'active'] as const;
 
 function parseGeoPoint(geoJson: string | null | undefined): { lat: number; lng: number } | null {
@@ -638,6 +638,7 @@ export class AdminController {
     private readonly ai: AiService,
     private readonly email: EmailService,
     private readonly otp: OtpService,
+    private readonly settingsReader: PlatformSettingsReader,
   ) {}
 
   @Get('users/otp/:phone')
@@ -769,7 +770,8 @@ export class AdminController {
     ]);
 
     const grossRevenueToday = todayCompletedTrips.reduce((sum, trip) => sum + trip.totalFare, 0);
-    const platformFeeToday = Math.round(grossRevenueToday * COMMISSION_RATE);
+    const commissionRate = (await this.settingsReader.getCommissionSettings()).ratePct / 100;
+    const platformFeeToday = Math.round(grossRevenueToday * commissionRate);
 
     const tripTrendMap = new Map<string, { trips: number; gross: number }>();
     for (let i = 0; i < 7; i++) {
@@ -795,7 +797,7 @@ export class AdminController {
     const earningsTrend = Array.from(tripTrendMap.entries()).map(([date, value]) => ({
       date,
       gross: value.gross,
-      fee: Math.round(value.gross * COMMISSION_RATE),
+      fee: Math.round(value.gross * commissionRate),
     }));
 
     return {
@@ -1507,6 +1509,9 @@ export class AdminController {
     if (auditRows.length) {
       await this.prisma.configAuditLog.createMany({ data: auditRows });
     }
+
+    // Invalidate the in-memory cache so matching engine picks up new settings
+    this.settingsReader.invalidate();
 
     return maskFcmServerKey(parsePlatformSettings(row.settings));
   }

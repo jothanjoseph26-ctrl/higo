@@ -1,16 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PlatformSettingsReader } from '../admin/platform-settings-reader.service';
 import { LatLng, VehicleType } from '@higo/shared-types';
 
 @Injectable()
 export class GeoRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: PlatformSettingsReader,
+  ) {}
 
   async findNearestOnlineDrivers(
     point: LatLng,
     vehicleType: VehicleType,
-    maxRadiusMeters = 5000,
+    maxRadiusMeters?: number,
   ): Promise<Array<{ id: string; distanceMeters: number }>> {
+    const radius = maxRadiusMeters ?? (await this.settings.getMatchSettings()).radiusMeters;
     const rows = await this.prisma.$queryRaw<any[]>`
       SELECT 
         id,
@@ -26,7 +31,7 @@ export class GeoRepository {
         AND ST_DWithin(
           current_location, 
           ST_SetSRID(ST_MakePoint(${point.lng}, ${point.lat}), 4326)::geography, 
-          ${maxRadiusMeters}
+          ${radius}
         )
       ORDER BY dist ASC
       LIMIT 10;
@@ -49,9 +54,10 @@ export class GeoRepository {
 
   async findNearbyOnlineDrivers(
     point: LatLng,
-    maxRadiusMeters = 5000,
+    maxRadiusMeters?: number,
     limit = 50,
   ): Promise<Array<{ id: string; lat: number; lng: number; distanceMeters: number }>> {
+    const radius = maxRadiusMeters ?? (await this.settings.getMatchSettings()).radiusMeters;
     const rows = await this.prisma.$queryRaw<any[]>`
       SELECT
         id,
@@ -69,7 +75,7 @@ export class GeoRepository {
         AND ST_DWithin(
           current_location,
           ST_SetSRID(ST_MakePoint(${point.lng}, ${point.lat}), 4326)::geography,
-          ${maxRadiusMeters}
+          ${radius}
         )
       ORDER BY dist ASC
       LIMIT ${limit};

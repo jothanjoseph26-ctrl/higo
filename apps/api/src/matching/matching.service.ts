@@ -9,6 +9,7 @@ import { CtsService, CtsContext } from './cts.service';
 import { TripService } from '../trips/trips.service';
 import { EventsGateway } from '../realtime/events.gateway';
 import { PushService } from '../push/push.service';
+import { PlatformSettingsReader } from '../admin/platform-settings-reader.service';
 import {
   CompositeTrustScore,
   LatLng,
@@ -31,12 +32,14 @@ export class MatchingService {
     private readonly tripService: TripService,
     private readonly eventsGateway: EventsGateway,
     private readonly pushService: PushService,
+    private readonly settings: PlatformSettingsReader,
     @InjectQueue('dispatch')
     private readonly dispatchQueue: Queue,
   ) {}
 
   async findCandidates(pickup: LatLng, vehicleType: VehicleType): Promise<RankedCandidate[]> {
-    const nearest = await this.geoRepo.findNearestOnlineDrivers(pickup, vehicleType, 5000);
+    const matchSettings = await this.settings.getMatchSettings();
+    const nearest = await this.geoRepo.findNearestOnlineDrivers(pickup, vehicleType, matchSettings.radiusMeters);
     
     const scoredCandidates = await Promise.all(
       nearest.map(async (candidate) => {
@@ -100,8 +103,10 @@ export class MatchingService {
       return;
     }
 
+    const matchSettings = await this.settings.getMatchSettings();
     const offerId = crypto.randomUUID();
-    const expiresAt = Date.now() + 15000;
+    const offerTimeoutMs = matchSettings.offerTimeoutSec * 1000;
+    const expiresAt = Date.now() + offerTimeoutMs;
 
     await this.redis.raw.sadd(offeredDriversKey, nextCandidate.driverId);
     await this.redis.expire(offeredDriversKey, 600);
@@ -109,7 +114,7 @@ export class MatchingService {
     const job = await this.dispatchQueue.add(
       'timeout',
       { tripId, driverId: nextCandidate.driverId, offerId },
-      { delay: 15000, removeOnComplete: true }
+      { delay: offerTimeoutMs, removeOnComplete: true }
     );
 
     const offerData = {
@@ -138,7 +143,7 @@ export class MatchingService {
       passengerName: passenger?.name || null,
       passengerPhone: passenger?.phone || null,
       passengerRating: passenger ? Number(passenger.ratingAvg) : 5.0,
-      expiresInSeconds: 15,
+      expiresInSeconds: matchSettings.offerTimeoutSec,
     };
 
     this.logger.log(`Offering trip ${tripId} to driver ${nextCandidate.driverId} (offerId: ${offerId})`);
@@ -242,7 +247,8 @@ export class MatchingService {
 
     await this.redis.del(offerKey);
 
-    this.logger.log(`Offer timeout (15s) for trip ${tripId} and driver ${driverId}`);
+    const matchSettings = await this.settings.getMatchSettings();
+    this.logger.log(`Offer timeout (${matchSettings.offerTimeoutSec}s) for trip ${tripId} and driver ${driverId}`);
 
     await this.dispatch(tripId);
   }
