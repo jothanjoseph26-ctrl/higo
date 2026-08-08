@@ -352,7 +352,7 @@ export class AuthService {
     accessTokenExpiresIn: number;
   }> {
     const accessTtl = this.config.get<number>('JWT_ACCESS_TTL', 900);
-    const refreshTtl = this.config.get<number>('JWT_REFRESH_TTL', 604800);
+    const refreshTtl = this.config.get<number>('JWT_REFRESH_TTL', 2592000);
     const jti = randomUUID();
 
     const accessToken = await this.jwt.signAsync(payload, {
@@ -374,7 +374,7 @@ export class AuthService {
   private async getRefreshRemainingTtl(token: string): Promise<number> {
     const decoded = this.jwt.decode(token) as { exp?: number } | null;
     if (!decoded?.exp) {
-      return this.config.get<number>('JWT_REFRESH_TTL', 604800);
+      return this.config.get<number>('JWT_REFRESH_TTL', 2592000);
     }
     return Math.max(decoded.exp - Math.floor(Date.now() / 1000), 1);
   }

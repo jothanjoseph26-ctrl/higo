@@ -25,6 +25,15 @@ import {
 } from './dto/auth.dto';
 
 const REFRESH_COOKIE = 'higo_rt';
+// The API and every web client that consumes it live on different
+// subdomains (api.hiconnectgo.com vs pilot./ride./portal.hiconnectgo.com) -
+// a cookie set with no explicit Domain defaults to host-only scope
+// (api.hiconnectgo.com alone) and is never sent on cross-subdomain
+// requests, credentials: 'include' or not. That silently broke refresh for
+// every real browser/WebView user: the 15-minute access token expires,
+// the refresh call has no cookie to read, and the client force-logs-out
+// and re-sends an OTP - repeatedly, all day, for every active user.
+const COOKIE_DOMAIN = process.env.NODE_ENV === 'production' ? '.hiconnectgo.com' : undefined;
 
 @Controller('auth')
 export class AuthController {
@@ -128,7 +137,7 @@ export class AuthController {
   ) {
     const cookieToken = req.cookies?.[REFRESH_COOKIE] as string | undefined;
     const result = await this.auth.logout(dto, cookieToken);
-    res.clearCookie(REFRESH_COOKIE, { path: '/' });
+    res.clearCookie(REFRESH_COOKIE, { path: '/', domain: COOKIE_DOMAIN });
     return result;
   }
 
@@ -152,6 +161,7 @@ export class AuthController {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
+      domain: COOKIE_DOMAIN,
       maxAge: refreshTtl * 1000,
     });
   }
