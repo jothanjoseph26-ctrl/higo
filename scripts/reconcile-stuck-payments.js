@@ -47,8 +47,18 @@ function paystackRequest(path) {
   });
 }
 
+const SUB_INIT_REFERENCE_RE = /^sub_init_([0-9a-f-]{36})_\d+$/i;
+
+function extractDriverId(tx) {
+  if (tx.metadata && tx.metadata.driver_id) return tx.metadata.driver_id;
+  const match = tx.reference && tx.reference.match(SUB_INIT_REFERENCE_RE);
+  return match ? match[1] : null;
+}
+
 async function findStuckSubscriptions() {
-  // Find transactions with sub_init_ prefix that haven't been processed
+  // Find transactions with sub_init_ prefix that haven't been processed.
+  // metadata isn't always attached at charge time, so also fall back to
+  // parsing the driver id out of the reference itself.
   const response = await paystackRequest(
     '/transaction?status=success&per_page=100'
   );
@@ -62,14 +72,13 @@ async function findStuckSubscriptions() {
     (tx) =>
       tx.reference &&
       tx.reference.startsWith('sub_init_') &&
-      tx.metadata &&
-      tx.metadata.driver_id
+      extractDriverId(tx)
   );
 }
 
 async function reconcilePayment(tx) {
-  const driverId = tx.metadata.driver_id;
-  const plan = tx.metadata.plan || 'daily';
+  const driverId = extractDriverId(tx);
+  const plan = (tx.metadata && tx.metadata.plan) || 'daily';
   const amount = tx.amount / 100; // kobo to naira
 
   console.log(`\n--- Reconciling payment ---`);
@@ -135,7 +144,7 @@ async function main() {
   let failCount = 0;
 
   for (const tx of stuckPayments) {
-    if (DRIVER_ID_ARG && tx.metadata.driver_id !== DRIVER_ID_ARG) {
+    if (DRIVER_ID_ARG && extractDriverId(tx) !== DRIVER_ID_ARG) {
       continue;
     }
 
