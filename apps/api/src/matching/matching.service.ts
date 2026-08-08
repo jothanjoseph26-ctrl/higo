@@ -161,7 +161,14 @@ export class MatchingService {
   async acceptOffer(driverId: string, tripId: string): Promise<void> {
     const offerKey = `dispatch:${tripId}`;
     const offerStr = await this.redis.get(offerKey);
+
+    // If the offer key is gone, check if the trip was already matched (race with timeout)
     if (!offerStr) {
+      const trip = await this.tripService.getTrip(tripId);
+      if (trip?.status === 'matched') {
+        this.logger.warn(`Trip ${tripId} already matched — ignoring duplicate accept from ${driverId}`);
+        return;
+      }
       throw new Error('Offer expired or not found');
     }
 
@@ -170,6 +177,7 @@ export class MatchingService {
       throw new Error('Offer was not made to you or is stale');
     }
 
+    // Remove the Bull timeout job first (before deleting Redis key)
     if (offer.jobId) {
       try {
         const job = await this.dispatchQueue.getJob(offer.jobId);
@@ -181,6 +189,7 @@ export class MatchingService {
       }
     }
 
+    // Use atomic delete to prevent race with timeout handler
     await this.redis.del(offerKey);
     await this.redis.del(`dispatch:offered_drivers:${tripId}`);
 
@@ -220,6 +229,14 @@ export class MatchingService {
 
     const offer = JSON.parse(offerStr);
     if (offer.offerId !== offerId || offer.driverId !== driverId) {
+      return;
+    }
+
+    // Check if the trip was already matched (race with acceptOffer)
+    const trip = await this.tripService.getTrip(tripId);
+    if (!trip || trip.status !== 'requested') {
+      this.logger.warn(`Trip ${tripId} is no longer requested (${trip?.status}). Skipping timeout re-dispatch.`);
+      await this.redis.del(offerKey);
       return;
     }
 
