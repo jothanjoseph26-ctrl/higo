@@ -136,6 +136,7 @@ export class MatchingService {
       durationMin: trip.durationMin || 0,
       passengerId: trip.passengerId,
       passengerName: passenger?.name || null,
+      passengerPhone: passenger?.phone || null,
       passengerRating: passenger ? Number(passenger.ratingAvg) : 5.0,
       expiresInSeconds: 15,
     };

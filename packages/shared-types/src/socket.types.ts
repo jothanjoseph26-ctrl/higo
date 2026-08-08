@@ -141,6 +141,7 @@ export interface TripNewRequestPayload {
   durationMin: number;
   passengerId: UUID;
   passengerName: string | null;
+  passengerPhone: string | null;
   passengerRating: number;
   /** Seconds the driver has to accept before auto-decline (15). */
   expiresInSeconds: number;
