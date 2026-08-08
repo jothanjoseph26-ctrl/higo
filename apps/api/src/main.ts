@@ -32,6 +32,9 @@ async function bootstrap() {
   const allowedOrigins = [
     'https://www.hiconnectgo.com',
     'https://hiconnectgo.com',
+    'https://pilot.hiconnectgo.com',
+    'https://ride.hiconnectgo.com',
+    'https://driver.hiconnectgo.com',
     'https://admin-production-13cc.up.railway.app',
     'http://localhost:5173',   // Vite dev server
     'http://localhost:4200',   // Angular dev server (legacy)
