@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Body, Query, Param } from '@nestjs/common';
+import { IsOptional, IsString, IsBoolean, IsEnum, IsNumber, Min, Max } from 'class-validator';
 import {
   AdminGetWeeklyKpisHistoryResponse,
   AdminGetWeeklyKpisResponse,
@@ -20,6 +21,63 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
+
+// ─── Admin-only DTOs ─────────────────────────────────────────────────────────
+
+/** Allowlist of fields an admin can update on a driver profile. */
+export class UpdateDriverDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  vehiclePlate?: string;
+
+  @IsOptional()
+  @IsString()
+  vehicleType?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isOnline?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsEnum(['pending', 'under_review', 'approved', 'rejected'] as const)
+  kycStatus?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  ratingAvg?: number;
+}
+
+/** Validate zone boundary coordinates are real numbers (prevents SQL injection). */
+export class CreateZoneDto {
+  @IsString()
+  name!: string;
+
+  @IsString()
+  zoneType!: string;
+
+  boundary!: Array<{ lat: number; lng: number }>;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(10)
+  surgeMultiplier?: number;
+}
 
 const PLATFORM_SETTINGS_ID = 'default';
 
@@ -849,8 +907,23 @@ export class AdminController {
   }
 
   @Put('drivers/:id')
-  async updateDriver(@Param('id') id: string, @Body() dto: any) {
-    return this.prisma.driver.update({ where: { id }, data: dto });
+  async updateDriver(@Param('id') id: string, @Body() dto: UpdateDriverDto) {
+    // Only update fields that are explicitly provided (allowlisted above)
+    const data: Record<string, unknown> = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.phone !== undefined) data.phone = dto.phone;
+    if (dto.vehiclePlate !== undefined) data.vehiclePlate = dto.vehiclePlate;
+    if (dto.vehicleType !== undefined) data.vehicleType = dto.vehicleType;
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.isOnline !== undefined) data.isOnline = dto.isOnline;
+    if (dto.kycStatus !== undefined) data.kycStatus = dto.kycStatus;
+    if (dto.ratingAvg !== undefined) data.ratingAvg = dto.ratingAvg;
+
+    if (Object.keys(data).length === 0) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'No valid fields to update');
+    }
+
+    return this.prisma.driver.update({ where: { id }, data });
   }
 
   @Delete('drivers/:id')
@@ -1062,6 +1135,15 @@ export class AdminController {
   }) {
     if (!dto.boundary || dto.boundary.length < 3) {
       throw new AppException('VALIDATION_ERROR', undefined, 'Zone boundary requires at least 3 points');
+    }
+
+    // Validate all coordinates are finite numbers to prevent SQL injection
+    for (const point of dto.boundary) {
+      if (typeof point.lat !== 'number' || typeof point.lng !== 'number' ||
+          !Number.isFinite(point.lat) || !Number.isFinite(point.lng) ||
+          point.lat < -90 || point.lat > 90 || point.lng < -180 || point.lng > 180) {
+        throw new AppException('VALIDATION_ERROR', undefined, 'Invalid coordinate in zone boundary');
+      }
     }
 
     const ring = [...dto.boundary];

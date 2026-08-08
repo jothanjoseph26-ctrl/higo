@@ -28,7 +28,25 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.use(cookieParser());
-  app.enableCors({ origin: true, credentials: true });
+  // CORS — explicit allowlist of trusted origins (never reflect arbitrary origins)
+  const allowedOrigins = [
+    'https://www.hiconnectgo.com',
+    'https://hiconnectgo.com',
+    'https://admin-production-13cc.up.railway.app',
+    'http://localhost:5173',   // Vite dev server
+    'http://localhost:4200',   // Angular dev server (legacy)
+  ];
+  app.enableCors({
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow requests with no origin (mobile apps, curl, server-to-server)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
+    credentials: true,
+  });
 
   app.setGlobalPrefix('api', {
     exclude: ['health', 'health/ready', 'docs', 'docs-json', 'downloads/HiGO-Passenger.apk'],

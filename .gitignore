@@ -38,9 +38,12 @@ testem.log
 # Environment
 .env
 .env.local
+.env.railway
+.env.*.local
 hiconnect-firebase-services-key.json
 *-firebase-services-key.json
-.env.*.local
+services-key/
+login-body.json
 
 # System Files
 .DS_Store
