@@ -301,10 +301,24 @@ export class AuthService {
       Math.max(remainingTtl, 1),
     );
 
+    // For admin sessions, re-read the current role from the database rather
+    // than carrying forward whatever role was baked into the refresh token
+    // at login time - otherwise an admin's role change (e.g. promotion to
+    // super_admin) silently never takes effect for that browser session
+    // until the 30-day refresh token itself expires and they log in again.
+    let role = payload.role;
+    if (payload.type === 'admin') {
+      const admin = await this.prisma.adminUser.findUnique({ where: { id: payload.sub } });
+      if (!admin || !admin.isActive) {
+        throw new AppException('UNAUTHORIZED');
+      }
+      role = admin.role;
+    }
+
     const tokens = await this.issueTokens({
       sub: payload.sub,
       type: payload.type,
-      role: payload.role,
+      role,
     });
 
     return {
