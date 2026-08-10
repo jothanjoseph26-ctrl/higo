@@ -10,9 +10,10 @@ const admins = [
     name: 'Support Admin',
     // 'supervisor' is below the RolesGuard threshold for the main admin
     // dashboard (@Roles('admin', 'super_admin') on AdminController) - this
-    // account is the one used to log into portal.hiconnectgo.com, so it
-    // needs full admin access, not the more limited supervisor tier.
-    role: 'admin',
+    // account is the one used to log into portal.hiconnectgo.com, and is the
+    // platform's actual super_admin (needed for Admin Studio's restricted
+    // sections, staff invites, and the settings audit trail).
+    role: 'super_admin',
     supervisorEmail: 'rebecca.adenike@hiconnectgo.com',
   },
   {
