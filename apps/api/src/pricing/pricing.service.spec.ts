@@ -27,7 +27,9 @@ describe('PricingService', () => {
     isActive: true,
     roundingIncrement: 5000,
     customerBookingFee: 0,
-    customerStatutoryLevy: 0,
+    // customerStatutoryLevy intentionally omitted - the service now computes
+    // this itself as FCT_LEVY_RATE * instantFare rather than reading it from
+    // PricingConfig (see pricing.service.ts).
     instantMultiplier: 1.0,
     negotiateRecommendedMultiplier: 1.0,
     negotiateMinimumOfferMultiplier: 0.9,
@@ -100,8 +102,8 @@ describe('PricingService', () => {
     expect(estimate.distanceFare).toBe(60000);
     expect(estimate.timeFare).toBe(22500);
     expect(estimate.rawFare).toBe(132500);
-    expect(estimate.totalFare).toBe(135000);
-    expect(estimate.quotedFare).toBe(135000);
+    expect(estimate.totalFare).toBe(136688);
+    expect(estimate.quotedFare).toBe(136688);
     expect(estimate.surgeMultiplier).toBe(1.0);
   });
 
@@ -129,7 +131,7 @@ describe('PricingService', () => {
       pickup,
     });
 
-    expect(estimate.totalFare).toBe(70000);
+    expect(estimate.totalFare).toBe(70875);
   });
 
   it('applies night premium between 10 PM and 5 AM Nigeria time', async () => {
@@ -143,7 +145,7 @@ describe('PricingService', () => {
       pickup,
     });
 
-    expect(estimate.totalFare).toBe(160000);
+    expect(estimate.totalFare).toBe(162000);
   });
 
   it('does not call surge repo when SURGE_ENABLED is false', async () => {
@@ -176,7 +178,7 @@ describe('PricingService', () => {
 
     expect(surgeRepo.getSurgeMultiplier).toHaveBeenCalledWith(pickup);
     expect(estimate.surgeMultiplier).toBe(1.5);
-    expect(estimate.totalFare).toBe(200000);
+    expect(estimate.totalFare).toBe(202500);
   });
 
   it('applies night premium before surge multiplier', async () => {
@@ -192,14 +194,13 @@ describe('PricingService', () => {
       pickup,
     });
 
-    expect(estimate.totalFare).toBe(240000);
+    expect(estimate.totalFare).toBe(243000);
   });
 
   it('calculates all Base44 ride modes independently from the metered base', async () => {
     prisma.pricingConfig.findFirst.mockResolvedValue({
       ...kekeConfig,
       customerBookingFee: 5000,
-      customerStatutoryLevy: 1000,
     });
     jest.useFakeTimers().setSystemTime(new Date('2026-06-25T12:00:00Z'));
 
@@ -211,14 +212,16 @@ describe('PricingService', () => {
       rideMode: RideMode.NEGOTIATE,
     });
 
-    expect(estimate.modes.instant.totalFare).toBe(141000);
-    expect(estimate.modes.negotiate.recommended).toBe(141000);
-    expect(estimate.modes.negotiate.minimumOffer).toBe(126000);
-    expect(estimate.modes.negotiate.fastMatch).toBe(156000);
-    expect(estimate.modes.share.perSeat).toBe(96000);
-    expect(estimate.modes.scheduleFlex.totalFare).toBe(126000);
-    expect(estimate.modes.scheduleExact.totalFare).toBe(146000);
-    expect(estimate.totalFare).toBe(141000);
+    // Every mode's total also includes the 1688 FCT levy (1.25% of the
+    // 135000 instant fare) on top of the 5000 booking fee.
+    expect(estimate.modes.instant.totalFare).toBe(141688);
+    expect(estimate.modes.negotiate.recommended).toBe(141688);
+    expect(estimate.modes.negotiate.minimumOffer).toBe(126688);
+    expect(estimate.modes.negotiate.fastMatch).toBe(156688);
+    expect(estimate.modes.share.perSeat).toBe(96688);
+    expect(estimate.modes.scheduleFlex.totalFare).toBe(126688);
+    expect(estimate.modes.scheduleExact.totalFare).toBe(146688);
+    expect(estimate.totalFare).toBe(141688);
     expect(estimate.rideMode).toBe(RideMode.NEGOTIATE);
   });
 

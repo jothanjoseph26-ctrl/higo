@@ -69,16 +69,21 @@ export class TripService {
     private readonly promosService: PromosService,
   ) {}
 
-  /** Launch envelope when micro-zones miss GPS / autocomplete coordinates. */
-  private isWithinAbujaMetro(point: LatLng): boolean {
-    return point.lat >= 8.95 && point.lat <= 9.15 && point.lng >= 7.25 && point.lng <= 7.55;
+  /**
+   * Whole-FCT envelope (all 6 Area Councils: AMAC, Bwari, Gwagwalada, Kuje,
+   * Kwali, Abaji) - covers points that miss the seeded micro-zones, which
+   * only outline central Abuja districts. Bounds taken from FCT's public
+   * administrative extent, with a small margin.
+   */
+  private isWithinFct(point: LatLng): boolean {
+    return point.lat >= 8.35 && point.lat <= 9.35 && point.lng >= 6.75 && point.lng <= 7.85;
   }
 
   private async isInServiceArea(point: LatLng): Promise<boolean> {
     if (await this.zonesService.isPointInPermittedZone(point)) {
       return true;
     }
-    return this.isWithinAbujaMetro(point);
+    return this.isWithinFct(point);
   }
 
   private haversineDistance(p1: LatLng, p2: LatLng): number {
@@ -1092,20 +1097,6 @@ export class TripService {
     `;
     if (activeTripRows.length > 0) {
       throw new AppException('TRIP_ALREADY_ACTIVE');
-    }
-
-    // Card payments aren't wired end-to-end yet: no authorization is captured/stored
-    // anywhere (PaymentMethods.jsx's "Add card" flow is just a wallet top-up checkout,
-    // nothing persists the returned Paystack authorization for reuse), and dispatch
-    // below only fires for CASH -- a CARD trip would otherwise sit in `requested`
-    // forever while the passenger sees a normal "finding driver" screen. Reject it
-    // server-side too since the frontend selector is not an authorization boundary.
-    if (dto.paymentMethod === PaymentMethod.CARD) {
-      throw new AppException(
-        'VALIDATION_ERROR',
-        undefined,
-        'Card payments are not available yet -- please select Cash.',
-      );
     }
 
     const { distanceKm, durationMin, estimate } = await this.prepareTripRequest(dto, {

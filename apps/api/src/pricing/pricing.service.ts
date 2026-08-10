@@ -8,6 +8,11 @@ import { AppException } from '../common/errors/app.exception';
 
 const DEFAULT_ROUNDING_KOBO = 5000; // Base44 DEFAULT_ROUNDING=50 naira.
 const MATCH_RADIUS_KM = 2.5;
+// FCTA-mandated levy on rides within the Federal Capital Territory, passed
+// through to the passenger. Applied on top of the metered fare, same as
+// customerBookingFee - not currently configurable per city/PricingConfig
+// since it's a fixed regulatory rate rather than a HiGO-set fee.
+const FCT_LEVY_RATE = 0.0125;
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -78,7 +83,6 @@ export class PricingService {
     let minimumFare = pricingConfig.minFare;
     const roundingIncrement = pricingConfig.roundingIncrement || DEFAULT_ROUNDING_KOBO;
     const customerBookingFee = pricingConfig.customerBookingFee || 0;
-    const customerStatutoryLevy = pricingConfig.customerStatutoryLevy || 0;
     const rideMode = input.rideMode ?? (input.isShared ? RideMode.SHARE : RideMode.INSTANT);
 
     const distanceFare = Math.round(input.distanceKm * perKmFare);
@@ -107,6 +111,7 @@ export class PricingService {
     const meteredBase = Math.max(rawFare, minimumFare);
     const minimumFareApplied = rawFare < minimumFare;
     const instantFare = this.roundToIncrement(meteredBase * surgeMultiplier, roundingIncrement);
+    const customerStatutoryLevy = Math.round(instantFare * FCT_LEVY_RATE);
 
     const instantMult = Number(pricingConfig.instantMultiplier ?? 1.0);
     const negotiateRecMult = Number(pricingConfig.negotiateRecommendedMultiplier ?? 1.0);
