@@ -64,6 +64,30 @@ export class KycController {
 
   @RequireUserTypes('admin')
   @Roles('admin', 'super_admin')
+  @Post(':driverId/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadForDriver(
+    @Param('driverId') driverId: string,
+    @Body() dto: UploadKycDto,
+    @UploadedFile() file?: { buffer: Buffer; mimetype: string; originalname: string },
+  ) {
+    if (!file) {
+      throw new BadRequestException('file is required');
+    }
+    return this.kyc.uploadDocument(
+      driverId,
+      dto.docType,
+      {
+        buffer: file.buffer,
+        mimetype: file.mimetype,
+        originalname: file.originalname,
+      },
+      dto.identityDocType,
+    );
+  }
+
+  @RequireUserTypes('admin')
+  @Roles('admin', 'super_admin')
   @Get(':driverId/documents')
   documents(
     @Param('driverId') driverId: string,

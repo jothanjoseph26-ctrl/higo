@@ -63,6 +63,35 @@ export class UpdateDriverDto {
   ratingAvg?: number;
 }
 
+/** Admin-initiated driver registration - no linked user account yet (the driver links their app account by phone number later). */
+export class CreateDriverDto {
+  @IsString()
+  name!: string;
+
+  @IsString()
+  phone!: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsEnum(['keke', 'car'] as const)
+  vehicleType?: string;
+
+  @IsString()
+  vehiclePlate!: string;
+
+  @IsOptional()
+  @IsString()
+  vehicleModel?: string;
+
+  @IsOptional()
+  @IsString()
+  vehicleColor?: string;
+}
+
 /** Validate zone boundary coordinates are real numbers (prevents SQL injection). */
 export class CreateZoneDto {
   @IsString()
@@ -854,6 +883,38 @@ export class AdminController {
     }).filter((trip) => trip.pickup && trip.destination);
 
     return { trips };
+  }
+
+  @Post('drivers')
+  async createDriver(
+    @Body() dto: CreateDriverDto,
+    @CurrentUser() admin: AuthUser,
+  ) {
+    const existing = await this.prisma.driver.findUnique({ where: { phone: dto.phone } });
+    if (existing) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'A driver with this phone number already exists');
+    }
+    const driver = await this.prisma.driver.create({
+      data: {
+        name: dto.name,
+        phone: dto.phone,
+        email: dto.email || undefined,
+        vehicleType: (dto.vehicleType as any) || 'keke',
+        vehiclePlate: dto.vehiclePlate,
+        vehicleModel: dto.vehicleModel,
+        vehicleColor: dto.vehicleColor,
+        kycStatus: 'pending',
+      },
+    });
+    await this.prisma.configAuditLog.create({
+      data: {
+        key: 'admin.driver.create',
+        newValue: { driverId: driver.id, phone: driver.phone, vehicleType: driver.vehicleType },
+        changedBy: admin.sub,
+        changedByType: 'admin',
+      },
+    });
+    return driver;
   }
 
   @Get('drivers')
