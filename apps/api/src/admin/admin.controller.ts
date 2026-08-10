@@ -37,11 +37,23 @@ export class UpdateDriverDto {
 
   @IsOptional()
   @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
   vehiclePlate?: string;
 
   @IsOptional()
   @IsString()
   vehicleType?: string;
+
+  @IsOptional()
+  @IsString()
+  vehicleModel?: string;
+
+  @IsOptional()
+  @IsString()
+  vehicleColor?: string;
 
   @IsOptional()
   @IsBoolean()
@@ -1009,8 +1021,11 @@ export class AdminController {
     const data: Record<string, unknown> = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.phone !== undefined) data.phone = dto.phone;
+    if (dto.email !== undefined) data.email = dto.email;
     if (dto.vehiclePlate !== undefined) data.vehiclePlate = dto.vehiclePlate;
     if (dto.vehicleType !== undefined) data.vehicleType = dto.vehicleType;
+    if (dto.vehicleModel !== undefined) data.vehicleModel = dto.vehicleModel;
+    if (dto.vehicleColor !== undefined) data.vehicleColor = dto.vehicleColor;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.isOnline !== undefined) data.isOnline = dto.isOnline;
     if (dto.kycStatus !== undefined) data.kycStatus = dto.kycStatus;
