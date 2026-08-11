@@ -98,6 +98,7 @@ export class AuthController {
   @Post('refresh')
   async refresh(
     @Body() dto: RefreshTokenDto,
+    @Headers('x-client-platform') platform: string | undefined,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
@@ -109,7 +110,14 @@ export class AuthController {
 
     if (setCookie) {
       this.setRefreshCookie(res, refreshToken);
-      return response;
+      // App-like clients (native shell, installed PWA) also need the rotated
+      // token in the body so they can persist it in localStorage - their
+      // cookie jar isn't a dependable home for a 30-day credential. Without
+      // this, a session created before the client began identifying itself as
+      // app-like would stay cookie-only until the next full login.
+      return platform && platform !== 'web'
+        ? { ...response, refreshToken }
+        : response;
     }
 
     return { ...response, refreshToken };

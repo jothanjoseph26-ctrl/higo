@@ -26,6 +26,13 @@ import { mapDriver, mapUser } from './auth.mappers';
 import { JwtPayload } from './jwt.strategy';
 import { AdminLoginDto } from './dto/auth.dto';
 
+/**
+ * How long a just-rotated refresh token stays replayable. Covers dropped
+ * responses, client retries and concurrent refreshes without weakening
+ * reuse detection outside the window.
+ */
+const REFRESH_ROTATION_GRACE_SECONDS = 60;
+
 @Injectable()
 export class AuthService {
   private readonly googleClient: OAuth2Client;
@@ -289,17 +296,33 @@ export class AuthService {
       throw new AppException('UNAUTHORIZED');
     }
 
+    // Rotation replay window. A refresh token is single-use, but "used once"
+    // must not mean "session destroyed" - a client can very easily fail to
+    // persist the replacement: a dropped response, an installed PWA whose
+    // cookie write doesn't survive the app being closed, two tabs refreshing
+    // at once, or our own startup path racing httpClient's 401-retry. With a
+    // zero-grace denylist, any one of those permanently killed a valid
+    // 30-day session and forced a full re-login - which is exactly the
+    // "logged out again after closing the app" report.
+    //
+    // Replaying the same token inside the grace window returns the identical
+    // pair minted the first time, so a lost response is recoverable and no
+    // extra tokens are issued. Outside the window the denylist below still
+    // catches genuine token reuse.
+    const replayKey = `refresh:rotated:${payload.jti}`;
+    const replayed = await this.redis.get(replayKey);
+    if (replayed) {
+      const cached = JSON.parse(replayed) as {
+        response: RefreshTokenResponse;
+        refreshToken: string;
+      };
+      return { ...cached, setCookie: Boolean(cookieToken) };
+    }
+
     const denied = await this.redis.get(`refresh:denylist:${payload.jti}`);
     if (denied) {
       throw new AppException('UNAUTHORIZED');
     }
-
-    const remainingTtl = await this.getRefreshRemainingTtl(token);
-    await this.redis.set(
-      `refresh:denylist:${payload.jti}`,
-      '1',
-      Math.max(remainingTtl, 1),
-    );
 
     // For admin sessions, re-read the current role from the database rather
     // than carrying forward whatever role was baked into the refresh token
@@ -321,14 +344,29 @@ export class AuthService {
       role,
     });
 
-    return {
+    const result = {
       response: {
         accessToken: tokens.accessToken,
         accessTokenExpiresIn: tokens.accessTokenExpiresIn,
       },
       refreshToken: tokens.refreshToken!,
-      setCookie: Boolean(cookieToken),
     };
+
+    // Retire the old token only once the replacement actually exists, and
+    // keep it replayable for the grace window above.
+    const remainingTtl = await this.getRefreshRemainingTtl(token);
+    await this.redis.set(
+      replayKey,
+      JSON.stringify(result),
+      REFRESH_ROTATION_GRACE_SECONDS,
+    );
+    await this.redis.set(
+      `refresh:denylist:${payload.jti}`,
+      '1',
+      Math.max(remainingTtl, 1),
+    );
+
+    return { ...result, setCookie: Boolean(cookieToken) };
   }
 
   async logout(
