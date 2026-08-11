@@ -20,6 +20,7 @@ import { OtpService } from '../auth/otp.service';
 import { PlatformSettingsReader } from './platform-settings-reader.service';
 import { SubscriptionService } from '../payments/subscription.service';
 import { SubscriptionTier } from '@higo/shared-types';
+import { RedisService } from '../redis/redis.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import * as bcrypt from 'bcryptjs';
@@ -693,27 +694,44 @@ export class AdminController {
     private readonly otp: OtpService,
     private readonly settingsReader: PlatformSettingsReader,
     private readonly subscriptionService: SubscriptionService,
+    private readonly redis: RedisService,
   ) {}
 
+  // Real login OTPs are sent and verified entirely client-side by Firebase
+  // Phone Auth - our backend never sees the actual code, so there is no
+  // "look up the OTP" that can work for real users (the old version of this
+  // endpoint only ever found something for the disused backend-generated-code
+  // path). What actually helps a support agent diagnose "not receiving SMS"
+  // is: does this phone already have an account, and has it hit our
+  // send-otp rate limit (5/hour) - the single most common real cause during
+  // testing/support calls, which looks identical to "SMS never arrived".
   @Get('users/otp/:phone')
-  async getUserOtp(
-    @Param('phone') phone: string,
-    @CurrentUser() admin: AuthUser,
-  ) {
-    const code = await this.otp.getOtp(phone);
-    if (!code) {
-      throw new AppException('NOT_FOUND', undefined, 'No active OTP found for this phone number');
-    }
-    // Audit log: admin viewed an OTP code
-    await this.prisma.configAuditLog.create({
-      data: {
-        key: 'admin.otp.view',
-        newValue: { phone },
-        changedBy: admin.sub,
-        changedByType: 'admin',
+  async getUserOtp(@Param('phone') phone: string) {
+    const [driver, passenger] = await Promise.all([
+      this.prisma.driver.findUnique({ where: { phone } }),
+      this.prisma.user.findUnique({ where: { phone } }),
+    ]);
+
+    const rateLimitKey = `ratelimit:send-otp:${phone}`;
+    const windowSeconds = 3600;
+    const limit = 5;
+    const windowStart = Date.now() - windowSeconds * 1000;
+    await this.redis.raw.zremrangebyscore(rateLimitKey, 0, windowStart);
+    const sendAttemptsLastHour = await this.redis.raw.zcard(rateLimitKey);
+
+    return {
+      phone,
+      account: driver
+        ? { type: 'driver', id: driver.id, name: driver.name, isActive: driver.isActive, isSuspended: driver.isSuspended, kycStatus: driver.kycStatus }
+        : passenger
+          ? { type: 'passenger', id: passenger.id, name: passenger.name, isVerified: passenger.isVerified, isBlocked: passenger.isBlocked }
+          : null,
+      otpRateLimit: {
+        sendAttemptsLastHour,
+        limit,
+        isRateLimited: sendAttemptsLastHour >= limit,
       },
-    });
-    return { phone, code };
+    };
   }
 
   @Get('weekly-kpis')
