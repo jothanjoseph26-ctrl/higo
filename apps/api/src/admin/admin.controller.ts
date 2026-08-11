@@ -18,6 +18,8 @@ import { AiService } from '../ai/ai.service';
 import { EmailService } from '../email/email.service';
 import { OtpService } from '../auth/otp.service';
 import { PlatformSettingsReader } from './platform-settings-reader.service';
+import { SubscriptionService } from '../payments/subscription.service';
+import { SubscriptionTier } from '@higo/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import * as bcrypt from 'bcryptjs';
@@ -73,6 +75,16 @@ export class UpdateDriverDto {
   @Min(0)
   @Max(5)
   ratingAvg?: number;
+}
+
+/** Admin activating a subscription paid for in cash at the office - bypasses Paystack entirely. */
+export class ActivateSubscriptionDto {
+  @IsEnum(SubscriptionTier)
+  tier!: SubscriptionTier;
+
+  @IsNumber()
+  @Min(1)
+  durationDays!: number;
 }
 
 /** Admin-initiated driver registration - no linked user account yet (the driver links their app account by phone number later). */
@@ -680,6 +692,7 @@ export class AdminController {
     private readonly email: EmailService,
     private readonly otp: OtpService,
     private readonly settingsReader: PlatformSettingsReader,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   @Get('users/otp/:phone')
@@ -1036,6 +1049,20 @@ export class AdminController {
     }
 
     return this.prisma.driver.update({ where: { id }, data });
+  }
+
+  @Post('drivers/:id/activate-subscription')
+  async activateDriverSubscription(
+    @Param('id') id: string,
+    @Body() dto: ActivateSubscriptionDto,
+    @CurrentUser() admin: AuthUser,
+  ) {
+    return this.subscriptionService.adminActivateSubscription(
+      admin.sub,
+      id,
+      dto.tier,
+      dto.durationDays,
+    );
   }
 
   @Delete('drivers/:id')

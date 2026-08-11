@@ -222,6 +222,64 @@ export class SubscriptionService {
     };
   }
 
+  /**
+   * Admin-side activation for a subscription paid in cash at the office -
+   * mirrors applyCoupon()'s transaction shape (set driver tier/expiry,
+   * record a Subscription row) but with no coupon involved and the amount
+   * recorded for real, for accounting/audit purposes.
+   */
+  async adminActivateSubscription(
+    adminId: string,
+    driverId: string,
+    tier: SubscriptionTier,
+    durationDays: number,
+  ): Promise<{ tier: SubscriptionTier; expiresAt: string }> {
+    const driver = await this.prisma.driver.findUnique({ where: { id: driverId } });
+    if (!driver) {
+      throw new AppException('NOT_FOUND', undefined, 'Driver not found');
+    }
+    if (!durationDays || durationDays < 1) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'durationDays must be at least 1');
+    }
+
+    const amount = this.getTierAmount(tier);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + durationDays);
+
+    await this.prisma.$transaction([
+      this.prisma.driver.update({
+        where: { id: driverId },
+        data: {
+          subscriptionTier: tier,
+          subscriptionExpiresAt: expiresAt,
+        },
+      }),
+      this.prisma.subscription.create({
+        data: {
+          driverId,
+          tier,
+          amount,
+          isActive: true,
+          autoRenew: false,
+          expiresAt,
+        },
+      }),
+    ]);
+
+    await this.audit.logEvent({
+      action: 'subscription.admin_activated',
+      actorId: adminId,
+      actorType: 'admin',
+      reference: `ADMIN-CASH-${driverId}-${Date.now()}`,
+      amount,
+      beforeStatus: driver.subscriptionTier ?? 'none',
+      afterStatus: 'active',
+      metadata: { driverId, tier, durationDays, reason: 'cash_paid_at_office' },
+    });
+
+    return { tier, expiresAt: expiresAt.toISOString() };
+  }
+
   async createCoupon(adminId: string, dto: CreateCouponDto) {
     const code = dto.code.trim().toUpperCase();
     const existing = await this.prisma.subscriptionCoupon.findUnique({ where: { code } });
