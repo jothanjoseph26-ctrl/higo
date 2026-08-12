@@ -1017,6 +1017,14 @@ export interface GetDirectionsResponse {
   polyline: LatLng[];
   distanceMeters: number;
   durationSeconds: number;
+  /**
+   * True when `polyline` is a 2-point straight line rather than a real
+   * road route. Surfaced so a straight line on the map is diagnosable from
+   * the client instead of failing silently server-side.
+   */
+  fallback?: boolean;
+  /** Why the straight-line fallback was used. Only set when `fallback`. */
+  fallbackReason?: string;
 }
 
 export interface PlaceAutocompleteSuggestion {

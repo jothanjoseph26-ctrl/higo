@@ -227,7 +227,11 @@ export class MapsService {
     const apiKey = this.config.get<string>('GOOGLE_MAPS_API_KEY');
 
     if (!enabled || !apiKey) {
-      const fallback = this.buildStraightLineFallback(origin, destination);
+      const reason = !apiKey
+        ? 'GOOGLE_MAPS_API_KEY is not set on the API service'
+        : 'MAPS_DIRECTIONS_ENABLED is disabled';
+      this.logger.warn(`Directions straight-line fallback: ${reason}`);
+      const fallback = this.buildStraightLineFallback(origin, destination, reason);
       await this.redis.set(
         cacheKey,
         JSON.stringify(fallback),
@@ -268,7 +272,11 @@ export class MapsService {
         this.logger.warn(
           `Directions API returned status=${data.status ?? 'unknown'}; using straight-line fallback`,
         );
-        const fallback = this.buildStraightLineFallback(origin, destination);
+        const fallback = this.buildStraightLineFallback(
+          origin,
+          destination,
+          `Directions API returned status=${data.status ?? 'unknown'}`,
+        );
         await this.redis.set(
           cacheKey,
           JSON.stringify(fallback),
@@ -290,10 +298,14 @@ export class MapsService {
       );
       return result;
     } catch (error) {
-      this.logger.warn(
-        `Directions API request failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+      const message =
+        error instanceof Error ? error.message : 'unknown error';
+      this.logger.warn(`Directions API request failed: ${message}`);
+      const fallback = this.buildStraightLineFallback(
+        origin,
+        destination,
+        `Directions API request failed: ${message}`,
       );
-      const fallback = this.buildStraightLineFallback(origin, destination);
       await this.redis.set(
         cacheKey,
         JSON.stringify(fallback),
@@ -314,6 +326,7 @@ export class MapsService {
   private buildStraightLineFallback(
     origin: LatLng,
     destination: LatLng,
+    reason = 'unknown',
   ): GetDirectionsResponse {
     const distanceMeters = haversineMeters(origin, destination);
     const urbanSpeedMps = 8.33;
@@ -322,6 +335,8 @@ export class MapsService {
       polyline: [origin, destination],
       distanceMeters: Math.round(distanceMeters),
       durationSeconds: Math.max(60, Math.round(distanceMeters / urbanSpeedMps)),
+      fallback: true,
+      fallbackReason: reason,
     };
   }
 }
