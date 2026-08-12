@@ -266,7 +266,21 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
       }
     }
 
-    await this.matchingService.acceptOffer(driverId, payload.tripId);
+    // A failed accept used to throw into the void: the driver's screen had
+    // already moved on and the passenger was never told, so both sides sat
+    // waiting. Tell the driver so the UI can recover.
+    try {
+      await this.matchingService.acceptOffer(driverId, payload.tripId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Accept failed';
+      this.logger.warn(
+        `Driver ${driverId} failed to accept trip ${payload.tripId}: ${message}`,
+      );
+      client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
+        tripId: payload.tripId,
+        reason: message,
+      });
+    }
   }
 
   @SubscribeMessage(SOCKET_EVENTS.DRIVER_TRIP_DECLINE)

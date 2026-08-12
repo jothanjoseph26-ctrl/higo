@@ -5,7 +5,7 @@ const SETTINGS_ID = 'default';
 
 const DEFAULT_MATCH = {
   radiusMeters: 5000,
-  offerTimeoutSec: 15,
+  offerTimeoutSec: 45,
   ctsWeights: {
     ninVerifiedPoints: 25,
     trips100Points: 10,

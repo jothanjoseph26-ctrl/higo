@@ -174,6 +174,22 @@ export class MatchingService {
         this.logger.warn(`Trip ${tripId} already matched — ignoring duplicate accept from ${driverId}`);
         return;
       }
+      // Late accept. The offer window elapsed and the Bull timeout job cleared
+      // the offer key, but re-dispatch found nobody else (the timed-out driver
+      // is excluded from re-offer for 600s, so in a small fleet there is often
+      // no second candidate) and the trip is still sitting unassigned. Throwing
+      // here used to dead-end the passenger on "searching" forever while the
+      // driver's own screen showed the request as accepted. Honour the accept
+      // instead - transition() is the authoritative guard against a trip being
+      // assigned twice.
+      if (trip?.status === 'requested') {
+        this.logger.warn(
+          `Late accept for trip ${tripId} by driver ${driverId} — offer window expired but trip still unassigned; honouring it`,
+        );
+        await this.redis.del(`dispatch:offered_drivers:${tripId}`);
+        await this.tripService.transition(tripId, TripStatus.MATCHED, 'driver', driverId);
+        return;
+      }
       throw new Error('Offer expired or not found');
     }
 

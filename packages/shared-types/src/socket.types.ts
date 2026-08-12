@@ -20,6 +20,7 @@ export const SOCKET_EVENTS = {
   DRIVER_GO_ONLINE: 'driver:go_online',
   DRIVER_GO_OFFLINE: 'driver:go_offline',
   DRIVER_TRIP_ACCEPT: 'driver:trip_accept',
+  DRIVER_TRIP_ACCEPT_FAILED: 'driver:trip_accept_failed',
   DRIVER_TRIP_DECLINE: 'driver:trip_decline',
   DRIVER_ARRIVED_AT_PICKUP: 'driver:arrived_at_pickup',
   DRIVER_TRIP_STARTED: 'driver:trip_started',
@@ -299,6 +300,10 @@ export interface ServerToClientEvents {
   [SOCKET_EVENTS.DRIVER_ZONE_EXIT]: (p: DriverZoneExitPayload) => void;
   [SOCKET_EVENTS.FRAUD_ALERT]: (p: FraudAlertPayload) => void;
   [SOCKET_EVENTS.AUTH_ERROR]: (p: { message: string }) => void;
+  [SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED]: (p: {
+    tripId: UUID;
+    reason: string;
+  }) => void;
 }
 
 /** JWT data attached to the socket after auth middleware. */

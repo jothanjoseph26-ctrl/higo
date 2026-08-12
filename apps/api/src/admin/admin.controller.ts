@@ -173,7 +173,7 @@ const DEFAULT_PLATFORM_SETTINGS = {
   // read path is Track 01/03's call per BASE44_MIGRATION_PLAN.md §4, mapping.md §2).
   match: {
     radiusMeters: 5000,
-    offerTimeoutSec: 15,
+    offerTimeoutSec: 45,
     ctsWeights: {
       ninVerifiedPoints: 25,
       trips100Points: 10,
