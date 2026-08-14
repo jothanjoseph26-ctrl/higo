@@ -1,20 +1,20 @@
-import { Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import { IsNumber, IsOptional, Max, Min } from 'class-validator';
 
 export class NearbyDriversQueryDto {
-  @Type(() => Number)
+  @Transform(({ value }) => Number(value))
   @IsNumber()
   @Min(-90)
   @Max(90)
   lat!: number;
 
-  @Type(() => Number)
+  @Transform(({ value }) => Number(value))
   @IsNumber()
   @Min(-180)
   @Max(180)
   lng!: number;
 
-  @Type(() => Number)
+  @Transform(({ value }) => Number(value))
   @IsNumber()
   @IsOptional()
   @Min(0.5)

@@ -1,14 +1,14 @@
-import { Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import { IsNumber, Max, Min } from 'class-validator';
 
 export class ReverseGeocodeQueryDto {
-  @Type(() => Number)
+  @Transform(({ value }) => Number(value))
   @IsNumber()
   @Min(-90)
   @Max(90)
   lat!: number;
 
-  @Type(() => Number)
+  @Transform(({ value }) => Number(value))
   @IsNumber()
   @Min(-180)
   @Max(180)
