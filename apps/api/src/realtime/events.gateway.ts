@@ -149,7 +149,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
       const activeTrip = await this.prisma.trip.findFirst({
         where: {
           driverId: userId,
-          status: { in: ['matched', 'en_route', 'active'] },
+          status: { in: ['matched', 'arrived', 'en_route', 'active'] },
         },
       });
       if (activeTrip) {
@@ -304,7 +304,13 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
     if (client.data.type !== 'driver') return;
 
     this.logger.log(`Driver ${driverId} arrived at pickup for trip ${payload.tripId}`);
-    await this.tripService.transition(payload.tripId, TripStatus.ARRIVED, 'driver');
+    try {
+      await this.tripService.transition(payload.tripId, TripStatus.ARRIVED, 'driver');
+    } catch (error) {
+      this.logger.warn(
+        `Driver ${driverId} failed to transition to arrived for trip ${payload.tripId}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
   }
 
   @SubscribeMessage(SOCKET_EVENTS.DRIVER_TRIP_STARTED)
@@ -316,7 +322,13 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
     if (client.data.type !== 'driver') return;
 
     this.logger.log(`Driver ${driverId} started ride for trip ${payload.tripId}`);
-    await this.tripService.transition(payload.tripId, TripStatus.ACTIVE, 'driver');
+    try {
+      await this.tripService.transition(payload.tripId, TripStatus.ACTIVE, 'driver');
+    } catch (error) {
+      this.logger.warn(
+        `Driver ${driverId} failed to start trip ${payload.tripId}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
   }
 
   @SubscribeMessage(SOCKET_EVENTS.DRIVER_TRIP_COMPLETED)
@@ -328,18 +340,29 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
     if (client.data.type !== 'driver') return;
 
     this.logger.log(`Driver ${driverId} completed ride for trip ${payload.tripId}`);
-    const trip = await this.tripService.transition(payload.tripId, TripStatus.COMPLETED, 'driver');
+    try {
+      const trip = await this.tripService.transition(payload.tripId, TripStatus.COMPLETED, 'driver');
 
-    // Remove passenger and driver from trip room
-    client.leave(`trip:${payload.tripId}`);
-    const tripPrisma = await this.prisma.trip.findUnique({
-      where: { id: payload.tripId },
-    });
-    if (tripPrisma) {
-      const passengerSockets = await this.server.in(`passenger:${tripPrisma.passengerId}`).fetchSockets();
-      for (const pSock of passengerSockets) {
-        pSock.leave(`trip:${payload.tripId}`);
+      // Remove passenger and driver from trip room
+      client.leave(`trip:${payload.tripId}`);
+      const tripPrisma = await this.prisma.trip.findUnique({
+        where: { id: payload.tripId },
+      });
+      if (tripPrisma) {
+        const passengerSockets = await this.server.in(`passenger:${tripPrisma.passengerId}`).fetchSockets();
+        for (const pSock of passengerSockets) {
+          pSock.leave(`trip:${payload.tripId}`);
+        }
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Completion failed';
+      this.logger.warn(
+        `Driver ${driverId} failed to complete trip ${payload.tripId}: ${message}`,
+      );
+      client.emit(SOCKET_EVENTS.TRIP_CANCELLED, {
+        tripId: payload.tripId,
+        reason: message,
+      });
     }
   }
 
