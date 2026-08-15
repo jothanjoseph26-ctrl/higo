@@ -321,6 +321,27 @@ export class TripsController {
     return { success: true };
   }
 
+  @Get(':id/state')
+  async getTripState(
+    @CurrentUser() user: AuthUser,
+    @Param('id') tripId: string,
+  ) {
+    await this.tripService.assertTripAccess(tripId, user);
+    const trip = await this.tripService.getTrip(tripId);
+    return {
+      tripId: trip.id,
+      status: trip.status,
+      driverId: trip.driverId,
+      passengerId: trip.passengerId,
+      startedAt: trip.startedAt,
+      completedAt: trip.completedAt,
+      cancelledAt: trip.cancelledAt,
+      paymentStatus: trip.paymentStatus,
+      paymentMethod: trip.paymentMethod,
+      totalFare: trip.totalFare,
+    };
+  }
+
   @Post(':id/dispute')
   async createDispute(
     @CurrentUser() user: AuthUser,

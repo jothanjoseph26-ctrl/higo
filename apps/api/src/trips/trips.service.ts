@@ -1358,31 +1358,33 @@ export class TripService {
       );
     }
 
-    const updateData: any = { status: to };
+    // Atomic update: only update if status still matches (prevents race conditions)
+    const updateResult = await this.prisma.$executeRaw`
+      UPDATE trips SET status = ${to}::"TripStatus"
+      WHERE id = ${tripId}::uuid AND status = ${currentStatus}::"TripStatus"
+    `;
+
+    if (updateResult === 0) {
+      throw new AppException(
+        'VALIDATION_ERROR',
+        undefined,
+        `Trip ${tripId} was concurrently modified — cannot transition from ${currentStatus} to ${to}`,
+      );
+    }
 
     if (to === TripStatus.MATCHED) {
       if (!driverId) {
         throw new AppException('VALIDATION_ERROR', undefined, 'Driver ID is required for matching');
       }
-      updateData.driverId = driverId;
+      await this.prisma.trip.update({ where: { id: tripId }, data: { driverId } });
     } else if (to === TripStatus.ACTIVE) {
-      updateData.startedAt = new Date();
+      await this.prisma.trip.update({ where: { id: tripId }, data: { startedAt: new Date() } });
     } else if (to === TripStatus.COMPLETED) {
-      updateData.completedAt = new Date();
-      if (trip.paymentMethod === PaymentMethod.CASH) {
-        updateData.paymentStatus = 'released';
-      } else {
-        updateData.paymentStatus = 'held';
-      }
+      const paymentStatus = trip.paymentMethod === PaymentMethod.CASH ? 'released' : 'held';
+      await this.prisma.trip.update({ where: { id: tripId }, data: { completedAt: new Date(), paymentStatus } });
     } else if (to === TripStatus.CANCELLED) {
-      updateData.cancelledAt = new Date();
-      updateData.cancelReason = `${actor}: cancelled`;
+      await this.prisma.trip.update({ where: { id: tripId }, data: { cancelledAt: new Date(), cancelReason: `${actor}: cancelled` } });
     }
-
-    await this.prisma.trip.update({
-      where: { id: tripId },
-      data: updateData,
-    });
 
     const updatedTrip = await this.getTrip(tripId);
     if (!updatedTrip) {

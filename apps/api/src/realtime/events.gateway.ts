@@ -305,6 +305,27 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
 
     this.logger.log(`Driver ${driverId} arrived at pickup for trip ${payload.tripId}`);
     try {
+      // GPS validation: verify driver is near pickup
+      const trip = await this.tripService.getTrip(payload.tripId);
+      if (trip && trip.pickupLocation) {
+        const driverLocation = await this.presenceService.getDriverLocation(driverId);
+        if (driverLocation) {
+          const distance = this.haversineDistance(
+            { lat: driverLocation.lat, lng: driverLocation.lng },
+            trip.pickupLocation as any,
+          );
+          if (distance > 0.15) { // 150m radius
+            this.logger.warn(
+              `Driver ${driverId} arrival rejected: ${distance.toFixed(2)}km from pickup (max 0.15km)`,
+            );
+            client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
+              tripId: payload.tripId,
+              reason: `You are ${distance.toFixed(1)}km from the pickup location. Please move closer.`,
+            });
+            return;
+          }
+        }
+      }
       await this.tripService.transition(payload.tripId, TripStatus.ARRIVED, 'driver');
     } catch (error) {
       this.logger.warn(
@@ -323,6 +344,27 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
 
     this.logger.log(`Driver ${driverId} started ride for trip ${payload.tripId}`);
     try {
+      // GPS validation: verify driver is near pickup (within 200m)
+      const trip = await this.tripService.getTrip(payload.tripId);
+      if (trip && trip.pickupLocation) {
+        const driverLocation = await this.presenceService.getDriverLocation(driverId);
+        if (driverLocation) {
+          const distance = this.haversineDistance(
+            { lat: driverLocation.lat, lng: driverLocation.lng },
+            trip.pickupLocation as any,
+          );
+          if (distance > 0.2) { // 200m radius
+            this.logger.warn(
+              `Driver ${driverId} start rejected: ${distance.toFixed(2)}km from pickup (max 0.2km)`,
+            );
+            client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
+              tripId: payload.tripId,
+              reason: `Cannot start trip: ${distance.toFixed(1)}km from pickup location. Please be at the pickup.`,
+            });
+            return;
+          }
+        }
+      }
       await this.tripService.transition(payload.tripId, TripStatus.ACTIVE, 'driver');
     } catch (error) {
       this.logger.warn(
@@ -359,9 +401,9 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
       this.logger.warn(
         `Driver ${driverId} failed to complete trip ${payload.tripId}: ${message}`,
       );
-      client.emit(SOCKET_EVENTS.TRIP_CANCELLED, {
+      client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
         tripId: payload.tripId,
-        reason: message,
+        reason: `Trip completion failed: ${message}`,
       });
     }
   }
