@@ -1176,9 +1176,7 @@ export class TripService {
       throw new AppException('INTERNAL_ERROR', undefined, 'Failed to create trip');
     }
 
-    if (dto.paymentMethod === PaymentMethod.CASH) {
-      this.dispatchRequestedTrip(tripId);
-    }
+    this.dispatchRequestedTrip(tripId);
 
     return {
       trip,

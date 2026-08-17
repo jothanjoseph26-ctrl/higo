@@ -14,8 +14,8 @@ export class PresenceService {
     const presenceKey = `presence:driver:${driverId}`;
     const locationKey = `loc:driver:${driverId}`;
 
-    // Set online presence status in Redis with a 60s TTL (refreshed on each location update)
-    await this.redis.set(presenceKey, 'online', 60);
+    // Set online presence status in Redis with a 5-minute TTL (refreshed on each location update)
+    await this.redis.set(presenceKey, 'online', 300);
 
     const locationData = {
       lat,
@@ -48,7 +48,7 @@ export class PresenceService {
     const locationKey = `loc:driver:${driverId}`;
 
     // Refresh presence TTL
-    await this.redis.set(presenceKey, 'online', 60);
+    await this.redis.set(presenceKey, 'online', 300);
 
     const locationData = {
       lat,
@@ -110,11 +110,6 @@ export class PresenceService {
     const drivers: NearbyDriver[] = [];
 
     for (const candidate of candidates) {
-      const isOnline = await this.isDriverOnline(candidate.id);
-      if (!isOnline) {
-        continue;
-      }
-
       const redisLoc = await this.getDriverLocation(candidate.id);
       drivers.push({
         id: candidate.id,

@@ -69,6 +69,12 @@ export class MatchingService {
     return this.ctsService.computeCTS(driverId, ctx);
   }
 
+  private static readonly MAX_CONCURRENT_OFFERS = 3;
+
+  private offerKey(tripId: string, driverId: string) {
+    return `dispatch:${tripId}:${driverId}`;
+  }
+
   async dispatch(tripId: string): Promise<void> {
     const trip = await this.tripService.getTrip(tripId);
     if (!trip) {
@@ -87,9 +93,9 @@ export class MatchingService {
     const offeredStrList = await this.redis.raw.smembers(offeredDriversKey);
     const offeredSet = new Set(offeredStrList);
 
-    const nextCandidate = candidates.find((c) => !offeredSet.has(c.driverId));
+    const newCandidates = candidates.filter((c) => !offeredSet.has(c.driverId));
 
-    if (!nextCandidate) {
+    if (newCandidates.length === 0) {
       this.logger.warn(`No candidates left for trip: ${tripId}. Cancelling trip.`);
       
       this.eventsGateway.server.to(`passenger:${trip.passengerId}`).emit(SOCKET_EVENTS.TRIP_NO_DRIVERS_AVAILABLE, {
@@ -98,90 +104,112 @@ export class MatchingService {
 
       await this.tripService.transition(tripId, TripStatus.CANCELLED, 'system');
       
-      await this.redis.del(`dispatch:${tripId}`);
       await this.redis.del(offeredDriversKey);
       return;
     }
 
     const matchSettings = await this.settings.getMatchSettings();
-    const offerId = crypto.randomUUID();
     const offerTimeoutMs = matchSettings.offerTimeoutSec * 1000;
-    const expiresAt = Date.now() + offerTimeoutMs;
-
-    await this.redis.raw.sadd(offeredDriversKey, nextCandidate.driverId);
-    await this.redis.expire(offeredDriversKey, 600);
-
-    const job = await this.dispatchQueue.add(
-      'timeout',
-      { tripId, driverId: nextCandidate.driverId, offerId },
-      { delay: offerTimeoutMs, removeOnComplete: true }
-    );
-
-    const offerData = {
-      driverId: nextCandidate.driverId,
-      offerId,
-      jobId: job.id,
-      expiresAt,
-    };
-    await this.redis.set(`dispatch:${tripId}`, JSON.stringify(offerData), 600);
 
     const passenger = await this.prisma.user.findUnique({
       where: { id: trip.passengerId },
     });
 
-    const payload = {
-      tripId,
-      pickup: trip.pickupLocation,
-      pickupAddress: trip.pickupAddress,
-      destination: trip.destinationLocation,
-      destinationAddress: trip.destinationAddress,
-      fare: trip.totalFare,
-      surgeMultiplier: trip.surgeMultiplier,
-      distanceKm: trip.distanceKm ? Number(trip.distanceKm) : 0,
-      durationMin: trip.durationMin || 0,
-      passengerId: trip.passengerId,
-      passengerName: passenger?.name || null,
-      passengerPhone: passenger?.phone || null,
-      passengerRating: passenger ? Number(passenger.ratingAvg) : 5.0,
-      expiresInSeconds: matchSettings.offerTimeoutSec,
-    };
+    const toOffer = newCandidates.slice(0, MatchingService.MAX_CONCURRENT_OFFERS);
 
-    this.logger.log(`Offering trip ${tripId} to driver ${nextCandidate.driverId} (offerId: ${offerId})`);
-    
-    this.eventsGateway.server.to(`driver:${nextCandidate.driverId}`).emit(
-      SOCKET_EVENTS.TRIP_NEW_REQUEST,
-      payload
-    );
+    this.logger.log(`Offering trip ${tripId} to ${toOffer.length} drivers: ${toOffer.map(c => c.driverId).join(', ')}`);
 
-    void this.pushService.sendToDriver(nextCandidate.driverId, {
-      title: 'New ride request',
-      body: `Pickup at ${trip.pickupAddress}`,
-      data: {
-        type: 'trip:new_request',
+    for (const candidate of toOffer) {
+      const offerId = crypto.randomUUID();
+      const expiresAt = Date.now() + offerTimeoutMs;
+
+      await this.redis.raw.sadd(offeredDriversKey, candidate.driverId);
+      await this.redis.expire(offeredDriversKey, 600);
+
+      const job = await this.dispatchQueue.add(
+        'timeout',
+        { tripId, driverId: candidate.driverId, offerId },
+        { delay: offerTimeoutMs, removeOnComplete: true }
+      );
+
+      const offerData = {
+        driverId: candidate.driverId,
+        offerId,
+        jobId: job.id,
+        expiresAt,
+      };
+      await this.redis.set(this.offerKey(tripId, candidate.driverId), JSON.stringify(offerData), 600);
+
+      const payload = {
         tripId,
-      },
-    });
+        pickup: trip.pickupLocation,
+        pickupAddress: trip.pickupAddress,
+        destination: trip.destinationLocation,
+        destinationAddress: trip.destinationAddress,
+        fare: trip.totalFare,
+        surgeMultiplier: trip.surgeMultiplier,
+        distanceKm: trip.distanceKm ? Number(trip.distanceKm) : 0,
+        durationMin: trip.durationMin || 0,
+        passengerId: trip.passengerId,
+        passengerName: passenger?.name || null,
+        passengerPhone: passenger?.phone || null,
+        passengerRating: passenger ? Number(passenger.ratingAvg) : 5.0,
+        expiresInSeconds: matchSettings.offerTimeoutSec,
+      };
+
+      this.eventsGateway.server.to(`driver:${candidate.driverId}`).emit(
+        SOCKET_EVENTS.TRIP_NEW_REQUEST,
+        payload
+      );
+
+      void this.pushService.sendToDriver(candidate.driverId, {
+        title: 'New ride request',
+        body: `Pickup at ${trip.pickupAddress}`,
+        data: {
+          type: 'trip:new_request',
+          tripId,
+        },
+      });
+    }
+  }
+
+  private async cancelOtherOffers(tripId: string, acceptedDriverId: string): Promise<void> {
+    const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
+    const offeredStrList = await this.redis.raw.smembers(offeredDriversKey);
+
+    for (const driverId of offeredStrList) {
+      if (driverId === acceptedDriverId) continue;
+
+      const key = this.offerKey(tripId, driverId);
+      const offerStr = await this.redis.get(key);
+      if (!offerStr) continue;
+
+      const offer = JSON.parse(offerStr);
+      if (offer.jobId) {
+        try {
+          const job = await this.dispatchQueue.getJob(offer.jobId);
+          if (job) await job.remove();
+        } catch (e) {
+          this.logger.warn(`Failed to remove Bull job ${offer.jobId}: ${e}`);
+        }
+      }
+
+      await this.redis.del(key);
+    }
+
+    await this.redis.del(offeredDriversKey);
   }
 
   async acceptOffer(driverId: string, tripId: string): Promise<void> {
-    const offerKey = `dispatch:${tripId}`;
-    const offerStr = await this.redis.get(offerKey);
+    const key = this.offerKey(tripId, driverId);
+    const offerStr = await this.redis.get(key);
 
-    // If the offer key is gone, check if the trip was already matched (race with timeout)
     if (!offerStr) {
       const trip = await this.tripService.getTrip(tripId);
       if (trip?.status === 'matched') {
         this.logger.warn(`Trip ${tripId} already matched — ignoring duplicate accept from ${driverId}`);
         return;
       }
-      // Late accept. The offer window elapsed and the Bull timeout job cleared
-      // the offer key, but re-dispatch found nobody else (the timed-out driver
-      // is excluded from re-offer for 600s, so in a small fleet there is often
-      // no second candidate) and the trip is still sitting unassigned. Throwing
-      // here used to dead-end the passenger on "searching" forever while the
-      // driver's own screen showed the request as accepted. Honour the accept
-      // instead - transition() is the authoritative guard against a trip being
-      // assigned twice.
       if (trip?.status === 'requested') {
         this.logger.warn(
           `Late accept for trip ${tripId} by driver ${driverId} — offer window expired but trip still unassigned; honouring it`,
@@ -198,28 +226,23 @@ export class MatchingService {
       throw new Error('Offer was not made to you or is stale');
     }
 
-    // Remove the Bull timeout job first (before deleting Redis key)
     if (offer.jobId) {
       try {
         const job = await this.dispatchQueue.getJob(offer.jobId);
-        if (job) {
-          await job.remove();
-        }
+        if (job) await job.remove();
       } catch (e) {
         this.logger.warn(`Failed to remove Bull job ${offer.jobId}: ${e}`);
       }
     }
 
-    // Use atomic delete to prevent race with timeout handler
-    await this.redis.del(offerKey);
-    await this.redis.del(`dispatch:offered_drivers:${tripId}`);
+    await this.cancelOtherOffers(tripId, driverId);
 
     await this.tripService.transition(tripId, TripStatus.MATCHED, 'driver', driverId);
   }
 
   async declineOffer(driverId: string, tripId: string, reason?: string): Promise<void> {
-    const offerKey = `dispatch:${tripId}`;
-    const offerStr = await this.redis.get(offerKey);
+    const key = this.offerKey(tripId, driverId);
+    const offerStr = await this.redis.get(key);
     if (!offerStr) return;
 
     const offer = JSON.parse(offerStr);
@@ -228,24 +251,22 @@ export class MatchingService {
     if (offer.jobId) {
       try {
         const job = await this.dispatchQueue.getJob(offer.jobId);
-        if (job) {
-          await job.remove();
-        }
+        if (job) await job.remove();
       } catch (e) {
         this.logger.warn(`Failed to remove Bull job ${offer.jobId}: ${e}`);
       }
     }
 
-    await this.redis.del(offerKey);
+    await this.redis.del(key);
 
     this.logger.log(`Driver ${driverId} declined trip ${tripId} (Reason: ${reason || 'none'})`);
 
-    await this.dispatch(tripId);
+    await this.dispatchIfNoActiveOffers(tripId, driverId);
   }
 
   async handleOfferTimeout(tripId: string, driverId: string, offerId: string): Promise<void> {
-    const offerKey = `dispatch:${tripId}`;
-    const offerStr = await this.redis.get(offerKey);
+    const key = this.offerKey(tripId, driverId);
+    const offerStr = await this.redis.get(key);
     if (!offerStr) return;
 
     const offer = JSON.parse(offerStr);
@@ -253,19 +274,29 @@ export class MatchingService {
       return;
     }
 
-    // Check if the trip was already matched (race with acceptOffer)
     const trip = await this.tripService.getTrip(tripId);
     if (!trip || trip.status !== 'requested') {
       this.logger.warn(`Trip ${tripId} is no longer requested (${trip?.status}). Skipping timeout re-dispatch.`);
-      await this.redis.del(offerKey);
+      await this.redis.del(key);
       return;
     }
 
-    await this.redis.del(offerKey);
+    await this.redis.del(key);
 
     const matchSettings = await this.settings.getMatchSettings();
     this.logger.log(`Offer timeout (${matchSettings.offerTimeoutSec}s) for trip ${tripId} and driver ${driverId}`);
 
+    await this.dispatchIfNoActiveOffers(tripId, driverId);
+  }
+
+  private async dispatchIfNoActiveOffers(tripId: string, excludeDriverId: string): Promise<void> {
+    const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
+    const remaining = await this.redis.raw.smembers(offeredDriversKey);
+    for (const id of remaining) {
+      if (id === excludeDriverId) continue;
+      const s = await this.redis.get(this.offerKey(tripId, id));
+      if (s) return; // Another offer is still active
+    }
     await this.dispatch(tripId);
   }
 }
