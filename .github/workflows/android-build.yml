@@ -53,7 +53,12 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm install
+        env:
+          CI: 'true'
+
+      - name: Build workspace libs
+        run: cd ../.. && npx nx run-many -t build -p @higo/brand-tokens,@higo/shared-types,@higo/api-client
 
       - name: Decode keystore
         if: ${{ env.KEYSTORE_BASE64 != '' }}
@@ -128,7 +133,12 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm install
+        env:
+          CI: 'true'
+
+      - name: Build workspace libs
+        run: cd ../.. && npx nx run-many -t build -p @higo/brand-tokens,@higo/shared-types,@higo/api-client
 
       - name: Decode keystore
         if: ${{ env.KEYSTORE_BASE64 != '' }}
