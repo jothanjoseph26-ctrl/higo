@@ -6,5 +6,5 @@
       "args": ["nx", "mcp"]
     }
   },
-  "contextFileName": "AGENTS.md"
+  "contextFiles": ["AGENTS.md", ".gemini/GEMINI_PROJECT.md"]
 }

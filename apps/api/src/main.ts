@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import './instrument';
 import { join } from 'path';
 import { Logger, ValidationPipe } from '@nestjs/common';
@@ -76,6 +77,9 @@ async function bootstrap() {
       whitelist: true,
       transform: true,
       forbidNonWhitelisted: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     }),
   );
 

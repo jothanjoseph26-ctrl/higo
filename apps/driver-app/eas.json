@@ -46,5 +46,13 @@
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "../../services-key/play-store-deployment.json",
+        "track": "internal"
+      }
+    }
   }
 }

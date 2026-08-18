@@ -6,6 +6,8 @@ import { NestFactory } from '@nestjs/core';
 import { envSchema } from './config/env.schema';
 import { MatchingModule } from './matching/matching.module';
 import { DispatchProcessor } from './matching/dispatch.processor';
+import { JobsModule } from './jobs/jobs.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -14,6 +16,7 @@ import { DispatchProcessor } from './matching/dispatch.processor';
       envFilePath: ['../../.env', '.env'],
       validationSchema: envSchema,
     }),
+    ScheduleModule.forRoot(),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (config: ConfigService) => ({
@@ -22,6 +25,7 @@ import { DispatchProcessor } from './matching/dispatch.processor';
       inject: [ConfigService],
     }),
     MatchingModule,
+    JobsModule,
   ],
   providers: [DispatchProcessor],
 })
