@@ -63,7 +63,7 @@ jobs:
 
       - name: Build APK
         if: ${{ github.event.inputs.build_type != 'aab' }}
-        run: ./gradlew assembleRelease
+        run: chmod +x gradlew && ./gradlew assembleRelease
         env:
           EXPO_PUBLIC_APP_URL: https://pilot.hiconnectgo.com
           EXPO_PUBLIC_API_BASE_URL: https://api.hiconnectgo.com/api
@@ -78,7 +78,7 @@ jobs:
 
       - name: Build AAB
         if: ${{ github.event.inputs.build_type == 'aab' || startsWith(github.ref, 'refs/tags/') }}
-        run: ./gradlew bundleRelease
+        run: chmod +x gradlew && ./gradlew bundleRelease
         env:
           EXPO_PUBLIC_APP_URL: https://pilot.hiconnectgo.com
           EXPO_PUBLIC_API_BASE_URL: https://api.hiconnectgo.com/api
@@ -138,7 +138,7 @@ jobs:
 
       - name: Build APK
         if: ${{ github.event.inputs.build_type != 'aab' }}
-        run: ./gradlew assembleRelease
+        run: chmod +x gradlew && ./gradlew assembleRelease
         env:
           EXPO_PUBLIC_APP_URL: https://ride.hiconnectgo.com
           EXPO_PUBLIC_API_BASE_URL: https://api.hiconnectgo.com/api
@@ -154,7 +154,7 @@ jobs:
 
       - name: Build AAB
         if: ${{ github.event.inputs.build_type == 'aab' || startsWith(github.ref, 'refs/tags/') }}
-        run: ./gradlew bundleRelease
+        run: chmod +x gradlew && ./gradlew bundleRelease
         env:
           EXPO_PUBLIC_APP_URL: https://ride.hiconnectgo.com
           EXPO_PUBLIC_API_BASE_URL: https://api.hiconnectgo.com/api
