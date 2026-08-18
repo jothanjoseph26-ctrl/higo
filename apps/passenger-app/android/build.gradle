@@ -29,9 +29,7 @@ allprojects {
     }
 }
 
-subprojects {
-    buildDir = "C:/b/${rootProject.name}/${project.name}"
-}
+
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
