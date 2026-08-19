@@ -7,6 +7,7 @@ import { envSchema } from './config/env.schema';
 import { MatchingModule } from './matching/matching.module';
 import { DispatchProcessor } from './matching/dispatch.processor';
 import { JobsModule } from './jobs/jobs.module';
+import { EmailModule } from './email/email.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -26,6 +27,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     }),
     MatchingModule,
     JobsModule,
+    EmailModule,
   ],
   providers: [DispatchProcessor],
 })
