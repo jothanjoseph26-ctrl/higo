@@ -27,6 +27,7 @@ export class GeoRepository {
       WHERE is_online = true
         AND kyc_status = 'approved'
         AND is_suspended = false
+        AND current_location IS NOT NULL
         AND vehicle_type::text = ${vehicleType}::text
         AND ST_DWithin(
           current_location, 

@@ -75,6 +75,22 @@ export class PaymentsController {
     return this.webhookHandler.handlePaystackWebhook(rawBody, signature);
   }
 
+  @Public()
+  @Get('callback')
+  async paymentCallback(
+    @Query('reference') reference?: string,
+    @Query('trxref') trxref?: string,
+  ) {
+    // Paystack redirects here after payment. The actual confirmation happens
+    // via the webhook, so this is purely a user-facing redirect.
+    const ref = reference || trxref || '';
+    return {
+      status: 'received',
+      reference: ref,
+      message: 'Payment received. Your trip will begin shortly.',
+    };
+  }
+
   @Post('refund')
   @Roles('admin', 'super_admin')
   @UseGuards(RolesGuard)

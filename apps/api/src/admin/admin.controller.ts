@@ -1376,6 +1376,86 @@ export class AdminController {
     return mapZoneRow(rows[0]);
   }
 
+  @Put('zones/:id')
+  async updateZone(
+    @Param('id') id: string,
+    @Body() dto: {
+      name?: string;
+      zoneType?: string;
+      boundary?: Array<{ lat: number; lng: number }>;
+      surgeMultiplier?: number;
+      isActive?: boolean;
+    },
+  ) {
+    const existing = await this.prisma.$queryRaw<any[]>`
+      SELECT id FROM zones WHERE id = ${id}::uuid
+    `;
+    if (!existing.length) {
+      throw new AppException('NOT_FOUND', undefined, 'Zone not found');
+    }
+
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (dto.name !== undefined) {
+      updates.push(`name = $${paramIndex++}`);
+      values.push(dto.name);
+    }
+    if (dto.zoneType !== undefined) {
+      updates.push(`zone_type = $${paramIndex++}::"ZoneType"`);
+      values.push(dto.zoneType);
+    }
+    if (dto.surgeMultiplier !== undefined) {
+      updates.push(`surge_multiplier = $${paramIndex++}`);
+      values.push(dto.surgeMultiplier);
+    }
+    if (dto.isActive !== undefined) {
+      updates.push(`is_active = $${paramIndex++}`);
+      values.push(dto.isActive);
+    }
+    if (dto.boundary) {
+      if (dto.boundary.length < 3) {
+        throw new AppException('VALIDATION_ERROR', undefined, 'Zone boundary requires at least 3 points');
+      }
+      for (const point of dto.boundary) {
+        if (typeof point.lat !== 'number' || typeof point.lng !== 'number' ||
+            !Number.isFinite(point.lat) || !Number.isFinite(point.lng) ||
+            point.lat < -90 || point.lat > 90 || point.lng < -180 || point.lng > 180) {
+          throw new AppException('VALIDATION_ERROR', undefined, 'Invalid coordinate in zone boundary');
+        }
+      }
+      const ring = [...dto.boundary];
+      const first = ring[0];
+      const last = ring[ring.length - 1];
+      if (first.lat !== last.lat || first.lng !== last.lng) {
+        ring.push(first);
+      }
+      const pointLiterals = ring.map((p) => `ST_MakePoint(${p.lng}, ${p.lat})`).join(', ');
+      updates.push(`boundary = ST_SetSRID(ST_MakePolygon(ST_MakeLine(ARRAY[${pointLiterals}])), 4326)::geography`);
+    }
+
+    if (updates.length === 0) {
+      throw new AppException('VALIDATION_ERROR', undefined, 'No fields to update');
+    }
+
+    const rows = await this.prisma.$queryRawUnsafe<any[]>(
+      `UPDATE zones SET ${updates.join(', ')} WHERE id = $${paramIndex}::uuid
+       RETURNING
+         id,
+         name,
+         zone_type AS "zoneType",
+         ST_AsGeoJSON(boundary) AS "boundaryGeoJson",
+         surge_multiplier AS "surgeMultiplier",
+         is_active AS "isActive",
+         created_at AS "createdAt"`,
+      ...values,
+      id,
+    );
+
+    return mapZoneRow(rows[0]);
+  }
+
   @Delete('zones/:id')
   async deleteZone(@Param('id') id: string) {
     await this.prisma.$executeRaw`DELETE FROM zones WHERE id = ${id}::uuid`;

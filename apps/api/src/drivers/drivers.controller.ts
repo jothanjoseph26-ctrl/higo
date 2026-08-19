@@ -61,7 +61,7 @@ export class DriversController {
   @Put('online-status')
   async updateOnlineStatus(
     @CurrentUser() user: AuthUser,
-    @Body() dto: { isOnline: boolean },
+    @Body() dto: { isOnline: boolean; lat?: number; lng?: number },
   ) {
     if (user.type !== 'driver') {
       throw new AppException('FORBIDDEN', undefined, 'Only drivers can toggle online status');
@@ -91,6 +91,11 @@ export class DriversController {
       where: { id: user.sub },
       data: { isOnline: dto.isOnline },
     });
+
+    // Seed PostGIS location so the driver is visible to dispatch immediately
+    if (dto.isOnline && dto.lat != null && dto.lng != null) {
+      await this.presenceService.setDriverOnline(user.sub, dto.lat, dto.lng);
+    }
 
     return { isOnline: dto.isOnline };
   }

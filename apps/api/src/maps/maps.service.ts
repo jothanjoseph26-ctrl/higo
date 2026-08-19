@@ -231,13 +231,7 @@ export class MapsService {
         ? 'GOOGLE_MAPS_API_KEY is not set on the API service'
         : 'MAPS_DIRECTIONS_ENABLED is disabled';
       this.logger.warn(`Directions straight-line fallback: ${reason}`);
-      const fallback = this.buildStraightLineFallback(origin, destination, reason);
-      await this.redis.set(
-        cacheKey,
-        JSON.stringify(fallback),
-        DIRECTIONS_CACHE_TTL_SECONDS,
-      );
-      return fallback;
+      return this.buildStraightLineFallback(origin, destination, reason);
     }
 
     try {
@@ -272,17 +266,11 @@ export class MapsService {
         this.logger.warn(
           `Directions API returned status=${data.status ?? 'unknown'}; using straight-line fallback`,
         );
-        const fallback = this.buildStraightLineFallback(
+        return this.buildStraightLineFallback(
           origin,
           destination,
           `Directions API returned status=${data.status ?? 'unknown'}`,
         );
-        await this.redis.set(
-          cacheKey,
-          JSON.stringify(fallback),
-          DIRECTIONS_CACHE_TTL_SECONDS,
-        );
-        return fallback;
       }
 
       const result: GetDirectionsResponse = {
@@ -301,17 +289,11 @@ export class MapsService {
       const message =
         error instanceof Error ? error.message : 'unknown error';
       this.logger.warn(`Directions API request failed: ${message}`);
-      const fallback = this.buildStraightLineFallback(
+      return this.buildStraightLineFallback(
         origin,
         destination,
         `Directions API request failed: ${message}`,
       );
-      await this.redis.set(
-        cacheKey,
-        JSON.stringify(fallback),
-        DIRECTIONS_CACHE_TTL_SECONDS,
-      );
-      return fallback;
     }
   }
 
