@@ -640,7 +640,8 @@ export class WhatsappService {
             success: false,
             error: errorBody?.error?.message || `HTTP ${response.status}`,
             errorType,
-          };
+};
+
         }
 
         const result = await response.json();
