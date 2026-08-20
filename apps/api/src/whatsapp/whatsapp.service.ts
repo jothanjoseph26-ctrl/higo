@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { HceService } from '../hce/hce.service';
 import {
@@ -89,7 +89,7 @@ export class WhatsappService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly hce: HceService,
+    @Optional() private readonly hce?: HceService,
   ) {}
 
   async verifyWebhook(
@@ -548,6 +548,10 @@ export class WhatsappService {
     language: string,
   ): Promise<string> {
     if (conversation.failedAiAttempts >= 3) {
+      return this.t('ai_fallback', language);
+    }
+
+    if (!this.hce) {
       return this.t('ai_fallback', language);
     }
 
