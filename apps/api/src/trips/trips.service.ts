@@ -1089,6 +1089,21 @@ export class TripService {
   }
 
   async requestTrip(passengerId: string, dto: RequestTripRequest): Promise<RequestTripResponse> {
+    // Auto-cancel stale trips that are stuck in active/requested/matched for > 30 minutes
+    // This prevents TRIP_ALREADY_ACTIVE from permanently blocking a passenger.
+    const staleThreshold = new Date(Date.now() - 30 * 60 * 1000);
+    const staleCancelled = await this.prisma.$executeRaw`
+      UPDATE trips SET status = 'cancelled'::"TripStatus",
+        cancel_reason = 'Auto-cancelled: stale trip cleanup',
+        cancelled_at = NOW()
+      WHERE passenger_id = ${passengerId}::uuid
+        AND status::text IN ('requested', 'matched', 'en_route', 'active')
+        AND created_at < ${staleThreshold}
+    `;
+    if (staleCancelled > 0) {
+      this.logger.warn(`Auto-cancelled ${staleCancelled} stale trip(s) for passenger ${passengerId}`);
+    }
+
     const activeTripRows = await this.prisma.$queryRaw<any[]>`
       SELECT id FROM trips
       WHERE passenger_id = ${passengerId}::uuid
@@ -1178,6 +1193,8 @@ export class TripService {
 
     this.dispatchRequestedTrip(tripId);
 
+    this.logger.log(`Trip ${tripId} created for passenger ${passengerId}: status=requested, dispatch initiated`);
+
     return {
       trip,
       estimate,
@@ -1185,8 +1202,9 @@ export class TripService {
   }
 
   dispatchRequestedTrip(tripId: string): void {
+    this.logger.log(`Dispatch requested for trip ${tripId}`);
     this.matchingService.dispatch(tripId).catch((err) => {
-      this.logger.error(`Matching dispatch failed for trip ${tripId}: ${err.message}`);
+      this.logger.error(`Matching dispatch failed for trip ${tripId}: ${err.message}`, err.stack);
     });
   }
 

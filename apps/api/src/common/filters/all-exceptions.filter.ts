@@ -21,6 +21,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const body = exception.getResponse();
+      this.logger.warn(`[${request.method}] ${request.url} → ${status} ${typeof body === 'string' ? body : JSON.stringify(body).slice(0, 300)}`);
 
       if (
         typeof body === 'object' &&

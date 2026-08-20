@@ -29,6 +29,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.use(cookieParser());
+
   // CORS — explicit allowlist of trusted origins (never reflect arbitrary origins)
   const allowedOrigins = [
     'https://www.hiconnectgo.com',

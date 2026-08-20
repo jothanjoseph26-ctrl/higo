@@ -39,6 +39,7 @@ import { DeliveriesModule } from './deliveries/deliveries.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SupportModule } from './support/support.module';
+import { WhatsAppModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { SupportModule } from './support/support.module';
     LoyaltyModule,
     NotificationsModule,
     SupportModule,
+    WhatsAppModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

@@ -88,6 +88,7 @@ export class MatchingService {
     }
 
     const candidates = await this.findCandidates(trip.pickupLocation, trip.vehicleType);
+    this.logger.log(`Dispatch trip ${tripId}: found ${candidates.length} candidates (vehicleType=${trip.vehicleType}, pickup=[${trip.pickupLocation.lat},${trip.pickupLocation.lng}])`);
 
     const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
     const offeredStrList = await this.redis.raw.smembers(offeredDriversKey);

@@ -8,8 +8,14 @@
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 
 const SERVICE_ACCOUNT_PATH = path.join(__dirname, '../../services-key/play-store-deployment.json');
+
+// Increase default socket timeout for large file uploads
+https.globalAgent.keepAlive = true;
+https.globalAgent.keepAliveMsecs = 30000;
+https.globalAgent.timeout = 600000;
 
 async function uploadAab(aabPath, packageName, track = 'internal') {
     if (!fs.existsSync(aabPath)) {
@@ -24,29 +30,44 @@ async function uploadAab(aabPath, packageName, track = 'internal') {
         scopes: ['https://www.googleapis.com/auth/androidpublisher'],
     });
 
-    const androidpublisher = google.androidpublisher({ version: 'v3', auth });
+    const androidpublisher = google.androidpublisher({
+        version: 'v3',
+        auth,
+        timeout: 600000,
+    });
 
     console.log(`Uploading ${path.basename(aabPath)} to ${packageName} (${track} track)...`);
 
     // Step 1: Create edit
     const edit = await androidpublisher.edits.insert({
         packageName,
-        resource: { changesNotSentForReview: false },
+        resource: {},
     });
     const editId = edit.data.id;
     console.log(`  Created edit: ${editId}`);
 
     try {
-        // Step 2: Upload AAB
-        const aabStream = fs.createReadStream(aabPath);
-        const uploadResult = await androidpublisher.edits.bundles.upload({
-            packageName,
-            editId,
-            media: {
-                mimeType: 'application/octet-stream',
-                body: aabStream,
-            },
-        });
+        // Step 2: Upload AAB (with retry)
+        let uploadResult;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const aabStream = fs.createReadStream(aabPath);
+                uploadResult = await androidpublisher.edits.bundles.upload({
+                    packageName,
+                    editId,
+                    media: {
+                        mimeType: 'application/octet-stream',
+                        body: aabStream,
+                    },
+                });
+                break;
+            } catch (uploadErr) {
+                console.error(`  Upload attempt ${attempt} failed: ${uploadErr.message}`);
+                if (attempt === 3) throw uploadErr;
+                console.log(`  Retrying in 5s...`);
+                await new Promise(r => setTimeout(r, 5000));
+            }
+        }
         console.log(`  Uploaded: versionCode ${uploadResult.data.versionCode}`);
 
         // Step 3: Assign to track

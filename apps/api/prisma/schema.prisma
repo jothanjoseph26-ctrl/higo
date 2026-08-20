@@ -1697,3 +1697,113 @@ model DriverVocabulary {
   @@index([driverId])
   @@map("driver_vocabulary")
 }
+
+// ============================================================================
+// WHATSAPP BOT
+// ============================================================================
+
+enum WhatsAppConversationState {
+  idle
+  awaiting_passenger_name
+  awaiting_passenger_city
+  awaiting_passenger_referral
+  awaiting_driver_name
+  awaiting_driver_vehicle
+  awaiting_driver_city
+  human_handoff
+}
+
+enum WhatsAppRole {
+  passenger
+  driver
+  dispatch
+  unknown
+}
+
+model WhatsAppConfig {
+  id                    String   @id @default(uuid()) @db.Uuid
+  phoneNumberId         String   @unique @map("phone_number_id")
+  accessToken           String   @map("access_token")
+  appSecret             String?  @map("app_secret")
+  verifyToken           String   @map("verify_token")
+  businessAccountId     String?  @map("business_account_id")
+  webhookUrl            String?  @map("webhook_url")
+  isActive              Boolean  @default(true) @map("is_active")
+  greetingMessage       String?  @map("greeting_message")
+  outOfHoursMessage     String?  @map("out_of_hours_message")
+  humanHandoffThreshold Int      @default(3) @map("human_handoff_threshold")
+  maxConversationAgeDays Int     @default(30) @map("max_conversation_age_days")
+  lastWebhookReceivedAt DateTime? @map("last_webhook_received_at")
+  totalMessagesProcessed Int     @default(0) @map("total_messages_processed")
+  description           String?  @db.VarChar(500)
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  conversations         WhatsAppConversation[]
+
+  @@index([isActive])
+  @@map("whatsapp_config")
+}
+
+model WhatsAppConversation {
+  id                   String                  @id @default(uuid()) @db.Uuid
+  configId             String                  @map("config_id") @db.Uuid
+  whatsappPhone        String                  @map("whatsapp_phone")
+  whatsappName         String?                 @map("whatsapp_name")
+  whatsappUserId       String?                 @map("whatsapp_user_id")
+  userId               String?                 @map("user_id") @db.Uuid
+  driverId             String?                 @map("driver_id") @db.Uuid
+  role                 WhatsAppRole            @default(unknown)
+  preferredLanguage    String                  @default("en") @map("preferred_language")
+  conversationState    WhatsAppConversationState @default(idle) @map("conversation_state")
+  onboardingData       Json?                   @map("onboarding_data") @db.JsonB
+  lastIntent           String?                 @map("last_intent")
+  lastUserMessage      String?                 @map("last_user_message")
+  lastBotMessage       String?                 @map("last_bot_message")
+  messageCount         Int                     @default(0) @map("message_count")
+  isHumanHandoff       Boolean                 @default(false) @map("is_human_handoff")
+  handoffReason        String?                 @map("handoff_reason")
+  handoffResolved      Boolean                 @default(false) @map("handoff_resolved")
+  supportTicketId      String?                 @map("support_ticket_id") @db.Uuid
+  referralCode         String?                 @map("referral_code")
+  referralCampaign     String?                 @map("referral_campaign")
+  lastMessageAt        DateTime?               @map("last_message_at")
+  isActive             Boolean                 @default(true) @map("is_active")
+  failedAiAttempts     Int                     @default(0) @map("failed_ai_attempts")
+  lastAiResponseAt     DateTime?               @map("last_ai_response_at")
+  tags                 String[]                @default([])
+  notes                String?                 @db.VarChar(2000)
+  source               String                  @default("whatsapp")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+
+  config               WhatsAppConfig          @relation(fields: [configId], references: [id])
+  messages             WhatsAppMessage[]
+
+  @@unique([configId, whatsappPhone])
+  @@index([whatsappPhone])
+  @@index([userId])
+  @@index([driverId])
+  @@index([conversationState])
+  @@index([isActive])
+  @@index([lastMessageAt])
+  @@map("whatsapp_conversations")
+}
+
+model WhatsAppMessage {
+  id                   String   @id @default(uuid()) @db.Uuid
+  conversationId       String   @map("conversation_id") @db.Uuid
+  direction            String   // inbound | outbound
+  messageType          String   @map("message_type") // text | image | audio | interactive | template
+  content              String
+  metadata             Json?    @db.JsonB
+  status               String   @default("sent") // sent | delivered | read | failed
+  errorMessage         String?  @map("error_message")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  conversation         WhatsAppConversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([status])
+  @@map("whatsapp_messages")
+}

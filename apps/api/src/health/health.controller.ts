@@ -52,8 +52,10 @@ export class HealthController {
     `);
 
     const onlineDrivers = await (this.prisma as any).$queryRawUnsafe(`
-      SELECT id, phone, name, is_online, kyc_status,
-             current_location IS NOT NULL AS has_location
+      SELECT id, phone, name, is_online, kyc_status, is_suspended, vehicle_type::text AS "vehicleType",
+             current_location IS NOT NULL AS has_location,
+             ST_Y(current_location::geometry) AS lat,
+             ST_X(current_location::geometry) AS lng
       FROM drivers
       WHERE is_online = true AND kyc_status = 'approved'
     `);
@@ -79,6 +81,8 @@ export class HealthController {
         createdAt: t.created_at,
         cancelledAt: t.cancelled_at,
         cancelReason: t.cancel_reason,
+        pickupLat: t.pickup_lat ? Number(t.pickup_lat) : null,
+        pickupLng: t.pickup_lng ? Number(t.pickup_lng) : null,
       })),
       onlineDrivers: onlineDrivers.map((d: any) => ({
         id: d.id,
@@ -86,7 +90,11 @@ export class HealthController {
         name: d.name,
         isOnline: d.is_online,
         kycStatus: d.kyc_status,
+        isSuspended: d.is_suspended,
+        vehicleType: d.vehicleType,
         hasLocation: d.has_location,
+        lat: d.lat ? Number(d.lat) : null,
+        lng: d.lng ? Number(d.lng) : null,
       })),
       redis: {
         presenceKeys: socketKeys.length,

@@ -28,7 +28,7 @@ export class GeoRepository {
         AND kyc_status = 'approved'
         AND is_suspended = false
         AND current_location IS NOT NULL
-        AND vehicle_type::text = ${vehicleType}::text
+        AND vehicle_type = ${vehicleType}::"VehicleType"
         AND ST_DWithin(
           current_location, 
           ST_SetSRID(ST_MakePoint(${point.lng}, ${point.lat}), 4326)::geography, 

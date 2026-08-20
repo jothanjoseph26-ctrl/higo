@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, Logger } from '@nestjs/common';
 import { IsOptional, IsString, IsArray, IsEnum } from 'class-validator';
 import { LatLng, PaginationQuery, RequestTripRequest, VehicleType } from '@higo/shared-types';
 import { TripService } from './trips.service';
@@ -62,6 +62,7 @@ export class TripsController {
 
   @Post('request')
   async requestTrip(@CurrentUser() user: AuthUser, @Body() dto: RequestTripDto) {
+    Logger.log(`[TRIPS] requestTrip called: user=${user.sub} type=${user.type} dto=${JSON.stringify(dto).slice(0, 500)}`);
     if (user.type !== 'passenger') {
       throw new AppException('FORBIDDEN', undefined, 'Only passengers can request a trip');
     }

@@ -28,12 +28,12 @@ if ($LASTEXITCODE -ne 0) {
 
 # Step 2: Push
 Write-Host "`n[2/6] Pushing to GitHub..." -ForegroundColor Yellow
-git push origin main 2>&1
+git push origin main
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  Push failed!" -ForegroundColor Red
     exit 1
 }
-Write-Host "  Pushed" -ForegroundColor Green
+Write-Host "  Pushed (or already up-to-date)" -ForegroundColor Green
 
 # Step 3: Trigger workflow
 Write-Host "`n[3/6] Triggering Android build..." -ForegroundColor Yellow
