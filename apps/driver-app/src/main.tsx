@@ -1,11 +1,15 @@
-import 'expo-dev-client';
 import { AppRegistry } from 'react-native';
-import crashlytics from '@react-native-firebase/crashlytics';
 import App from './App';
 import { initSentry, SentryRoot } from './services/sentry';
 
 initSentry();
-crashlytics().setCrashlyticsCollectionEnabled(true);
+
+try {
+  const crashlytics = require('@react-native-firebase/crashlytics').default;
+  crashlytics().setCrashlyticsCollectionEnabled(true);
+} catch (e) {
+  console.warn('Crashlytics init failed (non-fatal):', e);
+}
 
 function Root() {
   return (
