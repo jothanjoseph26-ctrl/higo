@@ -945,7 +945,7 @@ const RESPONSE_TEMPLATES: Record<string, Record<string, string>> = {
     en: 'HiGO Support 📞\n\nHow can we help you today?\n\n1. Book a ride\n2. Track my ride\n3. Report an issue\n4. Speak to a human\n\nType a number or describe your issue.',
     ha: 'HiGO Taimako 📞\n\nTa yaya za mu taimaka maka yau?\n\n1. Yi rajista\n2. Bi diddigin tafiya\n3. Ba da rahoto\n4. Yi magana da mutum\n\nRubuta lamba ko bayyana matsalar ka.',
     yo: 'HiGO Support 📞\n\nBáwo ni a ṣe é ran ọ lọ́wọ́ lọ́la?\n\n1. Bèèrè ìrìn àjò\n2. Tọ́ka sí ìrìn àjò\n3. Kọ ìṣòro\n4. Bá ènìyàn bá sọ̀rọ̀\n\nKọ nọ́mbà tàbí sọ ìṣòro rẹ.',
-    ig: 'HiGO Nyochaa 📞\n\nKa anyị nyere gị aka otu?",
+    ig: 'HiGO Nyochaa 📞\n\nKa anyị nyere gị aka otu:\n\n1. Nye aka nhọpụta\n2. Soro ịrịọ gị\n3. Kpọọ	nsogbu\n4. Kparịta ọka\n\nDee ọnụọgụgụ maọ bụ kọọ nsogbu gị.',
     pcm: 'HiGO Support 📞\n\nHow we fit help you today?\n\n1. Book ride\n2. Track my ride\n3. Report problem\n4. Talk to person\n\nType number or talk your problem.',
   },
   sos_response: {
