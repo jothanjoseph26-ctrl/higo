@@ -96,6 +96,24 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
+      - name: Re-sign AAB with upload key
+        if: ${{ github.event.inputs.build_type == 'aab' || startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          echo "$UPLOAD_KEYSTORE_BASE64" | base64 -d > /tmp/upload-keystore.jks
+          AAB_PATH=$(find app/build/outputs/bundle/release -name '*.aab' | head -1)
+          # Remove existing signature
+          zip -d "$AAB_PATH" "META-INF/*" || true
+          # Re-sign with upload key
+          jarsigner -keystore /tmp/upload-keystore.jks \
+            -storepass "$UPLOAD_KEYSTORE_PASSWORD" \
+            -keypass "$UPLOAD_KEYSTORE_PASSWORD" \
+            "$AAB_PATH" upload
+          # Verify
+          jarsigner -verify "$AAB_PATH"
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+
       - name: Upload APK
         if: ${{ github.event.inputs.build_type != 'aab' }}
         uses: actions/upload-artifact@v4
@@ -177,6 +195,21 @@ jobs:
           RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Re-sign AAB with upload key
+        if: ${{ github.event.inputs.build_type == 'aab' || startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          echo "$UPLOAD_KEYSTORE_BASE64" | base64 -d > /tmp/upload-keystore.jks
+          AAB_PATH=$(find app/build/outputs/bundle/release -name '*.aab' | head -1)
+          zip -d "$AAB_PATH" "META-INF/*" || true
+          jarsigner -keystore /tmp/upload-keystore.jks \
+            -storepass "$UPLOAD_KEYSTORE_PASSWORD" \
+            -keypass "$UPLOAD_KEYSTORE_PASSWORD" \
+            "$AAB_PATH" upload
+          jarsigner -verify "$AAB_PATH"
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
 
       - name: Upload APK
         if: ${{ github.event.inputs.build_type != 'aab' }}
