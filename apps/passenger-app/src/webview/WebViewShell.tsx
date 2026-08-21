@@ -152,6 +152,9 @@ export function WebViewShell({ appUrl = APP_URL }: Props) {
         renderLoading={() => <View style={[styles.container, { backgroundColor: theme.colors.lightGrey }]} />}
         allowsBackForwardNavigationGestures
         setSupportMultipleWindows={false}
+        thirdPartyCookiesEnabled
+        javaScriptEnabled
+        domStorageEnabled
       />
     </View>
   );
