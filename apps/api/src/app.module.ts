@@ -86,7 +86,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
     LoyaltyModule,
     NotificationsModule,
     SupportModule,
-    WhatsAppModule,
+    // WhatsAppModule, // TODO: re-enable once circular dependency is resolved
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
