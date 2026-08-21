@@ -54,7 +54,7 @@ android {
         applicationId "com.higopassenger"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 50
+        versionCode 100
         versionName "1.1.0"
         manifestPlaceholders = [
             GOOGLE_MAPS_API_KEY: System.getenv("EXPO_PUBLIC_GOOGLE_MAPS_API_KEY") ?: ""
