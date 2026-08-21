@@ -21,7 +21,7 @@ export default function App() {
     const cleanup = setupFCMHandlers();
 
     // Handle notification response (tap) — inject into WebView if ready, else store
-    const { Notifications } = require('expo-notifications');
+    const Notifications = require('expo-notifications');
     const responseSub = Notifications.addNotificationResponseReceivedListener((response: any) => {
       const data = response.notification.request.content.data as Record<string, unknown>;
       const type = typeof data?.type === 'string' ? data.type : '';
