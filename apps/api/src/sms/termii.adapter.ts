@@ -17,29 +17,48 @@ export class TermiiAdapter {
       throw new Error('TERMII_API_KEY is empty');
     }
 
-    try {
-      await axios.post(
-        `${baseUrl}/api/sms/send`,
-        {
-          api_key: apiKey,
-          to: phone,
-          from,
-          sms: message,
-          type: 'plain',
-          channel: 'dnd',
-        },
-        { timeout: 8000 },
-      );
-      this.logger.debug(`Termii SMS queued for ${phone.slice(0, 6)}***`);
-    } catch (error) {
-      const detail =
-        axios.isAxiosError(error) && error.response?.data
-          ? JSON.stringify(error.response.data)
-          : error instanceof Error
-            ? error.message
-            : 'unknown';
-      this.logger.error(`Termii SMS failed for ${phone.slice(0, 6)}***: ${detail}`);
-      throw new Error(`Termii SMS failed: ${detail}`);
+    const maxRetries = 2;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await axios.post(
+          `${baseUrl}/api/sms/send`,
+          {
+            api_key: apiKey,
+            to: phone,
+            from,
+            sms: message,
+            type: 'plain',
+            channel: 'dnd',
+          },
+          { timeout: 10000 },
+        );
+
+        const data = response.data as Record<string, unknown>;
+        this.logger.log(
+          `Termii SMS sent to ${phone.slice(0, 6)}*** (attempt ${attempt}) — status: ${data?.status ?? 'unknown'}, balance: ${data?.balance ?? 'n/a'}`,
+        );
+        return;
+      } catch (error) {
+        lastError = error;
+        const detail =
+          axios.isAxiosError(error) && error.response?.data
+            ? JSON.stringify(error.response.data)
+            : error instanceof Error
+              ? error.message
+              : 'unknown';
+        this.logger.warn(
+          `Termii SMS failed for ${phone.slice(0, 6)}*** (attempt ${attempt}/${maxRetries}): ${detail}`,
+        );
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+        }
+      }
     }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`Termii SMS failed after ${maxRetries} attempts`);
   }
 }

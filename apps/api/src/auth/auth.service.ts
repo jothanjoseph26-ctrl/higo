@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { OAuth2Client } from 'google-auth-library';
@@ -35,6 +35,7 @@ const REFRESH_ROTATION_GRACE_SECONDS = 60;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly googleClient: OAuth2Client;
 
   constructor(
@@ -78,7 +79,10 @@ export class AuthService {
     if (!this.sms.usesExternalOtpVerification()) {
       await this.otp.storeOtp(dto.phone, code);
     }
+    const maskedPhone = dto.phone.slice(0, 6) + '***';
+    this.logger.log(`OTP requested for ${maskedPhone} via ${dto.userType}`);
     const { channel } = await this.sms.sendOtp(dto.phone, code);
+    this.logger.log(`OTP delivered to ${maskedPhone} via ${channel}`);
     return { sent: true, expiresInSeconds: 300, channel };
   }
 
