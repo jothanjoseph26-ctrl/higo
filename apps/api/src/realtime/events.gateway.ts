@@ -314,9 +314,9 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
             { lat: driverLocation.lat, lng: driverLocation.lng },
             trip.pickupLocation as any,
           );
-          if (distance > 0.15) { // 150m radius
+          if (distance > 0.5) { // 500m radius
             this.logger.warn(
-              `Driver ${driverId} arrival rejected: ${distance.toFixed(2)}km from pickup (max 0.15km)`,
+              `Driver ${driverId} arrival rejected: ${distance.toFixed(2)}km from pickup (max 0.5km)`,
             );
             client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
               tripId: payload.tripId,
@@ -353,9 +353,9 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
             { lat: driverLocation.lat, lng: driverLocation.lng },
             trip.pickupLocation as any,
           );
-          if (distance > 0.2) { // 200m radius
+          if (distance > 0.5) { // 500m radius
             this.logger.warn(
-              `Driver ${driverId} start rejected: ${distance.toFixed(2)}km from pickup (max 0.2km)`,
+              `Driver ${driverId} start rejected: ${distance.toFixed(2)}km from pickup (max 0.5km)`,
             );
             client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
               tripId: payload.tripId,
