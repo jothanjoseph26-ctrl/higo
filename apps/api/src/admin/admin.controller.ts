@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Body, Query, Param } from '@nestjs/common';
+import { Public } from '../common/decorators/public.decorator';
 import { IsOptional, IsString, IsBoolean, IsEnum, IsNumber, Min, Max } from 'class-validator';
 import {
   AdminGetWeeklyKpisHistoryResponse,
@@ -1789,5 +1790,140 @@ export class AdminController {
       emailSent,
       temporaryPassword: emailSent ? undefined : temporaryPassword,
     };
+  }
+
+  // ─── Delta State Seed ────────────────────────────────────────────────────
+
+  @Public()
+  @Post('seed-delta')
+  async seedDelta() {
+    const results: string[] = [];
+
+    // 1. Create City record for Warri, Delta State
+    const existingCity = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM cities WHERE name = 'Warri' AND state = 'Delta' AND country = 'Nigeria' LIMIT 1
+    `;
+    let cityId: string;
+    if (existingCity.length > 0) {
+      cityId = existingCity[0].id;
+      results.push('City Warri already exists, skipping');
+    } else {
+      const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+        INSERT INTO cities (id, name, state, country, status, currency, timezone,
+          default_language, center_latitude, center_longitude, default_zoom, service_radius_km,
+          created_at, updated_at)
+        VALUES (
+          gen_random_uuid(), 'Warri', 'Delta', 'Nigeria', 'active', 'NGN',
+          'Africa/Lagos', 'en', 5.517, 5.750, 13, 25.0, NOW(), NOW()
+        ) RETURNING id
+      `;
+      cityId = rows[0].id;
+      results.push(`Created city Warri (${cityId})`);
+    }
+
+    // 2. Create Delta State permitted zones
+    const zones = [
+      {
+        name: 'Warri Central',
+        boundary: [
+          { lat: 5.49, lng: 5.73 }, { lat: 5.49, lng: 5.78 },
+          { lat: 5.54, lng: 5.78 }, { lat: 5.54, lng: 5.73 }, { lat: 5.49, lng: 5.73 },
+        ],
+      },
+      {
+        name: 'Effurun',
+        boundary: [
+          { lat: 5.49, lng: 5.78 }, { lat: 5.49, lng: 5.82 },
+          { lat: 5.54, lng: 5.82 }, { lat: 5.54, lng: 5.78 }, { lat: 5.49, lng: 5.78 },
+        ],
+      },
+      {
+        name: 'Warri South',
+        boundary: [
+          { lat: 5.45, lng: 5.72 }, { lat: 5.45, lng: 5.78 },
+          { lat: 5.49, lng: 5.78 }, { lat: 5.49, lng: 5.72 }, { lat: 5.45, lng: 5.72 },
+        ],
+      },
+      {
+        name: 'Udu',
+        boundary: [
+          { lat: 5.45, lng: 5.78 }, { lat: 5.45, lng: 5.83 },
+          { lat: 5.50, lng: 5.83 }, { lat: 5.50, lng: 5.78 }, { lat: 5.45, lng: 5.78 },
+        ],
+      },
+      {
+        name: 'Sapele',
+        boundary: [
+          { lat: 5.85, lng: 5.68 }, { lat: 5.85, lng: 5.72 },
+          { lat: 5.90, lng: 5.72 }, { lat: 5.90, lng: 5.68 }, { lat: 5.85, lng: 5.68 },
+        ],
+      },
+      {
+        name: 'Warri North',
+        boundary: [
+          { lat: 5.54, lng: 5.72 }, { lat: 5.54, lng: 5.78 },
+          { lat: 5.60, lng: 5.78 }, { lat: 5.60, lng: 5.72 }, { lat: 5.54, lng: 5.72 },
+        ],
+      },
+    ];
+
+    // Remove the old oversized Delta zone
+    await this.prisma.$executeRaw`DELETE FROM zones WHERE name = 'Delta' AND zone_type = 'permitted'`;
+
+    for (const z of zones) {
+      const existing = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM zones WHERE name = ${z.name} AND zone_type = 'permitted' LIMIT 1
+      `;
+      if (existing.length > 0) {
+        results.push(`Zone ${z.name} already exists, skipping`);
+        continue;
+      }
+
+      const points = z.boundary;
+      const wktPoints = points.map((p) => `${p.lng} ${p.lat}`).join(',');
+      const closedPoints = points[0].lat === points[points.length - 1].lat
+        && points[0].lng === points[points.length - 1].lng
+        ? wktPoints
+        : `${wktPoints},${points[0].lng} ${points[0].lat}`;
+
+      await this.prisma.$executeRaw`
+        INSERT INTO zones (id, name, zone_type, boundary, surge_multiplier, is_active, created_at)
+        VALUES (
+          gen_random_uuid(),
+          ${z.name},
+          'permitted'::"ZoneType",
+          ST_SetSRID(ST_GeogFromText(${`SRID=4326;POLYGON((${closedPoints})`}), 4326),
+          1.0,
+          true,
+          NOW()
+        )
+      `;
+      results.push(`Created zone ${z.name}`);
+    }
+
+    // 3. Create city-specific pricing for Warri
+    const existingPricing = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM pricing_config WHERE city = 'Warri' LIMIT 1
+    `;
+    if (existingPricing.length > 0) {
+      results.push('Pricing for Warri already exists, skipping');
+    } else {
+      const pricingConfigs = [
+        { vehicleType: 'keke', baseFare: 50000, perKmFare: 12000, perMinFare: 1500, minFare: 70000 },
+        { vehicleType: 'car', baseFare: 100000, perKmFare: 20000, perMinFare: 2500, minFare: 150000 },
+        { vehicleType: 'bike', baseFare: 30000, perKmFare: 8000, perMinFare: 1000, minFare: 50000 },
+      ];
+      for (const p of pricingConfigs) {
+        await this.prisma.$executeRaw`
+          INSERT INTO pricing_config (id, vehicle_type, city, base_fare, per_km_fare, per_min_fare,
+            min_fare, rounding_increment, currency, is_active, updated_at)
+          VALUES (gen_random_uuid(), ${p.vehicleType}::"VehicleType", 'Warri', ${p.baseFare},
+            ${p.perKmFare}, ${p.perMinFare}, ${p.minFare}, 5000, 'NGN', true, NOW())
+        `;
+      }
+      results.push('Created Warri pricing configs (keke, car, bike)');
+    }
+
+    return { success: true, results };
   }
 }

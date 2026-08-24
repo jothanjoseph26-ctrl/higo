@@ -70,20 +70,24 @@ export class TripService {
   ) {}
 
   /**
-   * Whole-FCT envelope (all 6 Area Councils: AMAC, Bwari, Gwagwalada, Kuje,
-   * Kwali, Abaji) - covers points that miss the seeded micro-zones, which
-   * only outline central Abuja districts. Bounds taken from FCT's public
-   * administrative extent, with a small margin.
+   * Envelope checks for regions where HiGO operates. A point passes if it
+   * falls inside any supported region OR inside a seeded permitted zone.
+   * FCT bounds cover all 6 Area Councils; Delta covers the Warri metropolitan
+   * area (Warri, Effurun, Udu, Sapele axis).
    */
   private isWithinFct(point: LatLng): boolean {
     return point.lat >= 8.35 && point.lat <= 9.35 && point.lng >= 6.75 && point.lng <= 7.85;
+  }
+
+  private isWithinDelta(point: LatLng): boolean {
+    return point.lat >= 5.30 && point.lat <= 5.70 && point.lng >= 5.60 && point.lng <= 6.20;
   }
 
   private async isInServiceArea(point: LatLng): Promise<boolean> {
     if (await this.zonesService.isPointInPermittedZone(point)) {
       return true;
     }
-    return this.isWithinFct(point);
+    return this.isWithinFct(point) || this.isWithinDelta(point);
   }
 
   private haversineDistance(p1: LatLng, p2: LatLng): number {
