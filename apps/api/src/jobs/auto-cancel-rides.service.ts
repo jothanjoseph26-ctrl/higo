@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 const REQUESTED_TIMEOUT_MINUTES = 5;
-const MATCHED_TIMEOUT_MINUTES = 10;
+const MATCHED_TIMEOUT_MINUTES = 45;
 
 @Injectable()
 export class AutoCancelRidesService {
@@ -33,7 +33,7 @@ export class AutoCancelRidesService {
         data: {
           status: 'cancelled',
           cancelledAt: now,
-          cancelReason: 'Auto-cancelled: driver did not proceed within 10 minutes',
+          cancelReason: 'Auto-cancelled: driver did not proceed within 45 minutes',
         },
       }),
     ]);

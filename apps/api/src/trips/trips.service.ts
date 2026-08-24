@@ -1456,6 +1456,12 @@ export class TripService {
       this.eventsGateway.server
         .to(`trip:${tripId}`)
         .emit(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED, { tripId });
+
+      void this.pushService.sendToPassenger(trip.passengerId, {
+        title: 'Driver has arrived',
+        body: 'Your driver is at the pickup location. Please come outside.',
+        data: { tripId, type: 'driver_arrived' },
+      });
     } else if (to === TripStatus.EN_ROUTE) {
       this.eventsGateway.server
         .to(`trip:${tripId}`)
@@ -1480,6 +1486,12 @@ export class TripService {
           paymentRef: updatedTrip.paystackReference,
           completedAt: updatedTrip.completedAt!,
         });
+
+      void this.pushService.sendToPassenger(trip.passengerId, {
+        title: 'Trip completed',
+        body: `Your trip is complete. Fare: ₦${(updatedTrip.totalFare ?? 0).toLocaleString()}`,
+        data: { tripId, type: 'trip_completed', fare: String(updatedTrip.totalFare ?? 0) },
+      });
     } else if (to === TripStatus.CANCELLED) {
       this.eventsGateway.server
         .to(`trip:${tripId}`)

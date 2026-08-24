@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
   OnGatewayConnection,
+  OnGatewayDisconnect,
   OnGatewayInit,
   WebSocketGateway,
   WebSocketServer,
@@ -42,7 +43,7 @@ type AppSocket = Socket<ClientToServerEvents, ServerToClientEvents> & {
 };
 
 @WebSocketGateway({ cors: true, namespace: '/' })
-export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
+export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(EventsGateway.name);
 
   @WebSocketServer()
@@ -159,6 +160,15 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection {
     } else if (type === 'admin') {
       this.roomService.joinAdmin(client);
     }
+  }
+
+  async handleDisconnect(client: AppSocket): Promise<void> {
+    const userId = client.data.sub;
+    const type = client.data.type;
+    this.logger.log(`Socket disconnected: ${client.id} user=${userId} type=${type}`);
+    // Do NOT cancel trips or change driver online status on disconnect.
+    // The driver's Redis presence key has a 5-min TTL and will expire naturally.
+    // The trip remains in its current state — the driver can reconnect and resume.
   }
 
   @SubscribeMessage(SOCKET_EVENTS.DRIVER_GO_ONLINE)
