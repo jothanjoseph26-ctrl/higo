@@ -148,6 +148,20 @@ export class AuthService {
     });
     const isNewUser = !driver;
     if (!driver) {
+      // If admin created this driver with a different phone format, try matching
+      // by cleaning the phone (remove leading zeros, add country code, etc.)
+      const variations = [
+        phone,
+        phone.replace(/^0/, '+234'),
+        phone.replace(/^\+2340/, '+234'),
+      ];
+      for (const variant of variations) {
+        if (variant === phone) continue;
+        driver = await this.prisma.driver.findUnique({ where: { phone: variant } });
+        if (driver) break;
+      }
+    }
+    if (!driver) {
       driver = await this.prisma.driver.create({
         data: {
           phone,
@@ -209,6 +223,27 @@ export class AuthService {
       where: { email: payload.email },
     });
     const isNewUser = !driver;
+    if (!driver) {
+      // Check if a driver already exists with this Google account's phone number
+      // (e.g. admin created the driver record, or they registered via phone OTP)
+      const googlePhone = (payload as { phone_number?: string }).phone_number;
+      if (googlePhone) {
+        driver = await this.prisma.driver.findFirst({
+          where: { phone: googlePhone },
+        });
+        if (driver) {
+          // Link the Google email to the existing driver record
+          driver = await this.prisma.driver.update({
+            where: { id: driver.id },
+            data: {
+              email: payload.email,
+              name: driver.name === 'Driver' ? (payload.name ?? driver.name) : driver.name,
+              avatarUrl: driver.avatarUrl ?? payload.picture ?? null,
+            },
+          });
+        }
+      }
+    }
     if (!driver) {
       driver = await this.prisma.driver.create({
         data: {
