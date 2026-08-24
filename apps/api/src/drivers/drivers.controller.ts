@@ -9,6 +9,7 @@ import { AppException } from '../common/errors/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { NearbyDriversQueryDto } from './dto/nearby-drivers-query.dto';
 import { HceService } from '../hce/hce.service';
+import { RedisService } from '../redis/redis.service';
 
 const TRAINING_MODULES = [
   { key: 'safety_basics', title: 'Safety basics', required: true },
@@ -24,6 +25,7 @@ export class DriversController {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly hce: HceService,
+    private readonly redis: RedisService,
   ) {}
 
   @Get('nearby')
@@ -324,6 +326,28 @@ export class DriversController {
           !driver.isSuspended,
       ),
     };
+  }
+
+  @Post('push-subscription')
+  async registerPushSubscription(
+    @CurrentUser() user: AuthUser,
+    @Body() body: { endpoint: string; keys: { p256dh: string; auth: string }; userAgent?: string },
+  ): Promise<{ ok: boolean }> {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Drivers only');
+    }
+    const subscription = {
+      endpoint: body.endpoint,
+      keys: body.keys,
+      userAgent: body.userAgent || '',
+      registeredAt: new Date().toISOString(),
+    };
+    await this.redis.set(
+      `push:driver:${user.sub}`,
+      JSON.stringify(subscription),
+      60 * 60 * 24 * 30, // 30 days
+    );
+    return { ok: true };
   }
 
   private hasActiveSubscriptionOrGrace(

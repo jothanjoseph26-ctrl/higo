@@ -9,6 +9,7 @@ import { CtsService, CtsContext } from './cts.service';
 import { TripService } from '../trips/trips.service';
 import { EventsGateway } from '../realtime/events.gateway';
 import { PushService } from '../push/push.service';
+import { WebPushService } from '../push/web-push.service';
 import { PlatformSettingsReader } from '../admin/platform-settings-reader.service';
 import {
   CompositeTrustScore,
@@ -32,6 +33,7 @@ export class MatchingService {
     private readonly tripService: TripService,
     private readonly eventsGateway: EventsGateway,
     private readonly pushService: PushService,
+    private readonly webPushService: WebPushService,
     private readonly settings: PlatformSettingsReader,
     @InjectQueue('dispatch')
     private readonly dispatchQueue: Queue,
@@ -164,6 +166,16 @@ export class MatchingService {
       );
 
       void this.pushService.sendToDriver(candidate.driverId, {
+        title: 'New ride request',
+        body: `Pickup at ${trip.pickupAddress}`,
+        data: {
+          type: 'trip:new_request',
+          tripId,
+        },
+      });
+
+      // Web push for browser-based driver app (background notifications)
+      void this.webPushService.sendToDriver(candidate.driverId, {
         title: 'New ride request',
         body: `Pickup at ${trip.pickupAddress}`,
         data: {
