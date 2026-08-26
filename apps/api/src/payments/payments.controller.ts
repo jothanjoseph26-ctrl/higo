@@ -87,16 +87,16 @@ export class PaymentsController {
     // via the webhook, so this is purely a user-facing redirect.
     const ref = reference || trxref || '';
 
-    // Determine frontend domain from the request origin or fallback
-    const origin = `https://${process.env.PASSENGER_DOMAIN || 'ride.hiconnectgo.com'}`;
-
-    // Subscription payments use a different success page
+    // Subscription payments use the driver domain; trip payments use passenger domain
     const isSubscription = ref.startsWith('sub_init_');
+    const domain = isSubscription
+      ? (process.env.DRIVER_DOMAIN || 'pilot.hiconnectgo.com')
+      : (process.env.PASSENGER_DOMAIN || 'ride.hiconnectgo.com');
+
     const successPath = isSubscription ? '/driver/subscription?paid=success' : '/payment-success';
+    const refParam = ref ? `&reference=${encodeURIComponent(ref)}` : '';
 
-    const redirectUrl = `${origin}${successPath}${ref ? `&reference=${encodeURIComponent(ref)}` : ''}`;
-
-    return res.redirect(redirectUrl);
+    return res.redirect(`https://${domain}${successPath}${refParam}`);
   }
 
   @Post('refund')
