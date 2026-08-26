@@ -9,8 +9,9 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { PaymentService } from './payment.service';
 import { DisbursementService } from './disbursement.service';
 import { SubscriptionService } from './subscription.service';
@@ -80,15 +81,22 @@ export class PaymentsController {
   async paymentCallback(
     @Query('reference') reference?: string,
     @Query('trxref') trxref?: string,
+    @Res() res?: Response,
   ) {
     // Paystack redirects here after payment. The actual confirmation happens
     // via the webhook, so this is purely a user-facing redirect.
     const ref = reference || trxref || '';
-    return {
-      status: 'received',
-      reference: ref,
-      message: 'Payment received. Your trip will begin shortly.',
-    };
+
+    // Determine frontend domain from the request origin or fallback
+    const origin = `https://${process.env.PASSENGER_DOMAIN || 'ride.hiconnectgo.com'}`;
+
+    // Subscription payments use a different success page
+    const isSubscription = ref.startsWith('sub_init_');
+    const successPath = isSubscription ? '/driver/subscription?paid=success' : '/payment-success';
+
+    const redirectUrl = `${origin}${successPath}${ref ? `&reference=${encodeURIComponent(ref)}` : ''}`;
+
+    return res.redirect(redirectUrl);
   }
 
   @Post('refund')
