@@ -1047,6 +1047,7 @@ export interface ReverseGeocodeResponse {
   description: string;
   lat: number;
   lng: number;
+  city?: string;
 }
 
 export interface NearbyDriver {

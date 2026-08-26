@@ -8,11 +8,9 @@ import { AppException } from '../common/errors/app.exception';
 
 const DEFAULT_ROUNDING_KOBO = 5000; // Base44 DEFAULT_ROUNDING=50 naira.
 const MATCH_RADIUS_KM = 2.5;
-// FCTA-mandated levy on rides within the Federal Capital Territory, passed
-// through to the passenger. Applied on top of the metered fare, same as
-// customerBookingFee - not currently configurable per city/PricingConfig
-// since it's a fixed regulatory rate rather than a HiGO-set fee.
-const FCT_LEVY_RATE = 0.0125;
+// FCTA-mandated levy — disabled pending regulatory confirmation.
+// Set to 0.0125 when re-enabled; apply city check for FCT-only trips.
+const FCT_LEVY_RATE = 0;
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;

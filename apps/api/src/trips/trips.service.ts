@@ -7,6 +7,7 @@ import { EventsGateway } from '../realtime/events.gateway';
 import { PaymentService } from '../payments/payment.service';
 import { PushService } from '../push/push.service';
 import { PromosService } from '../promos/promos.service';
+import { MapsService } from '../maps/maps.service';
 import { validateTransition } from './trip-state-machine';
 import { RedisService } from '../redis/redis.service';
 import {
@@ -67,6 +68,7 @@ export class TripService {
     private readonly paymentService: PaymentService,
     private readonly pushService: PushService,
     private readonly promosService: PromosService,
+    private readonly mapsService: MapsService,
   ) {}
 
   /**
@@ -544,6 +546,14 @@ export class TripService {
       dto.destination,
     );
 
+    let city: string | undefined;
+    try {
+      const geo = await this.mapsService.reverseGeocode(dto.pickup.lat, dto.pickup.lng);
+      city = geo?.city;
+    } catch {
+      this.logger.warn(`Reverse geocode failed for ${dto.pickup.lat},${dto.pickup.lng}; falling back to global pricing`);
+    }
+
     let estimate = await this.pricingService.estimateFare({
       vehicleType: dto.vehicleType,
       distanceKm,
@@ -551,6 +561,7 @@ export class TripService {
       pickup: dto.pickup,
       isShared: dto.isShared,
       rideMode: dto.rideMode,
+      city,
     });
 
     if (dto.promoCode) {

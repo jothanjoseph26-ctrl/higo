@@ -1909,9 +1909,9 @@ export class AdminController {
       results.push('Pricing for Warri already exists, skipping');
     } else {
       const pricingConfigs = [
-        { vehicleType: 'keke', baseFare: 50000, perKmFare: 12000, perMinFare: 1500, minFare: 70000 },
-        { vehicleType: 'car', baseFare: 100000, perKmFare: 20000, perMinFare: 2500, minFare: 150000 },
-        { vehicleType: 'bike', baseFare: 30000, perKmFare: 8000, perMinFare: 1000, minFare: 50000 },
+        { vehicleType: 'keke', baseFare: 50000, perKmFare: 30000, perMinFare: 1500, minFare: 50000 },
+        { vehicleType: 'car', baseFare: 100000, perKmFare: 25000, perMinFare: 2500, minFare: 500000 },
+        { vehicleType: 'bike', baseFare: 30000, perKmFare: 15000, perMinFare: 1000, minFare: 200000 },
       ];
       for (const p of pricingConfigs) {
         await this.prisma.$executeRaw`

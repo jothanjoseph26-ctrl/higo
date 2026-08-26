@@ -182,6 +182,11 @@ export class MapsService {
         results?: Array<{
           formatted_address?: string;
           geometry?: { location?: { lat?: number; lng?: number } };
+          address_components?: Array<{
+            long_name?: string;
+            short_name?: string;
+            types?: string[];
+          }>;
         }>;
       };
 
@@ -193,10 +198,29 @@ export class MapsService {
         return null;
       }
 
+      let city: string | undefined;
+      if (result.address_components) {
+        for (const component of result.address_components) {
+          if (component.types?.includes('locality')) {
+            city = component.long_name;
+            break;
+          }
+        }
+        if (!city) {
+          for (const component of result.address_components) {
+            if (component.types?.includes('administrative_area_level_2')) {
+              city = component.long_name;
+              break;
+            }
+          }
+        }
+      }
+
       const resolved: ReverseGeocodeResponse = {
         description: result.formatted_address,
         lat: result.geometry?.location?.lat ?? lat,
         lng: result.geometry?.location?.lng ?? lng,
+        city,
       };
 
       await this.redis.set(
