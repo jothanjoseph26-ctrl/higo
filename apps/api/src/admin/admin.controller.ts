@@ -1488,14 +1488,19 @@ export class AdminController {
   @Put('pricing')
   async upsertPricing(@Body() dto: {
     vehicleType: string;
+    city?: string;
     baseFare: number;
     perKmFare: number;
     perMinFare: number;
     minFare: number;
   }) {
-    const existing = await this.prisma.pricingConfig.findFirst({
-      where: { vehicleType: dto.vehicleType as any, isActive: true },
-    });
+    const where: any = { vehicleType: dto.vehicleType as any, isActive: true };
+    if (dto.city) {
+      where.city = dto.city;
+    } else {
+      where.city = null;
+    }
+    const existing = await this.prisma.pricingConfig.findFirst({ where });
 
     if (existing) {
       return this.prisma.pricingConfig.update({
@@ -1512,10 +1517,14 @@ export class AdminController {
     return this.prisma.pricingConfig.create({
       data: {
         vehicleType: dto.vehicleType as any,
+        city: dto.city ?? null,
         baseFare: dto.baseFare,
         perKmFare: dto.perKmFare,
         perMinFare: dto.perMinFare,
         minFare: dto.minFare,
+        roundingIncrement: 5000,
+        currency: 'NGN',
+        isActive: true,
       },
     });
   }
