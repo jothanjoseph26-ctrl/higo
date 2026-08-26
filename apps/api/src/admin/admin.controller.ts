@@ -1960,4 +1960,108 @@ export class AdminController {
 
     return { success: true, results };
   }
+
+  @Public()
+  @Post('seed-abuja')
+  async seedAbuja() {
+    const results: string[] = [];
+
+    // 1. Create City record for Abuja, FCT
+    const existingCity = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM cities WHERE name = 'Abuja' AND state = 'FCT' AND country = 'Nigeria' LIMIT 1
+    `;
+    let cityId: string;
+    if (existingCity.length > 0) {
+      cityId = existingCity[0].id;
+      results.push('City Abuja already exists, skipping');
+    } else {
+      const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+        INSERT INTO cities (id, name, state, country, status, currency, timezone,
+          default_language, center_latitude, center_longitude, default_zoom, service_radius_km,
+          created_at, updated_at)
+        VALUES (
+          gen_random_uuid(), 'Abuja', 'FCT', 'Nigeria', 'active', 'NGN',
+          'Africa/Lagos', 'en', 9.057, 7.495, 12, 35.0, NOW(), NOW()
+        ) RETURNING id
+      `;
+      cityId = rows[0].id;
+      results.push(`Created city Abuja (${cityId})`);
+    }
+
+    // 2. Ensure Abuja permitted + restricted zones exist (same as prisma/seed.js)
+    const abujaZones: Array<{ name: string; poly: string; zoneType: string }> = [
+      { name: 'Abuja Metro', poly: 'POLYGON((7.25 8.95, 7.55 8.95, 7.55 9.15, 7.25 9.15, 7.25 8.95))', zoneType: 'permitted' },
+      { name: 'Apo', poly: 'POLYGON((7.48 8.97, 7.50 8.97, 7.50 8.99, 7.48 8.99, 7.48 8.97))', zoneType: 'permitted' },
+      { name: 'Lokogoma', poly: 'POLYGON((7.42 8.99, 7.44 8.99, 7.44 9.01, 7.42 9.01, 7.42 8.99))', zoneType: 'permitted' },
+      { name: 'Lugbe', poly: 'POLYGON((7.36 8.96, 7.38 8.96, 7.38 8.98, 7.36 8.98, 7.36 8.96))', zoneType: 'permitted' },
+      { name: 'Gudu', poly: 'POLYGON((7.45 9.00, 7.47 9.00, 7.47 9.02, 7.45 9.02, 7.45 9.00))', zoneType: 'permitted' },
+      { name: 'Kaura', poly: 'POLYGON((7.43 9.01, 7.45 9.01, 7.45 9.03, 7.43 9.03, 7.43 9.01))', zoneType: 'permitted' },
+      { name: 'Games Village', poly: 'POLYGON((7.45 9.02, 7.47 9.02, 7.47 9.04, 7.45 9.04, 7.45 9.02))', zoneType: 'permitted' },
+      { name: 'Wuye', poly: 'POLYGON((7.43 9.04, 7.45 9.04, 7.45 9.06, 7.43 9.06, 7.43 9.04))', zoneType: 'permitted' },
+      { name: 'Utako', poly: 'POLYGON((7.43 9.06, 7.45 9.06, 7.45 9.08, 7.43 9.08, 7.43 9.06))', zoneType: 'permitted' },
+      { name: 'Wuse', poly: 'POLYGON((7.45 9.06, 7.48 9.06, 7.48 9.08, 7.45 9.08, 7.45 9.06))', zoneType: 'permitted' },
+      { name: 'Gwarimpa', poly: 'POLYGON((7.40 9.10, 7.43 9.10, 7.43 9.12, 7.40 9.12, 7.40 9.10))', zoneType: 'permitted' },
+      { name: 'Jabi', poly: 'POLYGON((7.44 9.06, 7.46 9.06, 7.46 9.08, 7.44 9.08, 7.44 9.06))', zoneType: 'permitted' },
+      { name: 'Maitama Ext.', poly: 'POLYGON((7.47 9.08, 7.49 9.08, 7.49 9.10, 7.47 9.10, 7.47 9.08))', zoneType: 'permitted' },
+      { name: 'Life Camp', poly: 'POLYGON((7.40 9.08, 7.42 9.08, 7.42 9.10, 7.40 9.10, 7.40 9.08))', zoneType: 'permitted' },
+      { name: 'Kubwa', poly: 'POLYGON((7.38 9.12, 7.40 9.12, 7.40 9.14, 7.38 9.14, 7.38 9.12))', zoneType: 'permitted' },
+      { name: 'Asokoro', poly: 'POLYGON((7.51 9.02, 7.54 9.02, 7.54 9.05, 7.51 9.05, 7.51 9.02))', zoneType: 'restricted' },
+      { name: 'Maitama', poly: 'POLYGON((7.48 9.08, 7.51 9.08, 7.51 9.10, 7.48 9.10, 7.48 9.08))', zoneType: 'restricted' },
+      { name: 'Central Area', poly: 'POLYGON((7.48 9.05, 7.50 9.05, 7.50 9.07, 7.48 9.07, 7.48 9.05))', zoneType: 'restricted' },
+      { name: 'Three Arms Zone', poly: 'POLYGON((7.50 9.05, 7.52 9.05, 7.52 9.07, 7.50 9.07, 7.50 9.05))', zoneType: 'restricted' },
+      { name: 'Aso Villa Axis', poly: 'POLYGON((7.52 9.06, 7.54 9.06, 7.54 9.08, 7.52 9.08, 7.52 9.06))', zoneType: 'restricted' },
+      { name: 'Diplomatic Zone', poly: 'POLYGON((7.47 9.04, 7.49 9.04, 7.49 9.06, 7.47 9.06, 7.47 9.04))', zoneType: 'restricted' },
+    ];
+
+    for (const z of abujaZones) {
+      const existing = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM zones WHERE name = ${z.name} LIMIT 1
+      `;
+      if (existing.length > 0) {
+        continue;
+      }
+      const wkt = `SRID=4326;${z.poly}`;
+      await this.prisma.$executeRawUnsafe(`
+        INSERT INTO zones (id, name, zone_type, boundary, surge_multiplier, is_active, created_at)
+        VALUES (
+          gen_random_uuid(),
+          '${z.name}',
+          '${z.zoneType}'::"ZoneType",
+          ST_GeogFromText('${wkt}'),
+          1.0,
+          true,
+          NOW()
+        )
+      `);
+      results.push(`Created zone ${z.name} (${z.zoneType})`);
+    }
+    if (!results.some((r) => r.includes('Created zone'))) {
+      results.push('All Abuja zones already exist, skipping');
+    }
+
+    // 3. Create city-specific pricing for Abuja (kobo, matching global seed)
+    const existingPricing = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM pricing_config WHERE city = 'Abuja' LIMIT 1
+    `;
+    if (existingPricing.length > 0) {
+      results.push('Pricing for Abuja already exists, skipping');
+    } else {
+      const pricingConfigs = [
+        { vehicleType: 'keke', baseFare: 50000, perKmFare: 12000, perMinFare: 1500, minFare: 70000 },
+        { vehicleType: 'car', baseFare: 100000, perKmFare: 20000, perMinFare: 2500, minFare: 150000 },
+        { vehicleType: 'bike', baseFare: 30000, perKmFare: 8000, perMinFare: 1000, minFare: 50000 },
+      ];
+      for (const p of pricingConfigs) {
+        await this.prisma.$executeRaw`
+          INSERT INTO pricing_config (id, vehicle_type, city, base_fare, per_km_fare, per_min_fare,
+            min_fare, rounding_increment, currency, is_active, updated_at)
+          VALUES (gen_random_uuid(), ${p.vehicleType}::"VehicleType", 'Abuja', ${p.baseFare},
+            ${p.perKmFare}, ${p.perMinFare}, ${p.minFare}, 5000, 'NGN', true, NOW())
+        `;
+      }
+      results.push('Created Abuja pricing configs (keke, car, bike)');
+    }
+
+    return { success: true, results };
+  }
 }
