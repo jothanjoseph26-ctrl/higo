@@ -1894,6 +1894,7 @@ export class AdminController {
         && points[0].lng === points[points.length - 1].lng
         ? wktPoints
         : `${wktPoints},${points[0].lng} ${points[0].lat}`;
+      const wkt = `SRID=4326;POLYGON((${closedPoints}))`;
 
       await this.prisma.$executeRaw`
         INSERT INTO zones (id, name, zone_type, boundary, surge_multiplier, is_active, created_at)
@@ -1901,7 +1902,7 @@ export class AdminController {
           gen_random_uuid(),
           ${z.name},
           'permitted'::"ZoneType",
-          ST_SetSRID(ST_GeogFromText(${`SRID=4326;POLYGON((${closedPoints})`}), 4326),
+          ST_SetSRID(ST_GeogFromText(${wkt}::text), 4326),
           1.0,
           true,
           NOW()
