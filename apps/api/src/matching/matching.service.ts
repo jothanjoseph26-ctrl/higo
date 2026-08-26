@@ -299,6 +299,11 @@ export class MatchingService {
     const matchSettings = await this.settings.getMatchSettings();
     this.logger.log(`Offer timeout (${matchSettings.offerTimeoutSec}s) for trip ${tripId} and driver ${driverId}`);
 
+    this.eventsGateway.server.to(`driver:${driverId}`).emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
+      tripId,
+      reason: 'timeout',
+    });
+
     await this.dispatchIfNoActiveOffers(tripId, driverId);
   }
 

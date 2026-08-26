@@ -84,10 +84,15 @@ export const useTripStore = create<TripState>((set, get) => ({
   },
 
   decrementCountdown() {
-    const { countdown, incomingRequest, declineTrip } = get();
+    const { countdown, incomingRequest } = get();
     if (countdown <= 1) {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
       if (incomingRequest) {
-        void declineTrip(incomingRequest.tripId, 'timeout');
+        set({ countdown: 0 });
+        void get().declineTrip(incomingRequest.tripId, 'timeout');
       }
     } else {
       set({ countdown: countdown - 1 });

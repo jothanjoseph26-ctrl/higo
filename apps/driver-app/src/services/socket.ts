@@ -51,6 +51,11 @@ function registerSocketHandlers(sock: Socket<ServerToClientEvents, ClientToServe
   sock.on(SOCKET_EVENTS.MESSAGE_NEW, (payload) => {
     console.debug('Trip message received', payload.tripId, payload.message.id);
   });
+
+  sock.on(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, (payload) => {
+    console.log('Trip accept failed / timed out:', payload.tripId, payload.reason);
+    void useTripStore.getState().setIncomingRequest(null);
+  });
 }
 
 export async function connectSocket(): Promise<Socket<ServerToClientEvents, ClientToServerEvents>> {
