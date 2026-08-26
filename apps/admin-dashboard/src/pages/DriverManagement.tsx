@@ -89,6 +89,18 @@ export const DriverManagement: React.FC = () => {
     }
   };
 
+  // Delete action
+  const handleDelete = async (driverId: string) => {
+    if (!window.confirm('Are you sure you want to delete this driver account? This cannot be undone.')) return;
+    try {
+      await apiService.deleteDriver(driverId);
+      addToast('Driver account deactivated', 'success');
+      refresh();
+    } catch (err: any) {
+      addToast(err.message || 'Failed to delete driver', 'error');
+    }
+  };
+
   // Map kyc status badges
   const renderKycBadge = (status: KYCStatus) => {
     switch (status) {
@@ -226,6 +238,12 @@ export const DriverManagement: React.FC = () => {
                 <span>Suspend</span>
               </button>
             )}
+            <button
+              onClick={() => handleDelete(driver.id)}
+              className="px-3 py-1.5 bg-white border border-red-400 text-red-500 text-xs font-semibold rounded-button hover:bg-red-50 transition-all"
+            >
+              Delete
+            </button>
           </div>
         );
       },

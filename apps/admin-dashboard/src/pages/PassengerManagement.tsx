@@ -56,6 +56,17 @@ export const PassengerManagement: React.FC = () => {
     }
   };
 
+  const handleDelete = async (passengerId: string) => {
+    if (!window.confirm('Are you sure you want to delete this passenger account? This cannot be undone.')) return;
+    try {
+      await apiService.deleteUser(passengerId);
+      addToast('Passenger account deactivated', 'success');
+      refresh();
+    } catch (err: any) {
+      addToast(err?.message || 'Failed to delete passenger', 'error');
+    }
+  };
+
   const columns: ColumnDef<User>[] = [
     {
       accessorKey: 'name',
@@ -113,17 +124,25 @@ export const PassengerManagement: React.FC = () => {
       cell: (info) => {
         const passenger = info.row.original;
         return (
-          <button
-            onClick={() => handleToggleBlock(passenger.id, passenger.isBlocked)}
-            className={`px-3 py-1.5 rounded-button text-xs font-semibold transition-all flex items-center gap-1 border ${
-              passenger.isBlocked
-                ? 'bg-white border-success text-success hover:bg-green-50'
-                : 'bg-white border-error text-error hover:bg-red-50'
-            }`}
-          >
-            {passenger.isBlocked ? <ShieldCheck size={12} /> : <Ban size={12} />}
-            <span>{passenger.isBlocked ? 'Unblock Account' : 'Block Account'}</span>
-          </button>
+          <div className="flex gap-1">
+            <button
+              onClick={() => handleToggleBlock(passenger.id, passenger.isBlocked)}
+              className={`px-3 py-1.5 rounded-button text-xs font-semibold transition-all flex items-center gap-1 border ${
+                passenger.isBlocked
+                  ? 'bg-white border-success text-success hover:bg-green-50'
+                  : 'bg-white border-error text-error hover:bg-red-50'
+              }`}
+            >
+              {passenger.isBlocked ? <ShieldCheck size={12} /> : <Ban size={12} />}
+              <span>{passenger.isBlocked ? 'Unblock' : 'Block'}</span>
+            </button>
+            <button
+              onClick={() => handleDelete(passenger.id)}
+              className="px-3 py-1.5 rounded-button text-xs font-semibold transition-all flex items-center gap-1 border bg-white border-red-400 text-red-500 hover:bg-red-50"
+            >
+              Delete
+            </button>
+          </div>
         );
       },
     },

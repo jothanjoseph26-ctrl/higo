@@ -401,6 +401,14 @@ export const apiService = {
     await api.put(`/admin/users/${passengerId}/unblock`);
   },
 
+  async deleteUser(userId: string): Promise<void> {
+    await api.delete(`/admin/users/${userId}`);
+  },
+
+  async deleteDriver(driverId: string): Promise<void> {
+    await api.delete(`/admin/drivers/${driverId}`);
+  },
+
   async getLiveTrips(): Promise<GetLiveTripsResponse> {
     const res = await api.get<ApiResponse<GetLiveTripsResponse>>('/admin/trips/live');
     return unwrap(res);

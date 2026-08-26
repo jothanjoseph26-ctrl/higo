@@ -1511,6 +1511,19 @@ export class TripService {
           reason: updatedTrip.cancelReason || '',
           cancelledBy: actor,
         });
+
+      // Also notify all offered drivers who haven't accepted yet
+      const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
+      const offeredDriverIds = await this.redis.raw.smembers(offeredDriversKey);
+      for (const driverId of offeredDriverIds) {
+        this.eventsGateway.server
+          .to(`driver:${driverId}`)
+          .emit(SOCKET_EVENTS.TRIP_CANCELLED, {
+            tripId,
+            reason: updatedTrip.cancelReason || '',
+            cancelledBy: actor,
+          });
+      }
     }
 
     return updatedTrip;

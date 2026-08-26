@@ -1614,6 +1614,30 @@ export class AdminController {
     return user;
   }
 
+  @Delete('users/:id')
+  async deleteUser(
+    @Param('id') id: string,
+    @CurrentUser() admin: AuthUser,
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new AppException('NOT_FOUND', undefined, 'User not found');
+
+    await this.prisma.user.update({
+      where: { id },
+      data: { isBlocked: true, phone: `deleted_${id}_${user.phone}` },
+    });
+    await this.prisma.configAuditLog.create({
+      data: {
+        key: 'admin.user.soft_delete',
+        previousValue: { isBlocked: user.isBlocked },
+        newValue: { isBlocked: true, deleted: true },
+        changedBy: admin.sub,
+        changedByType: 'admin',
+      },
+    });
+    return { success: true, userId: id, action: 'deactivated' };
+  }
+
   @Get('settings')
   async getSettings() {
     const row = await this.prisma.platformSettings.findUnique({
