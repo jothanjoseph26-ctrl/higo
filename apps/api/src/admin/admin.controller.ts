@@ -1935,10 +1935,4 @@ export class AdminController {
 
     return { success: true, results };
   }
-
-  @Post('test-set-otp')
-  async testSetOtp(@Body() dto: { phone: string; code: string }) {
-    await this.otp.storeOtp(dto.phone, dto.code);
-    return { success: true, message: `OTP set for ${dto.phone}` };
-  }
 }
