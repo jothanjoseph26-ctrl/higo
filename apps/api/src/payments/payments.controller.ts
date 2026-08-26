@@ -93,10 +93,14 @@ export class PaymentsController {
       ? (process.env.DRIVER_DOMAIN || 'pilot.hiconnectgo.com')
       : (process.env.PASSENGER_DOMAIN || 'ride.hiconnectgo.com');
 
-    const successPath = isSubscription ? '/driver/subscription?paid=success' : '/payment-success';
-    const refParam = ref ? `&reference=${encodeURIComponent(ref)}` : '';
+    const successPath = isSubscription ? '/driver/subscription' : '/payment-success';
+    const params = new URLSearchParams();
+    if (isSubscription) params.set('paid', 'success');
+    if (ref) params.set('reference', ref);
+    const qs = params.toString();
+    const redirectUrl = `https://${domain}${successPath}${qs ? `?${qs}` : ''}`;
 
-    return res.redirect(`https://${domain}${successPath}${refParam}`);
+    return res.redirect(redirectUrl);
   }
 
   @Post('refund')
