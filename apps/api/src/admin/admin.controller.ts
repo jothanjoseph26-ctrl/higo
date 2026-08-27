@@ -27,6 +27,14 @@ import { AuthUser } from '../common/types/auth-user';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 
+function normalizePhone(phone: string): string {
+  const compact = phone.replace(/[^\d+]/g, '');
+  if (compact.startsWith('+')) return compact;
+  if (compact.startsWith('0')) return `+234${compact.slice(1)}`;
+  if (compact.startsWith('234')) return `+${compact}`;
+  return compact;
+}
+
 // ─── Admin-only DTOs ─────────────────────────────────────────────────────────
 
 /** Allowlist of fields an admin can update on a driver profile. */
@@ -934,14 +942,15 @@ export class AdminController {
     @Body() dto: CreateDriverDto,
     @CurrentUser() admin: AuthUser,
   ) {
-    const existing = await this.prisma.driver.findUnique({ where: { phone: dto.phone } });
+    const normalizedPhone = dto.phone ? normalizePhone(dto.phone) : dto.phone;
+    const existing = await this.prisma.driver.findUnique({ where: { phone: normalizedPhone } });
     if (existing) {
       throw new AppException('VALIDATION_ERROR', undefined, 'A driver with this phone number already exists');
     }
     const driver = await this.prisma.driver.create({
       data: {
         name: dto.name,
-        phone: dto.phone,
+        phone: normalizedPhone,
         email: dto.email || undefined,
         vehicleType: (dto.vehicleType as any) || 'keke',
         vehiclePlate: dto.vehiclePlate,
@@ -1052,7 +1061,15 @@ export class AdminController {
     // Only update fields that are explicitly provided (allowlisted above)
     const data: Record<string, unknown> = {};
     if (dto.name !== undefined) data.name = dto.name;
-    if (dto.phone !== undefined) data.phone = dto.phone;
+    if (dto.phone !== undefined) {
+      const normalized = normalizePhone(dto.phone);
+      // Enforce uniqueness on normalized phone
+      const conflict = await this.prisma.driver.findUnique({ where: { phone: normalized } });
+      if (conflict && conflict.id !== id) {
+        throw new AppException('VALIDATION_ERROR', undefined, 'A driver with this phone number already exists');
+      }
+      data.phone = normalized;
+    }
     if (dto.email !== undefined) data.email = dto.email;
     if (dto.vehiclePlate !== undefined) data.vehiclePlate = dto.vehiclePlate;
     if (dto.vehicleType !== undefined) data.vehicleType = dto.vehicleType;
@@ -1092,10 +1109,10 @@ export class AdminController {
     const driver = await this.prisma.driver.findUnique({ where: { id } });
     if (!driver) throw new AppException('NOT_FOUND', undefined, 'Driver not found');
 
-    // Soft delete: deactivate instead of hard delete (trips/subscriptions reference this record)
+    // Soft delete: deactivate and free phone for reuse (like users soft-delete)
     await this.prisma.driver.update({
       where: { id },
-      data: { isActive: false, isOnline: false, isSuspended: true },
+      data: { isActive: false, isOnline: false, isSuspended: true, phone: `deleted_${id}_${driver.phone}` },
     });
     await this.prisma.configAuditLog.create({
       data: {
