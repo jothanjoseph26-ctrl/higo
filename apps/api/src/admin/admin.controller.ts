@@ -1126,6 +1126,13 @@ export class AdminController {
     return { success: true, driverId: id, action: 'deactivated' };
   }
 
+  @Post('fix-deleted-phones')
+  @Public()
+  async fixDeletedPhones() {
+    const count = await this.prisma.$executeRaw`UPDATE drivers SET phone = 'deleted_' || id || '_' || phone WHERE is_active = false AND phone NOT LIKE 'deleted\_%' ESCAPE '\'`;
+    return { fixed: Number(count) };
+  }
+
   @Get('kyc')
   async getKycPending(
     @Query('status') status?: string,
