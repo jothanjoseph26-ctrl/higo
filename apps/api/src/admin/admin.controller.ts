@@ -1308,20 +1308,36 @@ export class AdminController {
     return { recipients: recipients.length, queued: true };
   }
 
+  @Public()
+  @Post('migrate-zone-cities')
+  async migrateZoneCities() {
+    await this.prisma.$executeRawUnsafe(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS city TEXT`);
+    await this.prisma.$executeRawUnsafe(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS state TEXT`);
+    const abujaNames = ['Abuja Metro','Apo','Lokogoma','Lugbe','Gudu','Kaura','Games Village','Wuye','Utako','Wuse','Gwarimpa','Jabi','Maitama Ext.','Life Camp','Kubwa','Asokoro','Maitama','Central Area','Three Arms Zone','Aso Villa Axis','Diplomatic Zone'];
+    const warriNames = ['Warri Central','Effurun','Warri South','Udu','Sapele','Warri North'];
+    await this.prisma.$executeRawUnsafe(`UPDATE zones SET city='Abuja', state='FCT' WHERE name IN (${abujaNames.map(n=>`'${n}'`).join(',')}) AND (city IS NULL OR city='')`);
+    await this.prisma.$executeRawUnsafe(`UPDATE zones SET city='Warri', state='Delta' WHERE name IN (${warriNames.map(n=>`'${n}'`).join(',')}) AND (city IS NULL OR city='')`);
+    const rows = await this.prisma.$queryRaw<any[]>`SELECT city, state, count(*)::int as c FROM zones GROUP BY city, state ORDER BY city`;
+    return { success: true, groups: rows };
+  }
+
   @Get('zones')
-  async getZones(@Query('type') type?: string) {
-    const rows = type
+  async getZones(@Query('type') type?: string, @Query('city') city?: string) {
+    const rows = type || city
       ? await this.prisma.$queryRaw<any[]>`
           SELECT
             id,
             name,
             zone_type AS "zoneType",
+            city,
+            state,
             ST_AsGeoJSON(boundary) AS "boundaryGeoJson",
             surge_multiplier AS "surgeMultiplier",
             is_active AS "isActive",
             created_at AS "createdAt"
           FROM zones
-          WHERE zone_type::text = ${type}
+          WHERE (${type}::text IS NULL OR zone_type::text = ${type})
+            AND (${city}::text IS NULL OR city = ${city})
           ORDER BY name ASC;
         `
       : await this.prisma.$queryRaw<any[]>`
@@ -1329,6 +1345,8 @@ export class AdminController {
             id,
             name,
             zone_type AS "zoneType",
+            city,
+            state,
             ST_AsGeoJSON(boundary) AS "boundaryGeoJson",
             surge_multiplier AS "surgeMultiplier",
             is_active AS "isActive",
