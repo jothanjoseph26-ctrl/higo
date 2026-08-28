@@ -211,6 +211,13 @@ export class MatchingService {
         data: {
           type: 'trip:new_request',
           tripId,
+          pickupLat: String(trip.pickupLocation.lat),
+          pickupLng: String(trip.pickupLocation.lng),
+          destLat: String(trip.destinationLocation.lat),
+          destLng: String(trip.destinationLocation.lng),
+          pickupAddress: trip.pickupAddress,
+          destinationAddress: trip.destinationAddress,
+          fare: String(trip.totalFare),
         },
       });
 
@@ -221,6 +228,13 @@ export class MatchingService {
         data: {
           type: 'trip:new_request',
           tripId,
+          pickupLat: String(trip.pickupLocation.lat),
+          pickupLng: String(trip.pickupLocation.lng),
+          destLat: String(trip.destinationLocation.lat),
+          destLng: String(trip.destinationLocation.lng),
+          pickupAddress: trip.pickupAddress,
+          destinationAddress: trip.destinationAddress,
+          fare: String(trip.totalFare),
         },
       });
     }
