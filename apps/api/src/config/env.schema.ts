@@ -45,8 +45,11 @@ export const envSchema = Joi.object({
   ),
   FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().allow('').default(''),
   FIREBASE_SERVER_KEY: Joi.string().allow('').default(''),
-  FIREBASE_PROJECT_ID: Joi.string().default('hiconnect-3caf8'),
+  FIREBASE_PROJECT_ID: Joi.string().default('hiconnectgo-763a8'),
   FIREBASE_WEB_API_KEY: Joi.string().allow('').default(''),
+  VAPID_PUBLIC_KEY: Joi.string().allow('').default(''),
+  VAPID_PRIVATE_KEY: Joi.string().allow('').default(''),
+  VAPID_SUBJECT: Joi.string().allow('').default('mailto:support@hiconnectgo.com'),
 
   CLOUDFLARE_ACCOUNT_ID: Joi.string().required(),
   CLOUDFLARE_R2_BUCKET: Joi.string().default('higo-kyc-docs'),

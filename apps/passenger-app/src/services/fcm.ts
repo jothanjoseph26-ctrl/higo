@@ -2,21 +2,14 @@ import { Platform } from 'react-native';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useAuthStore } from '../stores/authStore';
 
-const useMock =
-  Platform.OS === 'web' || process.env.EXPO_PUBLIC_PUSH_MOCK === 'true';
+const useMock = process.env.EXPO_PUBLIC_PUSH_MOCK === 'true';
 
 let lastRegisteredToken: string | null = null;
 
 async function registerFCMMock(): Promise<string | null> {
-  const mockFcmToken = 'fcm-token-' + Math.random().toString(36).substring(7);
-  const { user, updateProfile } = useAuthStore.getState();
-
-  if (user && user.fcmToken !== mockFcmToken) {
-    await updateProfile({ fcmToken: mockFcmToken });
-    console.log('FCM token registered with backend (mock):', mockFcmToken);
-  }
-
-  return mockFcmToken;
+  // Mock only for explicit EXPO_PUBLIC_PUSH_MOCK; never store fake tokens for web/production
+  console.log('FCM mock skipped - no token stored');
+  return null;
 }
 
 async function ensureNotificationHandler(): Promise<typeof import('expo-notifications')> {

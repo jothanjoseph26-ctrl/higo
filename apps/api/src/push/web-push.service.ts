@@ -35,11 +35,22 @@ export class WebPushService {
     return !!(this.vapidPublicKey && this.vapidPrivateKey);
   }
 
+  private maskEndpoint(endpoint: string): string {
+    return endpoint.length > 20 ? `${endpoint.slice(0, 20)}***` : '***';
+  }
+
   async sendToDriver(driverId: string, payload: WebPushPayload): Promise<boolean> {
-    if (!this.isEnabled()) return false;
+    const event = payload.data?.type || 'unknown';
+    if (!this.isEnabled()) {
+      this.logger.log(`NOTIFICATION ATTEMPT userId=${driverId} role=driver event=${event} channel=WebPush dest=none provider=web-push success=false error=vapid_disabled`);
+      return false;
+    }
 
     const raw = await this.redis.get(`push:driver:${driverId}`);
-    if (!raw) return false;
+    if (!raw) {
+      this.logger.log(`NOTIFICATION ATTEMPT userId=${driverId} role=driver event=${event} channel=WebPush dest=none provider=web-push success=false error=no_subscription`);
+      return false;
+    }
 
     let subscription: PushSubscription;
     try {
@@ -67,16 +78,16 @@ export class WebPushService {
           data: payload.data || {},
         }),
       );
-      this.logger.debug(`Web push sent to driver ${driverId}`);
+      this.logger.log(`NOTIFICATION ATTEMPT userId=${driverId} role=driver event=${event} channel=WebPush dest=${this.maskEndpoint(subscription.endpoint)} provider=web-push success=true`);
       return true;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       // 404/410 = subscription expired, remove it
       if (message.includes('404') || message.includes('410') || message.includes('expired')) {
         await this.redis.del(`push:driver:${driverId}`);
-        this.logger.debug(`Removed expired push subscription for driver ${driverId}`);
+        this.logger.log(`NOTIFICATION ATTEMPT userId=${driverId} role=driver event=${event} channel=WebPush dest=${this.maskEndpoint(subscription.endpoint)} provider=web-push success=false error=expired_removed`);
       } else {
-        this.logger.warn(`Web push failed for driver ${driverId}: ${message}`);
+        this.logger.warn(`NOTIFICATION ATTEMPT userId=${driverId} role=driver event=${event} channel=WebPush dest=${this.maskEndpoint(subscription.endpoint)} provider=web-push success=false error=${message}`);
       }
       return false;
     }

@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { WebViewShell } from '../webview/WebViewShell';
 import { theme } from '../theme';
 import { OfflineManager } from '../services/offline';
+import { registerFCM, setupFCMHandlers } from '../services/fcm';
 
 export function App() {
   const [ready, setReady] = useState(false);
@@ -11,6 +12,9 @@ export function App() {
   useEffect(() => {
     void (async () => {
       OfflineManager.init();
+      // Phase 1: register real FCM token (no mock) for passenger native
+      setupFCMHandlers({ isReady: () => false, navigate: () => {} });
+      void registerFCM();
       setReady(true);
     })();
   }, []);
