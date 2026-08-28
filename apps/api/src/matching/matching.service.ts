@@ -11,6 +11,7 @@ import { EventsGateway } from '../realtime/events.gateway';
 import { PushService } from '../push/push.service';
 import { WebPushService } from '../push/web-push.service';
 import { PlatformSettingsReader } from '../admin/platform-settings-reader.service';
+import { PresenceService } from '../realtime/presence.service';
 import {
   CompositeTrustScore,
   LatLng,
@@ -35,13 +36,23 @@ export class MatchingService {
     private readonly pushService: PushService,
     private readonly webPushService: WebPushService,
     private readonly settings: PlatformSettingsReader,
+    private readonly presenceService: PresenceService,
     @InjectQueue('dispatch')
     private readonly dispatchQueue: Queue,
   ) {}
 
-  async findCandidates(pickup: LatLng, vehicleType: VehicleType): Promise<RankedCandidate[]> {
+  /**
+   * P0: findCandidates now accepts an optional `city` parameter.
+   *
+   * When city is provided, the geo query filters drivers by matching city.
+   * Drivers with NULL city are EXCLUDED (marked LOCATION_UNCLASSIFIED).
+   *
+   * When city is null/undefined, falls back to proximity-only search
+   * (backward compatible with existing callers).
+   */
+  async findCandidates(pickup: LatLng, vehicleType: VehicleType, city?: string): Promise<RankedCandidate[]> {
     const matchSettings = await this.settings.getMatchSettings();
-    const nearest = await this.geoRepo.findNearestOnlineDrivers(pickup, vehicleType, matchSettings.radiusMeters);
+    const nearest = await this.geoRepo.findNearestOnlineDrivers(pickup, vehicleType, matchSettings.radiusMeters, city);
     
     const scoredCandidates = await Promise.all(
       nearest.map(async (candidate) => {
@@ -89,8 +100,11 @@ export class MatchingService {
       return;
     }
 
-    const candidates = await this.findCandidates(trip.pickupLocation, trip.vehicleType);
-    this.logger.log(`Dispatch trip ${tripId}: found ${candidates.length} candidates (vehicleType=${trip.vehicleType}, pickup=[${trip.pickupLocation.lat},${trip.pickupLocation.lng}])`);
+    // P0: Pass trip city to filter drivers by matching city.
+    // trip.city is set during trip creation from reverse geocoding the pickup.
+    // If trip.city is null, falls back to proximity-only (backward compatible).
+    const candidates = await this.findCandidates(trip.pickupLocation, trip.vehicleType, trip.city ?? undefined);
+    this.logger.log(`Dispatch trip ${tripId}: found ${candidates.length} candidates (vehicleType=${trip.vehicleType}, city=${trip.city ?? 'none'}, pickup=[${trip.pickupLocation.lat},${trip.pickupLocation.lng}])`);
 
     const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
     const offeredStrList = await this.redis.raw.smembers(offeredDriversKey);
@@ -118,7 +132,30 @@ export class MatchingService {
       where: { id: trip.passengerId },
     });
 
-    const toOffer = newCandidates.slice(0, MatchingService.MAX_CONCURRENT_OFFERS);
+    // P1: dispatchEligible gate — driver must have live presence + a delivery channel
+    const eligibleToOffer: typeof newCandidates = [];
+    for (const c of newCandidates) {
+      const check = await this.isDispatchEligible(c.driverId);
+      this.logger.log(
+        `DISPATCH CHECK driverId=${c.driverId} tripId=${tripId} dbOnline=${check.dbOnline} presenceTtl=${check.presenceTtl} socketCount=${check.socketCount} hasFcmToken=${check.hasFcmToken} hasWebPush=${check.hasWebPush} eligible=${check.eligible}`,
+      );
+      if (check.eligible) {
+        eligibleToOffer.push(c);
+        if (eligibleToOffer.length >= MatchingService.MAX_CONCURRENT_OFFERS) break;
+      } else {
+        this.logger.warn(`DISPATCH SKIP ineligible driver ${c.driverId} trip ${tripId} - no live channel`);
+      }
+    }
+
+    if (eligibleToOffer.length === 0) {
+      this.logger.warn(`No dispatch-eligible drivers for trip ${tripId} (candidates ${newCandidates.length} but none eligible). Cancelling.`);
+      this.eventsGateway.server.to(`passenger:${trip.passengerId}`).emit(SOCKET_EVENTS.TRIP_NO_DRIVERS_AVAILABLE, { tripId });
+      await this.tripService.transition(tripId, TripStatus.CANCELLED, 'system');
+      await this.redis.del(offeredDriversKey);
+      return;
+    }
+
+    const toOffer = eligibleToOffer;
 
     this.logger.log(`Offering trip ${tripId} to ${toOffer.length} drivers: ${toOffer.map(c => c.driverId).join(', ')}`);
 
@@ -319,6 +356,28 @@ export class MatchingService {
       if (s) return; // Another offer is still active
     }
     await this.dispatch(tripId);
+  }
+
+  private async isDispatchEligible(driverId: string): Promise<{
+    eligible: boolean;
+    dbOnline: boolean;
+    presenceTtl: number;
+    socketCount: number;
+    hasFcmToken: boolean;
+    hasWebPush: boolean;
+  }> {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { isOnline: true, fcmToken: true },
+    });
+    const dbOnline = !!driver?.isOnline;
+    const presenceTtl = await this.presenceService.getPresenceTtl(driverId);
+    const socketCount = this.eventsGateway.getDriverSocketCount(driverId);
+    const hasFcmToken = !!driver?.fcmToken;
+    const raw = await this.redis.get(`push:driver:${driverId}`);
+    const hasWebPush = !!raw;
+    const eligible = dbOnline && presenceTtl > 0 && (socketCount > 0 || hasFcmToken || hasWebPush);
+    return { eligible, dbOnline, presenceTtl, socketCount, hasFcmToken, hasWebPush };
   }
 
   private haversineDistance(p1: LatLng, p2: LatLng): number {

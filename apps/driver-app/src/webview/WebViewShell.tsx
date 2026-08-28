@@ -57,9 +57,17 @@ export function WebViewShell({ appUrl = APP_URL, webViewRef: externalRef, onWebV
               respond(requestId, { ok: false, error: 'permission_denied' });
               return;
             }
+            // Prefer FCM device token for Firebase Admin; fall back to Expo token
+            try {
+              const deviceToken = await Notifications.getDevicePushTokenAsync();
+              if (deviceToken?.data) {
+                respond(requestId, { ok: true, token: deviceToken.data, type: 'fcm' });
+                return;
+              }
+            } catch {}
             const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-            const token = await Notifications.getExpoPushTokenAsync({ projectId });
-            respond(requestId, { ok: true, token: token.data });
+            const expoToken = await Notifications.getExpoPushTokenAsync({ projectId });
+            respond(requestId, { ok: true, token: expoToken.data, type: 'expo' });
           } catch (err) {
             respond(requestId, { ok: false, error: String(err) });
           }

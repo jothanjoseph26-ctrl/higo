@@ -167,6 +167,15 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
   }
 
+  getDriverSocketCount(driverId: string): number {
+    try {
+      const room: any = (this.server as any)?.sockets?.adapter?.rooms?.get(`driver:${driverId}`);
+      return room?.size ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
   async handleDisconnect(client: AppSocket): Promise<void> {
     const userId = client.data.sub;
     const type = client.data.type;

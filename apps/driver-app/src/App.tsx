@@ -16,12 +16,30 @@ export default function App() {
     setReady(true);
   }, []);
 
-  // Register FCM notification handlers (foreground + tap)
+  // Register FCM notification handlers (foreground + tap + cold-start)
   useEffect(() => {
     const cleanup = setupFCMHandlers();
 
-    // Handle notification response (tap) — inject into WebView if ready, else store
     const Notifications = require('expo-notifications');
+
+    // Cold-start: app was terminated, notification tap launched it
+    Notifications.getLastNotificationResponseAsync().then((response: any) => {
+      if (!response) return;
+      const data = response.notification.request.content.data as Record<string, unknown>;
+      const type = typeof data?.type === 'string' ? data.type : '';
+      if (type === 'trip:new_request' && data.tripId) {
+        const payload = { type, tripId: data.tripId as string };
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(
+            `window.dispatchEvent(new CustomEvent('higo-notification', { detail: ${JSON.stringify(payload)} })); true;`
+          );
+        } else {
+          pendingNotificationRef.current = payload;
+        }
+      }
+    });
+
+    // Handle notification response (tap) — inject into WebView if ready, else store
     const responseSub = Notifications.addNotificationResponseReceivedListener((response: any) => {
       const data = response.notification.request.content.data as Record<string, unknown>;
       const type = typeof data?.type === 'string' ? data.type : '';

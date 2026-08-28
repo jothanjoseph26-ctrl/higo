@@ -53,6 +53,10 @@ export class RedisService implements OnModuleDestroy {
     await this.client.expire(key, ttlSeconds);
   }
 
+  async ttl(key: string): Promise<number> {
+    return this.client.ttl(key);
+  }
+
   /** Sliding-window rate limit using a sorted set. */
   async slidingWindow(
     key: string,

@@ -96,6 +96,10 @@ export class PresenceService {
     return val === 'online';
   }
 
+  async getPresenceTtl(driverId: string): Promise<number> {
+    return this.redis.ttl(`presence:driver:${driverId}`);
+  }
+
   async getNearbyOnlineDrivers(
     lat: number,
     lng: number,
