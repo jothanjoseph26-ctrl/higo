@@ -533,6 +533,7 @@ model Driver {
   @@index([referralCode])
   @@index([activityStatus])
   @@index([fraudRiskScore])
+  @@index([city])
   // GiST index on (is_online, current_location) for nearest-driver search must be
   // added via raw SQL migration:
   //   CREATE INDEX idx_drivers_online_location ON drivers USING GIST (current_location)
@@ -728,6 +729,9 @@ model Trip {
   // Driver rejection tracking
   rejectionReason      String?     @map("rejection_reason") @db.VarChar(100)
 
+  // P0: City derived from pickup location for matching filter
+  city                 String?     @map("city")
+
   createdAt            DateTime    @default(now()) @map("created_at")
 
   passenger            User        @relation("PassengerTrips", fields: [passengerId], references: [id])
@@ -747,6 +751,7 @@ model Trip {
   @@index([rideMode])
   @@index([negotiationId])
   @@index([createdAt])
+  @@index([city])
   // GiST on pickup_location for geofencing checks (raw SQL migration):
   //   CREATE INDEX idx_trips_pickup_location ON trips USING GIST (pickup_location);
   @@map("trips")

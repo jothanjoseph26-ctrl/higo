@@ -167,10 +167,10 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
   }
 
-  getDriverSocketCount(driverId: string): number {
+  async getDriverSocketCount(driverId: string): Promise<number> {
     try {
-      const room: any = (this.server as any)?.sockets?.adapter?.rooms?.get(`driver:${driverId}`);
-      return room?.size ?? 0;
+      const sockets = await this.server.in(`driver:${driverId}`).fetchSockets();
+      return sockets.length;
     } catch {
       return 0;
     }

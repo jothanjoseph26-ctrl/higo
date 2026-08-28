@@ -38,6 +38,7 @@ interface PreparedTripRequest {
   distanceKm: number;
   durationMin: number;
   estimate: RequestTripResponse['estimate'];
+  city?: string; // P0: city derived from pickup location for matching filter
 }
 
 type DriverNegotiationResponseRow = FareNegotiationResponse['driverResponses'][number];
@@ -368,6 +369,7 @@ export class TripService {
       cashConfirmedByDriver: row.cashConfirmedByDriver,
       cashConfirmedAt: row.cashConfirmedAt ? row.cashConfirmedAt.toISOString() : null,
       rejectionReason: row.rejectionReason,
+      city: row.city ?? null,
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -425,6 +427,7 @@ export class TripService {
         cash_confirmed_by_driver AS "cashConfirmedByDriver",
         cash_confirmed_at AS "cashConfirmedAt",
         rejection_reason AS "rejectionReason",
+        city,
         created_at AS "createdAt"
       FROM trips
       WHERE id = ${tripId}::uuid
@@ -580,12 +583,13 @@ export class TripService {
       };
     }
 
-    return { distanceKm, durationMin, estimate };
+    return { distanceKm, durationMin, estimate, city };
   }
 
   async quoteTrip(_passengerId: string, dto: RequestTripRequest): Promise<QuoteTripResponse> {
     const prepared = await this.prepareTripRequest(dto, { redeemPromo: false });
-    const candidates = await this.matchingService.findCandidates(dto.pickup, dto.vehicleType);
+    // P0: Pass city to findCandidates for city-based driver filtering
+    const candidates = await this.matchingService.findCandidates(dto.pickup, dto.vehicleType, prepared.city);
     const nearbyDrivers = candidates.length;
     const closest = candidates[0];
     const etaMin = closest
@@ -1133,11 +1137,13 @@ export class TripService {
       throw new AppException('TRIP_ALREADY_ACTIVE');
     }
 
-    const { distanceKm, durationMin, estimate } = await this.prepareTripRequest(dto, {
+    const { distanceKm, durationMin, estimate, city: tripCity } = await this.prepareTripRequest(dto, {
       redeemPromo: true,
     });
 
     const tripId = crypto.randomUUID();
+
+    // P0: Store city on trip for matching filter
 
     await this.prisma.$executeRaw`
       INSERT INTO trips (
@@ -1172,6 +1178,7 @@ export class TripService {
         ride_mode,
         scheduled_for,
         is_scheduled,
+        city,
         created_at
       ) VALUES (
         ${tripId}::uuid,
@@ -1205,6 +1212,7 @@ export class TripService {
         ${estimate.rideMode}::"RideMode",
         ${dto.scheduledFor ? new Date(dto.scheduledFor) : null},
         ${Boolean(dto.scheduledFor || estimate.rideMode === RideMode.SCHEDULE_FLEX || estimate.rideMode === RideMode.SCHEDULE_EXACT)},
+        ${tripCity ?? null},
         NOW()
       );
     `;

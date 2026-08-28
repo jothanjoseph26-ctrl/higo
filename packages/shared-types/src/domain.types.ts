@@ -313,6 +313,9 @@ export interface Trip {
   // Driver rejection tracking
   rejectionReason: string | null;
 
+  // P0: City derived from pickup location for matching filter
+  city: string | null;
+
   createdAt: ISODateString;
 }
 

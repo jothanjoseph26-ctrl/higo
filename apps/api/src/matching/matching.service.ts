@@ -372,11 +372,13 @@ export class MatchingService {
     });
     const dbOnline = !!driver?.isOnline;
     const presenceTtl = await this.presenceService.getPresenceTtl(driverId);
-    const socketCount = this.eventsGateway.getDriverSocketCount(driverId);
+    const socketCount = await this.eventsGateway.getDriverSocketCount(driverId);
     const hasFcmToken = !!driver?.fcmToken;
     const raw = await this.redis.get(`push:driver:${driverId}`);
     const hasWebPush = !!raw;
-    const eligible = dbOnline && presenceTtl > 0 && (socketCount > 0 || hasFcmToken || hasWebPush);
+    const hasLiveSocket = socketCount > 0;
+    const hasFreshBackgroundPresence = presenceTtl > 0 && (hasFcmToken || hasWebPush);
+    const eligible = dbOnline && (hasLiveSocket || hasFreshBackgroundPresence);
     return { eligible, dbOnline, presenceTtl, socketCount, hasFcmToken, hasWebPush };
   }
 

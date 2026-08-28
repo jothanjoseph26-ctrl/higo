@@ -10,17 +10,76 @@ export class GeoRepository {
     private readonly settings: PlatformSettingsReader,
   ) {}
 
+  /**
+   * P0: Find nearest online drivers filtered by city.
+   *
+   * CITY FILTER LOGIC:
+   * - If `city` is provided and non-empty: only return drivers whose `city` matches
+   *   OR drivers with NULL/empty city (unclassified drivers are EXCLUDED from
+   *   city-restricted matching — they are marked LOCATION_UNCLASSIFIED).
+   * - If `city` is null/undefined/empty: fall back to proximity-only search
+   *   (no city filter). This preserves backward compatibility for flows that
+   *   don't yet provide city.
+   *
+   * WHY CITY ALONE (NOT STATE+ZONE):
+   * - The `state` field is often NULL or defaulted to 'FCT' for all drivers.
+   * - `operatingZoneIds` is stored but never enforced in matching.
+   * - City is the only reliably populated location field on existing drivers.
+   * - P1/P2/P3 will add state and zone validation.
+   *
+   * WHAT HAPPENS TO NULL-CITY DRIVERS:
+   * - They are EXCLUDED when a city filter is active.
+   * - They are NOT incorrectly assigned to any city.
+   * - They will NOT receive ride requests until their city is established.
+   * - This is intentional: it is safer to exclude than to misclassify.
+   */
   async findNearestOnlineDrivers(
     point: LatLng,
     vehicleType: VehicleType,
     maxRadiusMeters?: number,
+    city?: string,
   ): Promise<Array<{ id: string; distanceMeters: number }>> {
     const radius = maxRadiusMeters ?? (await this.settings.getMatchSettings()).radiusMeters;
+
+    // P0: If city is provided, filter by city. Drivers with NULL city are excluded.
+    // If city is not provided, fall back to proximity-only (backward compatible).
+    if (city && city.trim()) {
+      const normalizedCity = city.trim();
+      const rows = await this.prisma.$queryRaw<any[]>`
+        SELECT
+          id,
+          ST_Distance(
+            current_location,
+            ST_SetSRID(ST_MakePoint(${point.lng}, ${point.lat}), 4326)::geography
+          ) AS dist
+        FROM drivers
+        WHERE is_online = true
+          AND kyc_status = 'approved'
+          AND is_suspended = false
+          AND current_location IS NOT NULL
+          AND vehicle_type = ${vehicleType}::"VehicleType"
+          AND city = ${normalizedCity}
+          AND ST_DWithin(
+            current_location,
+            ST_SetSRID(ST_MakePoint(${point.lng}, ${point.lat}), 4326)::geography,
+            ${radius}
+          )
+        ORDER BY dist ASC
+        LIMIT 10;
+      `;
+
+      return rows.map((row) => ({
+        id: row.id,
+        distanceMeters: Number(row.dist),
+      }));
+    }
+
+    // No city filter: proximity-only search (original behavior)
     const rows = await this.prisma.$queryRaw<any[]>`
-      SELECT 
+      SELECT
         id,
         ST_Distance(
-          current_location, 
+          current_location,
           ST_SetSRID(ST_MakePoint(${point.lng}, ${point.lat}), 4326)::geography
         ) AS dist
       FROM drivers
@@ -30,8 +89,8 @@ export class GeoRepository {
         AND current_location IS NOT NULL
         AND vehicle_type = ${vehicleType}::"VehicleType"
         AND ST_DWithin(
-          current_location, 
-          ST_SetSRID(ST_MakePoint(${point.lng}, ${point.lat}), 4326)::geography, 
+          current_location,
+          ST_SetSRID(ST_MakePoint(${point.lng}, ${point.lat}), 4326)::geography,
           ${radius}
         )
       ORDER BY dist ASC
