@@ -12,6 +12,8 @@ export class ZonesRepository {
         id, 
         name, 
         zone_type AS "zoneType", 
+        city,
+        state,
         ST_AsGeoJSON(boundary) AS "boundaryGeoJson", 
         surge_multiplier AS "surgeMultiplier", 
         is_active AS "isActive",
@@ -32,11 +34,13 @@ export class ZonesRepository {
         id: row.id,
         name: row.name,
         zoneType: row.zoneType as ZoneType,
+        city: row.city || null,
+        state: row.state || null,
         boundary,
         surgeMultiplier: Number(row.surgeMultiplier),
         isActive: row.isActive,
         createdAt: row.createdAt.toISOString(),
-      };
+      } as Zone;
     });
   }
 

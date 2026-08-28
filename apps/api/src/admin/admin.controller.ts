@@ -683,6 +683,8 @@ function mapZoneRow(row: any) {
     id: row.id,
     name: row.name,
     zoneType: row.zoneType,
+    city: row.city || null,
+    state: row.state || null,
     boundary,
     surgeMultiplier: Number(row.surgeMultiplier),
     isActive: row.isActive,
