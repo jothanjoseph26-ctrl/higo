@@ -24,7 +24,7 @@ function delay(ms: number): Promise<void> {
 // On cold start, native FirebaseApp initialization can still be in flight
 // when this runs, causing getDevicePushTokenAsync() to throw. Retry with
 // backoff before giving up so the race doesn't silently drop registration.
-async function getDevicePushTokenWithRetry(maxAttempts = 4): Promise<string> {
+export async function getDevicePushTokenWithRetry(maxAttempts = 4): Promise<string> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const deviceToken = await Notifications.getDevicePushTokenAsync();

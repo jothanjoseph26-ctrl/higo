@@ -32,6 +32,10 @@ export class PassengersService {
   }
 
   async updateMe(passengerId: string, dto: UpdateMyProfileRequest): Promise<User> {
+    const fcmToken =
+      dto.fcmToken !== undefined && /^ExponentPushToken\[/.test(dto.fcmToken)
+        ? undefined
+        : dto.fcmToken;
     const user = await this.prisma.user.update({
       where: { id: passengerId },
       data: {
@@ -39,7 +43,7 @@ export class PassengersService {
         email: dto.email,
         avatarUrl: dto.avatarUrl,
         preferredLanguage: dto.preferredLanguage,
-        fcmToken: dto.fcmToken,
+        ...(fcmToken !== undefined && { fcmToken }),
       },
     });
     return mapUser(user);

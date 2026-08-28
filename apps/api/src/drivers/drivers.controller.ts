@@ -183,6 +183,14 @@ export class DriversController {
       throw new AppException('FORBIDDEN', undefined, 'Only drivers can update their profile');
     }
 
+    // Expo push tokens (ExponentPushToken[...]) are invalid for Firebase Admin
+    // messaging. Reject silently instead of storing a token that can never
+    // deliver - old native builds fall back to Expo tokens.
+    const fcmToken =
+      dto.fcmToken !== undefined && /^ExponentPushToken\[/.test(dto.fcmToken)
+        ? undefined
+        : dto.fcmToken;
+
     const driver = await this.prisma.driver.update({
       where: { id: user.sub },
       data: {
@@ -192,7 +200,7 @@ export class DriversController {
         ...(dto.vehicleColor && { vehicleColor: dto.vehicleColor }),
         ...(dto.vehicleYear && { vehicleYear: dto.vehicleYear }),
         ...(dto.vehicleType && { vehicleType: dto.vehicleType as any }),
-        ...(dto.fcmToken !== undefined && { fcmToken: dto.fcmToken }),
+        ...(fcmToken !== undefined && { fcmToken }),
       },
     });
 

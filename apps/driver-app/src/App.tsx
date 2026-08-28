@@ -4,7 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { WebViewShell } from './webview/WebViewShell';
 import { BRIDGE_INJECTED_JS, deliverToWebView, parseBridgeMessage } from './webview/bridge';
-import { setupFCMHandlers } from './services/fcm';
+import { setupFCMHandlers, registerFCM } from './services/fcm';
 import { theme } from './theme';
 
 export default function App() {
@@ -19,6 +19,10 @@ export default function App() {
   // Register FCM notification handlers (foreground + tap + cold-start)
   useEffect(() => {
     const cleanup = setupFCMHandlers();
+
+    // Register a real FCM device token (via retry) so Firebase Admin can
+    // reach this driver. Only FCM tokens are accepted - Expo tokens fail.
+    registerFCM();
 
     const Notifications = require('expo-notifications');
 

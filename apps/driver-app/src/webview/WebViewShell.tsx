@@ -12,6 +12,7 @@ import { ALLOWED_DOMAINS, APP_URL, isAllowedUrl } from './allowedDomains';
 import { BRIDGE_INJECTED_JS, deliverToWebView, parseBridgeMessage } from './bridge';
 import { OfflineScreen } from './OfflineScreen';
 import { startActiveTripTracking, stopActiveTripTracking } from './backgroundLocation';
+import { getDevicePushTokenWithRetry } from '../services/fcm';
 import { theme } from '../theme';
 
 type Props = {
@@ -57,17 +58,18 @@ export function WebViewShell({ appUrl = APP_URL, webViewRef: externalRef, onWebV
               respond(requestId, { ok: false, error: 'permission_denied' });
               return;
             }
-            // Prefer FCM device token for Firebase Admin; fall back to Expo token
+            // Only ever persist real FCM device tokens. Expo tokens are invalid
+            // for Firebase Admin messaging ("registration token is not a valid
+            // FCM registration token") and silently kill push delivery.
             try {
-              const deviceToken = await Notifications.getDevicePushTokenAsync();
-              if (deviceToken?.data) {
-                respond(requestId, { ok: true, token: deviceToken.data, type: 'fcm' });
+              const deviceToken = await getDevicePushTokenWithRetry();
+              if (deviceToken) {
+                respond(requestId, { ok: true, token: deviceToken, type: 'fcm' });
                 return;
               }
             } catch {}
-            const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-            const expoToken = await Notifications.getExpoPushTokenAsync({ projectId });
-            respond(requestId, { ok: true, token: expoToken.data, type: 'expo' });
+            respond(requestId, { ok: false, error: 'fcm_token_unavailable' });
+            return;
           } catch (err) {
             respond(requestId, { ok: false, error: String(err) });
           }
