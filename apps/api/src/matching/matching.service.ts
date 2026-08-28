@@ -143,6 +143,9 @@ export class MatchingService {
       };
       await this.redis.set(this.offerKey(tripId, candidate.driverId), JSON.stringify(offerData), 600);
 
+      const haversineKm = this.haversineDistance(trip.pickupLocation, trip.destinationLocation);
+      const distanceKm = trip.distanceKm != null ? Number(trip.distanceKm) : Math.round(haversineKm * 10) / 10;
+      const durationMin = trip.durationMin ?? Math.max(1, Math.round(distanceKm * 2.5));
       const payload = {
         tripId,
         pickup: trip.pickupLocation,
@@ -151,8 +154,8 @@ export class MatchingService {
         destinationAddress: trip.destinationAddress,
         fare: trip.totalFare,
         surgeMultiplier: trip.surgeMultiplier,
-        distanceKm: trip.distanceKm ? Number(trip.distanceKm) : 0,
-        durationMin: trip.durationMin || 0,
+        distanceKm,
+        durationMin,
         passengerId: trip.passengerId,
         passengerName: passenger?.name || null,
         passengerPhone: passenger?.phone || null,
@@ -316,5 +319,19 @@ export class MatchingService {
       if (s) return; // Another offer is still active
     }
     await this.dispatch(tripId);
+  }
+
+  private haversineDistance(p1: LatLng, p2: LatLng): number {
+    const R = 6371;
+    const dLat = ((p2.lat - p1.lat) * Math.PI) / 180;
+    const dLng = ((p2.lng - p1.lng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((p1.lat * Math.PI) / 180) *
+        Math.cos((p2.lat * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   }
 }
