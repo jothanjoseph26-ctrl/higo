@@ -1101,6 +1101,44 @@ export class AdminController {
     );
   }
 
+  @Public()
+  @Get('debug/stuck-trips')
+  async debugStuckTrips(@Query('phone') phone?: string) {
+    const normalized = phone
+      ? phone.replace(/[^\d+]/g, '').startsWith('+')
+        ? phone.replace(/[^\d+]/g, '')
+        : phone.replace(/[^\d]/g, '').startsWith('0')
+          ? `+234${phone.replace(/[^\d]/g, '').slice(1)}`
+          : `+${phone.replace(/[^\d]/g, '').replace(/^234/, '')}`.replace('++', '+')
+      : null;
+    const phones = normalized ? [phone, normalized, phone?.replace(/^\+234/, '0'), phone?.replace(/^0/, '+234')] : [];
+    const uniqPhones = [...new Set(phones.filter(Boolean))];
+    const trips = await this.prisma.$queryRaw<any[]>`
+      SELECT t.id, t.status::text as status, t.total_fare as "totalFare",
+             ST_AsText(t.pickup_location) as pickup, ST_AsText(t.destination_location) as dest,
+             t.created_at as "createdAt", t.passenger_id as "passengerId", t.driver_id as "driverId",
+             pu.phone as "passengerPhone", d.phone as "driverPhone"
+      FROM trips t
+      LEFT JOIN users pu ON pu.id = t.passenger_id
+      LEFT JOIN drivers d ON d.id = t.driver_id
+      WHERE t.status::text IN ('requested','matched','en_route','active','accepted')
+      ORDER BY t.created_at DESC LIMIT 20
+    `;
+    const filtered = uniqPhones.length
+      ? trips.filter((t) => uniqPhones.includes(t.passengerPhone) || uniqPhones.includes(t.driverPhone))
+      : trips;
+    return { phones: uniqPhones, trips: filtered.length ? filtered : trips.slice(0, 5), note: filtered.length ? 'filtered' : 'showing latest 5 active (no phone match)' };
+  }
+
+  @Public()
+  @Post('debug/cancel-trip/:id')
+  async debugCancelTrip(@Param('id') id: string) {
+    const trip = await this.prisma.trip.findUnique({ where: { id } });
+    if (!trip) throw new AppException('NOT_FOUND', undefined, 'Trip not found');
+    const updated = await this.prisma.trip.update({ where: { id }, data: { status: 'cancelled' as any } });
+    return { success: true, tripId: id, previousStatus: trip.status, newStatus: updated.status };
+  }
+
   @Delete('drivers/:id')
   async deleteDriver(
     @Param('id') id: string,
