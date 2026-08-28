@@ -457,6 +457,9 @@ model Driver {
   isActive              Boolean          @default(true) @map("is_active")
   isSuspended           Boolean          @default(false) @map("is_suspended")
 
+  city                  String?          @map("city")
+  state                 String?          @map("state")
+
   subscriptionTier      SubscriptionTier? @map("subscription_tier")
   subscriptionExpiresAt DateTime?         @map("subscription_expires_at")
 

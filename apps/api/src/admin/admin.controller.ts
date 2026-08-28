@@ -85,6 +85,14 @@ export class UpdateDriverDto {
   @Min(0)
   @Max(5)
   ratingAvg?: number;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  state?: string;
 }
 
 /** Admin activating a subscription paid for in cash at the office - bypasses Paystack entirely. */
@@ -124,6 +132,14 @@ export class CreateDriverDto {
   @IsOptional()
   @IsString()
   vehicleColor?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  state?: string;
 }
 
 /** Validate zone boundary coordinates are real numbers (prevents SQL injection). */
@@ -959,6 +975,8 @@ export class AdminController {
         vehicleModel: dto.vehicleModel,
         vehicleColor: dto.vehicleColor,
         kycStatus: 'pending',
+        city: dto.city || undefined,
+        state: dto.state || undefined,
       },
     });
     await this.prisma.configAuditLog.create({
@@ -979,6 +997,10 @@ export class AdminController {
     @Query('isOnline') isOnline?: string,
     @Query('isSuspended') isSuspended?: string,
     @Query('search') search?: string,
+    @Query('state') state?: string,
+    @Query('city') city?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
     @Query('limit') limit: number = 10,
     @Query('offset') offset: number = 0,
   ) {
@@ -987,6 +1009,8 @@ export class AdminController {
     if (isOnline !== undefined && isOnline !== '') where.isOnline = isOnline === 'true';
     if (isSuspended !== undefined && isSuspended !== '') where.isSuspended = isSuspended === 'true';
     if (kycStatus) where.kycStatus = kycStatus;
+    if (state) where.state = state;
+    if (city) where.city = city;
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -995,10 +1019,15 @@ export class AdminController {
       ];
     }
 
+    const orderBy: any = {};
+    if (sortBy === 'state') orderBy.state = sortOrder === 'desc' ? 'desc' : 'asc';
+    else if (sortBy === 'city') orderBy.city = sortOrder === 'desc' ? 'desc' : 'asc';
+    else orderBy.createdAt = 'desc';
+
     const [drivers, total] = await Promise.all([
       this.prisma.driver.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         take: Number(limit),
         skip: Number(offset),
       }),
@@ -1081,6 +1110,8 @@ export class AdminController {
     if (dto.isOnline !== undefined) data.isOnline = dto.isOnline;
     if (dto.kycStatus !== undefined) data.kycStatus = dto.kycStatus;
     if (dto.ratingAvg !== undefined) data.ratingAvg = dto.ratingAvg;
+    if (dto.city !== undefined) data.city = dto.city;
+    if (dto.state !== undefined) data.state = dto.state;
 
     if (Object.keys(data).length === 0) {
       throw new AppException('VALIDATION_ERROR', undefined, 'No valid fields to update');
@@ -1321,6 +1352,37 @@ export class AdminController {
     await this.prisma.$executeRawUnsafe(`UPDATE zones SET city='Warri', state='Delta' WHERE name IN (${warriNames.map(n=>`'${n}'`).join(',')}) AND (city IS NULL OR city='')`);
     const rows = await this.prisma.$queryRaw<any[]>`SELECT city, state, count(*)::int as c FROM zones GROUP BY city, state ORDER BY city`;
     return { success: true, groups: rows };
+  }
+
+  @Public()
+  @Post('migrate-driver-state')
+  async migrateDriverState() {
+    await this.prisma.$executeRawUnsafe(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS city TEXT`);
+    await this.prisma.$executeRawUnsafe(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS state TEXT`);
+    // Backfill existing drivers with no state: infer from most recent trip zone or default to FCT
+    await this.prisma.$executeRawUnsafe(`UPDATE drivers SET state='FCT', city='Abuja' WHERE state IS NULL OR state=''`);
+    const rows = await this.prisma.$queryRaw<any[]>`SELECT state, city, count(*)::int as c FROM drivers GROUP BY state, city ORDER BY state`;
+    return { success: true, groups: rows };
+  }
+
+  @Public()
+  @Get('geo/detect-state')
+  async detectStateFromIp(@Req() req: any) {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
+    // Simple IP→state via free ipapi (no key, best-effort); fallback to FCT
+    try {
+      const res = await fetch(`https://ipapi.co/${ip}/json/`, { signal: AbortSignal.timeout(4000) } as any);
+      if (res.ok) {
+        const j: any = await res.json();
+        const region = j.region || j.region_code || '';
+        // Map common Nigerian regions to state
+        const map: Record<string, string> = { 'Federal Capital Territory': 'FCT', 'FCT': 'FCT', 'Delta': 'Delta', 'Lagos': 'Lagos' };
+        const state = map[region] || (region.includes('Abuja') ? 'FCT' : region || 'FCT');
+        const city = j.city || (state === 'FCT' ? 'Abuja' : state === 'Delta' ? 'Warri' : '');
+        return { ip, state, city, region, country: j.country_name };
+      }
+    } catch {}
+    return { ip, state: 'FCT', city: 'Abuja', region: 'FCT', country: 'Nigeria' };
   }
 
   @Get('zones')
