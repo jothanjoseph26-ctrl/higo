@@ -1346,6 +1346,8 @@ export class AdminController {
   async migrateZoneCities() {
     await this.prisma.$executeRawUnsafe(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS city TEXT`);
     await this.prisma.$executeRawUnsafe(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS state TEXT`);
+    await this.prisma.$executeRawUnsafe(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS city TEXT`);
+    await this.prisma.$executeRawUnsafe(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS state TEXT`);
     const abujaNames = ['Abuja Metro','Apo','Lokogoma','Lugbe','Gudu','Kaura','Games Village','Wuye','Utako','Wuse','Gwarimpa','Jabi','Maitama Ext.','Life Camp','Kubwa','Asokoro','Maitama','Central Area','Three Arms Zone','Aso Villa Axis','Diplomatic Zone'];
     const warriNames = ['Warri Central','Effurun','Warri South','Udu','Sapele','Warri North'];
     await this.prisma.$executeRawUnsafe(`UPDATE zones SET city='Abuja', state='FCT' WHERE name IN (${abujaNames.map(n=>`'${n}'`).join(',')}) AND (city IS NULL OR city='')`);
