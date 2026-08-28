@@ -127,6 +127,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
           passengerId: userId,
           status: { in: ['requested', 'matched', 'en_route', 'active'] },
         },
+        select: { id: true },
       });
       if (activeTrip) {
         this.roomService.joinTrip(client, activeTrip.id);
@@ -138,12 +139,15 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       // Check if online in database
       const driver = await this.prisma.driver.findUnique({
         where: { id: userId },
+        select: { isOnline: true },
       });
-      if (driver?.isOnline && driver.currentLocation) {
-        // Restore Redis presence
-        const rawLoc = driver.currentLocation as any;
-        const coords = rawLoc?.coordinates ?? [0, 0];
-        await this.presenceService.setDriverOnline(userId, coords[1], coords[0]);
+      if (driver?.isOnline) {
+        try {
+          const locRows = await this.prisma.$queryRaw<any[]>`SELECT ST_AsGeoJSON(current_location) as geo FROM drivers WHERE id = ${userId}::uuid`;
+          const geo = locRows[0]?.geo ? JSON.parse(locRows[0].geo) : null;
+          const coords = geo?.coordinates;
+          if (coords) await this.presenceService.setDriverOnline(userId, coords[1], coords[0]);
+        } catch {}
       }
 
       // Look for active trip
@@ -152,6 +156,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
           driverId: userId,
           status: { in: ['matched', 'arrived', 'en_route', 'active'] },
         },
+        select: { id: true },
       });
       if (activeTrip) {
         this.roomService.joinTrip(client, activeTrip.id);
