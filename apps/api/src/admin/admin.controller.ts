@@ -1342,6 +1342,19 @@ export class AdminController {
   }
 
   @Public()
+  @Public()
+  @Get('debug/driver-by-phone')
+  async debugDriverByPhone(@Query('phone') phone: string) {
+    const norm = phone ? phone.replace(/[^\d+]/g, '').replace(/^0/, '+234').replace(/^\+2340/, '+234') : phone;
+    const variants = [phone, norm, phone.replace(/^\+234/, '0'), norm.replace(/^\+234/, '0')].filter(Boolean);
+    const drivers = await this.prisma.$queryRaw<any[]>`SELECT id, name, phone, fcm_token as "fcmToken", is_online as "isOnline", city, state FROM drivers WHERE phone IN (${variants.join(',')}) OR phone = ${phone} OR phone = ${norm} LIMIT 5`;
+    const withSub = await Promise.all(drivers.map(async (d:any) => {
+      const sub = await this.redis.get(`push:driver:${d.id}`);
+      return { ...d, hasWebPush: !!sub, fcmMasked: d.fcmToken ? d.fcmToken.slice(0,6)+'***' : null };
+    }));
+    return { variants, drivers: withSub };
+  }
+
   @Post('migrate-zone-cities')
   async migrateZoneCities() {
     await this.prisma.$executeRawUnsafe(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS city TEXT`);
