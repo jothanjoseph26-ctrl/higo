@@ -1355,6 +1355,14 @@ export class AdminController {
     return { variants, drivers: withSub };
   }
 
+  @Public()
+  @Post('nuke-expo-tokens')
+  async nukeExpoTokens() {
+    const d = await this.prisma.$executeRawUnsafe(`UPDATE drivers SET fcm_token = NULL WHERE fcm_token LIKE 'Exponent%'`);
+    const u = await this.prisma.$executeRawUnsafe(`UPDATE users SET fcm_token = NULL WHERE fcm_token LIKE 'Exponent%'`);
+    return { driversCleared: Number(d), usersCleared: Number(u) };
+  }
+
   @Post('migrate-zone-cities')
   async migrateZoneCities() {
     await this.prisma.$executeRawUnsafe(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS city TEXT`);
