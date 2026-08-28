@@ -229,6 +229,8 @@ export function WebViewShell({ appUrl = APP_URL, webViewRef: externalRef, onWebV
         thirdPartyCookiesEnabled
         javaScriptEnabled
         domStorageEnabled
+        mediaPlaybackRequiresUserGesture={false}
+        allowsInlineMediaPlayback
       />
     </View>
   );
