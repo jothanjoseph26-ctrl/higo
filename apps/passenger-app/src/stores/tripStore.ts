@@ -141,7 +141,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       set({
         currentTrip: response.trip,
         estimate: response.estimate,
-        status: TripStatus.REQUESTED,
+        status: response.trip?.status || TripStatus.REQUESTED,
         isSubmitting: false,
       });
 
