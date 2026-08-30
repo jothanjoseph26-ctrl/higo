@@ -1363,6 +1363,43 @@ export class AdminController {
     return { driversCleared: Number(d), usersCleared: Number(u) };
   }
 
+  @Public()
+  @Post('debug/fare-test')
+  async debugFareTest(@Body() body: { distanceKm: number; durationMin?: number; vehicleType: string; city?: string }) {
+    const durationMin = body.durationMin ?? Math.max(1, Math.round(body.distanceKm * 2.5));
+    let cfg: any = body.city ? await this.prisma.pricingConfig.findFirst({ where: { vehicleType: body.vehicleType as any, isActive: true, city: body.city } }) : null;
+    if (!cfg) cfg = await this.prisma.pricingConfig.findFirst({ where: { vehicleType: body.vehicleType as any, isActive: true } });
+    if (!cfg) throw new AppException('NOT_FOUND', undefined, 'No pricing');
+    const baseFare = cfg.baseFare; const perKmFare = cfg.perKmFare; const perMinFare = cfg.perMinFare; let minFare = cfg.minFare;
+    const distanceFare = Math.round(body.distanceKm * perKmFare);
+    const timeFare = Math.round(durationMin * perMinFare);
+    let rawFare = baseFare + distanceFare + timeFare;
+    const nigeriaHour = (() => { const now = new Date(); const utc = now.getTime() + now.getTimezoneOffset()*60000; return new Date(utc+3600000).getHours(); })();
+    const isNight = nigeriaHour >=22 || nigeriaHour <5;
+    if (isNight) { rawFare = Math.round(rawFare*1.2); minFare = Math.round(minFare*1.2); }
+    const meteredBase = Math.max(rawFare, minFare);
+    const roundingIncrement = cfg.roundingIncrement || 5000;
+    const roundToIncrement = (a:number, inc:number) => Math.round(a/inc)*inc;
+    const instantFare = roundToIncrement(meteredBase, roundingIncrement);
+    const customerBookingFee = cfg.customerBookingFee || 0;
+    const totalFare = instantFare + customerBookingFee;
+    return {
+      city: body.city || null, vehicleType: body.vehicleType, distanceKm: body.distanceKm, durationMin,
+      config: { baseFare, perKmFare, perMinFare, minFare: cfg.minFare, roundingIncrement, customerBookingFee, surgeEnabled: cfg.surgeEnabled, surgeMaximumMultiplier: cfg.surgeMaximumMultiplier, instantMultiplier: cfg.instantMultiplier, city: cfg.city },
+      calc: { distanceFare, timeFare, rawFare, meteredBase, instantFare, totalFare, isNight, nigeriaHour },
+      fares: { instant: totalFare },
+    };
+  }
+
+  @Public()
+  @Get('debug/pricing-dump')
+  async debugPricingDump(@Query('city') city?: string) {
+    const where: any = { isActive: true };
+    if (city) where.city = city;
+    const rows = await this.prisma.pricingConfig.findMany({ where, orderBy: [{ city: 'asc' }, { vehicleType: 'asc' }] });
+    return rows.map(r => ({ id: r.id, city: r.city, vehicleType: r.vehicleType, baseFare: r.baseFare, perKmFare: r.perKmFare, perMinFare: r.perMinFare, minFare: r.minFare, roundingIncrement: r.roundingIncrement, customerBookingFee: r.customerBookingFee, surgeEnabled: r.surgeEnabled, pricingVersion: r.pricingVersion }));
+  }
+
   @Post('migrate-zone-cities')
   async migrateZoneCities() {
     await this.prisma.$executeRawUnsafe(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS city TEXT`);
