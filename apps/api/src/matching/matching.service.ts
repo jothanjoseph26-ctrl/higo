@@ -82,7 +82,7 @@ export class MatchingService {
     return this.ctsService.computeCTS(driverId, ctx);
   }
 
-  private static readonly MAX_CONCURRENT_OFFERS = 3;
+  private static readonly MAX_CONCURRENT_OFFERS = 2;
 
   private offerKey(tripId: string, driverId: string) {
     return `dispatch:${tripId}:${driverId}`;
@@ -220,6 +220,7 @@ export class MatchingService {
       void this.pushService.sendToDriver(candidate.driverId, {
         title: 'New ride request',
         body: `Pickup at ${trip.pickupAddress}`,
+        channelId: 'trip_requests_v2',
         data: {
           type: 'trip:new_request',
           tripId,
@@ -281,43 +282,70 @@ export class MatchingService {
   }
 
   async acceptOffer(driverId: string, tripId: string): Promise<void> {
-    const key = this.offerKey(tripId, driverId);
-    const offerStr = await this.redis.get(key);
-
-    if (!offerStr) {
-      const trip = await this.tripService.getTrip(tripId);
-      if (trip?.status === 'matched') {
-        this.logger.warn(`Trip ${tripId} already matched — ignoring duplicate accept from ${driverId}`);
-        return;
-      }
-      if (trip?.status === 'requested') {
-        this.logger.warn(
-          `Late accept for trip ${tripId} by driver ${driverId} — offer window expired but trip still unassigned; honouring it`,
-        );
-        await this.redis.del(`dispatch:offered_drivers:${tripId}`);
-        await this.tripService.transition(tripId, TripStatus.MATCHED, 'driver', driverId);
-        return;
-      }
-      throw new Error('Offer expired or not found');
-    }
-
-    const offer = JSON.parse(offerStr);
-    if (offer.driverId !== driverId) {
-      throw new Error('Offer was not made to you or is stale');
-    }
-
-    if (offer.jobId) {
-      try {
-        const job = await this.dispatchQueue.getJob(offer.jobId);
-        if (job) await job.remove();
-      } catch (e) {
-        this.logger.warn(`Failed to remove Bull job ${offer.jobId}: ${e}`);
+    // Distributed lock: only one accept per trip can proceed at a time.
+    // Prevents two drivers accepting simultaneously from both winning.
+    const lockKey = `dispatch:accept_lock:${tripId}`;
+    const lockAcquired = await this.redis.setNx(lockKey, driverId, 10);
+    if (!lockAcquired) {
+      this.logger.warn(`Accept lock held for trip ${tripId} — driver ${driverId} contention, retrying`);
+      // Brief spin-wait: the lock holder should finish fast (DB CAS + Redis cleanup)
+      await new Promise((r) => setTimeout(r, 50));
+      const secondTry = await this.redis.setNx(lockKey, driverId, 10);
+      if (!secondTry) {
+        throw new Error('Another accept is being processed. Please try again.');
       }
     }
 
-    await this.cancelOtherOffers(tripId, driverId);
+    try {
+      const key = this.offerKey(tripId, driverId);
+      const offerStr = await this.redis.get(key);
 
-    await this.tripService.transition(tripId, TripStatus.MATCHED, 'driver', driverId);
+      if (!offerStr) {
+        const trip = await this.tripService.getTrip(tripId);
+        if (trip?.status === 'matched') {
+          this.logger.warn(`Trip ${tripId} already matched — ignoring duplicate accept from ${driverId}`);
+          return;
+        }
+        // Late accept: offer expired but trip still requested — honour it
+        if (trip?.status === 'requested') {
+          this.logger.warn(
+            `Late accept for trip ${tripId} by driver ${driverId} — offer window expired but trip still unassigned; honouring it`,
+          );
+          await this.redis.del(`dispatch:offered_drivers:${tripId}`);
+          await this.tripService.transition(tripId, TripStatus.MATCHED, 'driver', driverId);
+          await this.cancelOtherOffers(tripId, driverId);
+          return;
+        }
+        throw new Error('Offer expired or not found');
+      }
+
+      const offer = JSON.parse(offerStr);
+      if (offer.driverId !== driverId) {
+        throw new Error('Offer was not made to you or is stale');
+      }
+
+      // Remove this driver's offer + Bull timeout job
+      if (offer.jobId) {
+        try {
+          const job = await this.dispatchQueue.getJob(offer.jobId);
+          if (job) await job.remove();
+        } catch (e) {
+          this.logger.warn(`Failed to remove Bull job ${offer.jobId}: ${e}`);
+        }
+      }
+      await this.redis.del(key);
+      await this.redis.raw.srem(this.driverOffersKey(driverId), tripId);
+
+      // Transition FIRST — CAS ensures only one driver wins.
+      // If this throws (concurrent modification), other offers survive.
+      await this.tripService.transition(tripId, TripStatus.MATCHED, 'driver', driverId);
+
+      // Now cancel other offers — only reached if transition succeeded
+      await this.cancelOtherOffers(tripId, driverId);
+    } finally {
+      // Always release the lock
+      await this.redis.del(lockKey);
+    }
   }
 
   async declineOffer(driverId: string, tripId: string, reason?: string): Promise<void> {
@@ -407,8 +435,13 @@ export class MatchingService {
     const raw = await this.redis.get(`push:driver:${driverId}`);
     const hasWebPush = !!raw;
     const hasLiveSocket = socketCount > 0;
-    const hasFreshBackgroundPresence = presenceTtl > 0 && (hasFcmToken || hasWebPush);
-    const eligible = dbOnline && (hasLiveSocket || hasFreshBackgroundPresence);
+    // P0 FIX: FCM push reaches the device even when the app is backgrounded
+    // and the presence key has expired. Requiring presenceTtl > 0 meant
+    // drivers who hadn't sent a location update in 5 minutes were
+    // unreachable despite having valid FCM tokens — the root cause of
+    // "No drivers available" when candidates existed in the geo query.
+    const hasFcmChannel = hasFcmToken || hasWebPush;
+    const eligible = dbOnline && (hasLiveSocket || hasFcmChannel);
     return { eligible, dbOnline, presenceTtl, socketCount, hasFcmToken, hasWebPush };
   }
 

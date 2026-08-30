@@ -5,6 +5,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { WebViewShell } from './webview/WebViewShell';
 import { BRIDGE_INJECTED_JS, deliverToWebView, parseBridgeMessage } from './webview/bridge';
 import { setupFCMHandlers, registerFCM } from './services/fcm';
+import { ringManager } from './services/ringManager';
 import { theme } from './theme';
 
 export default function App() {
@@ -26,7 +27,8 @@ export default function App() {
 
     const Notifications = require('expo-notifications');
 
-    // Cold-start: app was terminated, notification tap launched it
+    // Cold-start: app was terminated, notification tap launched it.
+    // Do NOT play ring here — wait for socket to deliver authoritative trip state.
     Notifications.getLastNotificationResponseAsync().then((response: any) => {
       if (!response) return;
       const data = response.notification.request.content.data as Record<string, unknown>;
@@ -62,6 +64,7 @@ export default function App() {
     return () => {
       cleanup();
       responseSub.remove();
+      ringManager.stop(); // Stop ring on unmount / app teardown
     };
   }, []);
 

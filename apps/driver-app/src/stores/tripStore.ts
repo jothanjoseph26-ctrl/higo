@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import {
   Trip,
   TripStatus,
@@ -13,6 +12,7 @@ import { api } from '../services/api';
 import { getSocket } from '../services/socket';
 import { startBackgroundLocation } from '../services/location-task';
 import { enqueueJob } from '../services/jobQueue';
+import { ringManager } from '../services/ringManager';
 
 interface TripState {
   activeTrip: Trip | null;
@@ -38,7 +38,6 @@ interface TripState {
 }
 
 let countdownInterval: NodeJS.Timeout | null = null;
-let soundInstance: AudioPlayer | null = null;
 
 export const useTripStore = create<TripState>((set, get) => ({
   activeTrip: null,
@@ -52,29 +51,16 @@ export const useTripStore = create<TripState>((set, get) => ({
       countdownInterval = null;
     }
 
-    if (soundInstance) {
-      try {
-        soundInstance.pause();
-        soundInstance.remove();
-      } catch {}
-      soundInstance = null;
-    }
-
     if (!req) {
+      ringManager.stop();
       set({ incomingRequest: null, countdown: 15 });
       return;
     }
 
+    // Start ring with trip ID for idempotency.
+    // If same trip triggers via both FCM and socket, second call is a no-op.
+    ringManager.start(req.tripId);
     set({ incomingRequest: req, countdown: 15 });
-
-    try {
-      const player = createAudioPlayer(require('../assets/ring.mp3'));
-      player.loop = true;
-      player.play();
-      soundInstance = player;
-    } catch (err) {
-      console.warn('Failed to play incoming request sound:', err);
-    }
 
     countdownInterval = setInterval(() => {
       get().decrementCountdown();
@@ -289,13 +275,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       clearInterval(countdownInterval);
       countdownInterval = null;
     }
-    if (soundInstance) {
-      try {
-        soundInstance.pause();
-        soundInstance.remove();
-      } catch {}
-      soundInstance = null;
-    }
+    ringManager.stop();
     set({ activeTrip: null, incomingRequest: null, countdown: 15, isSOSActive: false });
   },
 }));

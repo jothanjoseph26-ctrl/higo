@@ -1406,11 +1406,46 @@ export class TripService {
       );
     }
 
-    // Atomic update: only update if status still matches (prevents race conditions)
-    const updateResult = await this.prisma.$executeRaw`
-      UPDATE trips SET status = ${to}::"TripStatus"
-      WHERE id = ${tripId}::uuid AND status = ${currentStatus}::"TripStatus"
-    `;
+    // Atomic update: status + all associated fields in ONE statement.
+    // The CAS WHERE guard prevents race conditions — only one concurrent
+    // transition can win. If a crash occurs between writes, the row is
+    // consistent because everything is a single SQL statement.
+    let updateResult: number;
+
+    if (to === TripStatus.MATCHED) {
+      if (!driverId) {
+        throw new AppException('VALIDATION_ERROR', undefined, 'Driver ID is required for matching');
+      }
+      updateResult = await this.prisma.$executeRaw`
+        UPDATE trips SET status = ${to}::"TripStatus", driver_id = ${driverId}::uuid
+        WHERE id = ${tripId}::uuid AND status = ${currentStatus}::"TripStatus"
+      `;
+    } else if (to === TripStatus.ACTIVE) {
+      updateResult = await this.prisma.$executeRaw`
+        UPDATE trips SET status = ${to}::"TripStatus", started_at = NOW()
+        WHERE id = ${tripId}::uuid AND status = ${currentStatus}::"TripStatus"
+      `;
+    } else if (to === TripStatus.COMPLETED) {
+      const paymentStatus = trip.paymentMethod === PaymentMethod.CASH ? 'released' : 'held';
+      updateResult = await this.prisma.$executeRaw`
+        UPDATE trips SET status = ${to}::"TripStatus", completed_at = NOW(),
+          payment_status = ${paymentStatus}::"PaymentStatus"
+        WHERE id = ${tripId}::uuid AND status = ${currentStatus}::"TripStatus"
+      `;
+    } else if (to === TripStatus.CANCELLED) {
+      const cancelReason = `${actor}: cancelled`;
+      updateResult = await this.prisma.$executeRaw`
+        UPDATE trips SET status = ${to}::"TripStatus", cancelled_at = NOW(),
+          cancel_reason = ${cancelReason}
+        WHERE id = ${tripId}::uuid AND status = ${currentStatus}::"TripStatus"
+      `;
+    } else {
+      // Simple status-only update (e.g. MATCHED → ARRIVED)
+      updateResult = await this.prisma.$executeRaw`
+        UPDATE trips SET status = ${to}::"TripStatus"
+        WHERE id = ${tripId}::uuid AND status = ${currentStatus}::"TripStatus"
+      `;
+    }
 
     if (updateResult === 0) {
       throw new AppException(
@@ -1418,20 +1453,6 @@ export class TripService {
         undefined,
         `Trip ${tripId} was concurrently modified — cannot transition from ${currentStatus} to ${to}`,
       );
-    }
-
-    if (to === TripStatus.MATCHED) {
-      if (!driverId) {
-        throw new AppException('VALIDATION_ERROR', undefined, 'Driver ID is required for matching');
-      }
-      await this.prisma.trip.update({ where: { id: tripId }, data: { driverId } });
-    } else if (to === TripStatus.ACTIVE) {
-      await this.prisma.trip.update({ where: { id: tripId }, data: { startedAt: new Date() } });
-    } else if (to === TripStatus.COMPLETED) {
-      const paymentStatus = trip.paymentMethod === PaymentMethod.CASH ? 'released' : 'held';
-      await this.prisma.trip.update({ where: { id: tripId }, data: { completedAt: new Date(), paymentStatus } });
-    } else if (to === TripStatus.CANCELLED) {
-      await this.prisma.trip.update({ where: { id: tripId }, data: { cancelledAt: new Date(), cancelReason: `${actor}: cancelled` } });
     }
 
     const updatedTrip = await this.getTrip(tripId);

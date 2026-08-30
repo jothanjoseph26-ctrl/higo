@@ -40,7 +40,8 @@ export type BridgeCommand =
   | 'START_ACTIVE_TRIP_TRACKING'
   | 'STOP_ACTIVE_TRIP_TRACKING'
   | 'GET_DEVICE_INFO'
-  | 'OPEN_APP_SETTINGS';
+  | 'OPEN_APP_SETTINGS'
+  | 'GET_TRIP_STATE';
 
 export function parseBridgeMessage(raw: string): BridgeRequest | null {
   try {

@@ -70,11 +70,12 @@ async function resolveFcmToken(): Promise<string | null> {
   }
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
+    await Notifications.setNotificationChannelAsync('trip_requests_v2', {
+      name: 'Ride Requests',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#1B7A3E',
+      sound: 'ring',
     });
   }
 
@@ -105,13 +106,17 @@ export async function registerFCM(): Promise<string | null> {
 
 export function setupFCMHandlers(): () => void {
   const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
-    console.log('Foreground push received', notification.request.content.title);
+    const data = notification.request.content.data as Record<string, unknown>;
+    const type = typeof data?.type === 'string' ? data.type : '';
+    console.log('Foreground push received', notification.request.content.title, type);
+    // Ring starts from socket TRIP_NEW_REQUEST via RingManager — not here.
   });
 
   const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data as Record<string, unknown>;
     const type = typeof data?.type === 'string' ? data.type : '';
     console.log('Notification tapped', type);
+    // Ring starts when WebView socket reconnects and delivers TRIP_NEW_REQUEST — not here.
   });
 
   return () => {

@@ -60,6 +60,11 @@ jobs:
       - name: Build workspace libs
         run: cd ../.. && npx nx run-many -t build -p @higo/brand-tokens,@higo/shared-types,@higo/api-client
 
+      - name: Ensure notification ring sound is in Android raw resources
+        run: |
+          mkdir -p app/src/main/res/raw
+          cp ../../src/assets/ring.mp3 app/src/main/res/raw/ring.mp3
+
       - name: Decode keystore
         if: ${{ env.KEYSTORE_BASE64 != '' }}
         run: echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore

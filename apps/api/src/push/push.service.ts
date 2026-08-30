@@ -7,6 +7,7 @@ export interface PushNotificationPayload {
   title: string;
   body: string;
   data?: Record<string, string>;
+  channelId?: string;
 }
 
 @Injectable()
@@ -64,7 +65,10 @@ export class PushService implements OnModuleInit {
           body: payload.body,
         },
         data: payload.data ?? {},
-        android: { priority: 'high' },
+        android: {
+          priority: 'high',
+          ...(payload.channelId ? { channelId: payload.channelId } : {}),
+        },
         apns: {
           headers: { 'apns-priority': '10' },
           payload: { aps: { sound: 'default' } },

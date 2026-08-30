@@ -13,6 +13,8 @@ import { BRIDGE_INJECTED_JS, deliverToWebView, parseBridgeMessage } from './brid
 import { OfflineScreen } from './OfflineScreen';
 import { startActiveTripTracking, stopActiveTripTracking } from './backgroundLocation';
 import { getDevicePushTokenWithRetry } from '../services/fcm';
+import { ringManager } from '../services/ringManager';
+import { useTripStore } from '../stores/tripStore';
 import { theme } from '../theme';
 
 type Props = {
@@ -189,6 +191,18 @@ export function WebViewShell({ appUrl = APP_URL, webViewRef: externalRef, onWebV
         case 'STOP_ACTIVE_TRIP_TRACKING': {
           const result = await stopActiveTripTracking();
           respond(requestId, result);
+          return;
+        }
+        case 'GET_TRIP_STATE': {
+          const tripState = useTripStore.getState();
+          respond(requestId, {
+            ok: true,
+            ringing: ringManager.isRinging(),
+            tripRequestId: ringManager.getCurrentTripId(),
+            incomingRequest: tripState.incomingRequest
+              ? { tripId: tripState.incomingRequest.tripId }
+              : null,
+          });
           return;
         }
         default:
