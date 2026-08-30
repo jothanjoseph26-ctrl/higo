@@ -59,8 +59,8 @@ export const useTripStore = create<TripState>((set, get) => ({
 
     // Start ring with trip ID for idempotency.
     // If same trip triggers via both FCM and socket, second call is a no-op.
-    ringManager.start(req.tripId);
-    set({ incomingRequest: req, countdown: 15 });
+    ringManager.start(req.tripId, req.expiresInSeconds || 45);
+    set({ incomingRequest: req, countdown: req.expiresInSeconds || 15 });
 
     countdownInterval = setInterval(() => {
       get().decrementCountdown();

@@ -231,6 +231,7 @@ export class MatchingService {
           pickupAddress: trip.pickupAddress,
           destinationAddress: trip.destinationAddress,
           fare: String(trip.totalFare),
+          expiresInSeconds: String(matchSettings.offerTimeoutSec),
         },
       });
 
@@ -248,6 +249,7 @@ export class MatchingService {
           pickupAddress: trip.pickupAddress,
           destinationAddress: trip.destinationAddress,
           fare: String(trip.totalFare),
+          expiresInSeconds: String(matchSettings.offerTimeoutSec),
         },
       });
     }
