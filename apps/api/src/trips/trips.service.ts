@@ -83,10 +83,8 @@ export class TripService {
   }
 
   private isWithinDelta(point: LatLng): boolean {
-    // Warri metro (5.30-5.70) + Asaba capital (6.05-6.35) — covers Delta State envelope
-    const inWarri = point.lat >= 5.30 && point.lat <= 5.70 && point.lng >= 5.60 && point.lng <= 6.20;
-    const inAsaba = point.lat >= 6.05 && point.lat <= 6.35 && point.lng >= 6.60 && point.lng <= 6.85;
-    return inWarri || inAsaba;
+    // Whole Delta State envelope — covers Warri, Asaba, Abraka, Agbor, Eku, Ozoro, Oleh, Emevor, Ughelli
+    return point.lat >= 5.20 && point.lat <= 6.40 && point.lng >= 5.50 && point.lng <= 6.90;
   }
 
   private async isInServiceArea(point: LatLng): Promise<boolean> {

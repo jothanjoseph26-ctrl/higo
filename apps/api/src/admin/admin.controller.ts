@@ -2258,4 +2258,53 @@ export class AdminController {
 
     return { success: true, results };
   }
+
+  @Public()
+  @Post('seed-delta-towns')
+  async seedDeltaTowns() {
+    const towns = [
+      { name: 'Abraka', lat: 5.79, lng: 6.10, state: 'Delta' },
+      { name: 'Agbor', lat: 6.25, lng: 6.18, state: 'Delta' },
+      { name: 'Eku', lat: 5.73, lng: 5.94, state: 'Delta' },
+      { name: 'Ozoro', lat: 5.54, lng: 6.21, state: 'Delta' },
+      { name: 'Oleh', lat: 5.46, lng: 6.20, state: 'Delta' },
+      { name: 'Emevor', lat: 5.37, lng: 6.07, state: 'Delta' },
+      { name: 'Ughelli', lat: 5.48, lng: 6.00, state: 'Delta' },
+    ];
+    const results: string[] = [];
+    for (const t of towns) {
+      const existingCity = await this.prisma.$queryRaw<{ id: string }[]>`SELECT id FROM cities WHERE name = ${t.name} AND state = ${t.state} LIMIT 1`;
+      if (existingCity.length === 0) {
+        const rows = await this.prisma.$queryRaw<{ id: string }[]>`INSERT INTO cities (id, name, state, country, status, currency, timezone, default_language, center_latitude, center_longitude, default_zoom, service_radius_km, created_at, updated_at) VALUES (gen_random_uuid(), ${t.name}, ${t.state}, 'Nigeria', 'active', 'NGN', 'Africa/Lagos', 'en', ${t.lat}, ${t.lng}, 13, 20.0, NOW(), NOW()) RETURNING id`;
+        results.push(`Created city ${t.name} (${rows[0].id})`);
+      } else {
+        results.push(`City ${t.name} already exists, skipping`);
+      }
+
+      const zoneName = `${t.name} Central`;
+      const existingZone = await this.prisma.$queryRaw<{ id: string }[]>`SELECT id FROM zones WHERE name = ${zoneName} LIMIT 1`;
+      if (existingZone.length === 0) {
+        const lat = t.lat, lng = t.lng;
+        const boundary = [{lat: lat-0.02, lng: lng-0.02},{lat: lat-0.02, lng: lng+0.02},{lat: lat+0.02, lng: lng+0.02},{lat: lat+0.02, lng: lng-0.02},{lat: lat-0.02, lng: lng-0.02}];
+        const wktPoints = boundary.map(p=>`${p.lng} ${p.lat}`).join(',');
+        const wkt = `SRID=4326;POLYGON((${wktPoints}))`;
+        await this.prisma.$executeRawUnsafe(`INSERT INTO zones (id, name, zone_type, boundary, surge_multiplier, is_active, created_at) VALUES (gen_random_uuid(), '${zoneName}', 'permitted'::"ZoneType", ST_SetSRID(ST_GeogFromText('${wkt}'),4326), 1.0, true, NOW())`);
+        await this.prisma.$executeRawUnsafe(`UPDATE zones SET city='${t.name}', state='${t.state}' WHERE name='${zoneName}'`);
+        results.push(`Created zone ${zoneName}`);
+      } else {
+        results.push(`Zone ${zoneName} already exists, skipping`);
+      }
+
+      const existingPricing = await this.prisma.$queryRaw<{ id: string }[]>`SELECT id FROM pricing_config WHERE city = ${t.name} LIMIT 1`;
+      if (existingPricing.length === 0) {
+        for (const p of [{vehicleType:'keke',baseFare:50000,perKmFare:12000,perMinFare:1500,minFare:70000},{vehicleType:'car',baseFare:100000,perKmFare:20000,perMinFare:2500,minFare:150000},{vehicleType:'bike',baseFare:30000,perKmFare:8000,perMinFare:1000,minFare:50000}]) {
+          await this.prisma.$executeRaw`INSERT INTO pricing_config (id, vehicle_type, city, base_fare, per_km_fare, per_min_fare, min_fare, rounding_increment, currency, is_active, updated_at) VALUES (gen_random_uuid(), ${p.vehicleType}::"VehicleType", ${t.name}, ${p.baseFare}, ${p.perKmFare}, ${p.perMinFare}, ${p.minFare}, 5000, 'NGN', true, NOW())`;
+        }
+        results.push(`Created pricing for ${t.name}`);
+      } else {
+        results.push(`Pricing for ${t.name} already exists, skipping`);
+      }
+    }
+    return { success: true, results };
+  }
 }
