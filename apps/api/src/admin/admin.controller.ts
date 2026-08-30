@@ -1034,7 +1034,15 @@ export class AdminController {
       this.prisma.driver.count({ where }),
     ]);
 
-    return { drivers, total, limit: Number(limit), offset: Number(offset) };
+    const normalizedDrivers = drivers.map((d: any) => ({
+      ...d,
+      rating_avg: d.ratingAvg != null ? Number(d.ratingAvg) : d.rating_avg,
+      ratingAvg: d.ratingAvg != null ? Number(d.ratingAvg) : d.ratingAvg,
+      total_earnings: d.totalEarnings != null ? Number(d.totalEarnings) : d.total_earnings,
+      totalEarnings: d.totalEarnings != null ? Number(d.totalEarnings) : d.totalEarnings,
+    }));
+
+    return { drivers: normalizedDrivers as any, total, limit: Number(limit), offset: Number(offset) };
   }
 
   @Put('drivers/:id/suspend')
