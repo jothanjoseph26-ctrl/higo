@@ -107,9 +107,15 @@ export class MatchingService {
     // P0: Pass trip city to filter drivers by matching city.
     // trip.city is set during trip creation from reverse geocoding the pickup.
     // If trip.city is null, falls back to proximity-only (backward compatible).
-    const candidates = await this.findCandidates(trip.pickupLocation, trip.vehicleType, trip.city ?? undefined);
+    let candidates = await this.findCandidates(trip.pickupLocation, trip.vehicleType, trip.city ?? undefined);
     this.logger.log(`Dispatch trip ${tripId}: found ${candidates.length} candidates (vehicleType=${trip.vehicleType}, city=${trip.city ?? 'none'}, pickup=[${trip.pickupLocation.lat},${trip.pickupLocation.lng}])`);
 
+    // Fallback: if city-filtered search found no drivers, retry without city filter
+    if (candidates.length === 0 && trip.city) {
+      this.logger.log(`Dispatch trip ${tripId}: city=${trip.city} returned 0 candidates, retrying without city filter`);
+      candidates = await this.findCandidates(trip.pickupLocation, trip.vehicleType, undefined);
+      this.logger.log(`Dispatch trip ${tripId}: proximity-only fallback found ${candidates.length} candidates`);
+    }
     const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
     const offeredStrList = await this.redis.raw.smembers(offeredDriversKey);
     const offeredSet = new Set(offeredStrList);
