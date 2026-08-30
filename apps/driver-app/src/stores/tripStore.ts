@@ -68,9 +68,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     set({ incomingRequest: req, countdown: 15 });
 
     try {
-      const player = createAudioPlayer({
-        uri: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav',
-      });
+      const player = createAudioPlayer(require('../assets/ring.mp3'));
       player.loop = true;
       player.play();
       soundInstance = player;
