@@ -2188,4 +2188,74 @@ export class AdminController {
 
     return { success: true, results };
   }
+
+  @Public()
+  @Post('seed-asaba')
+  async seedAsaba() {
+    const results: string[] = [];
+
+    // 1. City Asaba, Delta
+    const existingCity = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM cities WHERE name = 'Asaba' AND state = 'Delta' AND country = 'Nigeria' LIMIT 1
+    `;
+    if (existingCity.length > 0) {
+      results.push('City Asaba already exists, skipping');
+    } else {
+      const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+        INSERT INTO cities (id, name, state, country, status, currency, timezone,
+          default_language, center_latitude, center_longitude, default_zoom, service_radius_km,
+          created_at, updated_at)
+        VALUES (gen_random_uuid(), 'Asaba', 'Delta', 'Nigeria', 'active', 'NGN', 'Africa/Lagos', 'en', 6.205, 6.695, 13, 25.0, NOW(), NOW())
+        RETURNING id
+      `;
+      results.push(`Created city Asaba (${rows[0].id})`);
+    }
+
+    // 2. Zones for Asaba capital
+    const zones = [
+      { name: 'Asaba Central', boundary: [{lat:6.19,lng:6.68},{lat:6.19,lng:6.72},{lat:6.22,lng:6.72},{lat:6.22,lng:6.68},{lat:6.19,lng:6.68}] },
+      { name: 'Asaba GRA', boundary: [{lat:6.18,lng:6.69},{lat:6.18,lng:6.72},{lat:6.21,lng:6.72},{lat:6.21,lng:6.69},{lat:6.18,lng:6.69}] },
+      { name: 'Okpanam Road', boundary: [{lat:6.18,lng:6.65},{lat:6.18,lng:6.69},{lat:6.22,lng:6.69},{lat:6.22,lng:6.65},{lat:6.18,lng:6.65}] },
+      { name: 'Illah Road', boundary: [{lat:6.20,lng:6.68},{lat:6.20,lng:6.73},{lat:6.24,lng:6.73},{lat:6.24,lng:6.68},{lat:6.20,lng:6.68}] },
+      { name: 'Inter Bus Roundabout', boundary: [{lat:6.17,lng:6.66},{lat:6.17,lng:6.70},{lat:6.20,lng:6.70},{lat:6.20,lng:6.66},{lat:6.17,lng:6.66}] },
+    ];
+
+    for (const z of zones) {
+      const existing = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM zones WHERE name = ${z.name} AND zone_type = 'permitted' LIMIT 1
+      `;
+      if (existing.length > 0) { results.push(`Zone ${z.name} already exists, skipping`); continue; }
+      const wktPoints = z.boundary.map(p=>`${p.lng} ${p.lat}`).join(',');
+      const wkt = `SRID=4326;POLYGON((${wktPoints}))`;
+      await this.prisma.$executeRawUnsafe(`
+        INSERT INTO zones (id, name, zone_type, boundary, surge_multiplier, is_active, created_at)
+        VALUES (gen_random_uuid(), '${z.name}', 'permitted'::"ZoneType", ST_SetSRID(ST_GeogFromText('${wkt}'),4326), 1.0, true, NOW())
+      `);
+      results.push(`Created zone ${z.name}`);
+    }
+
+    // Update zones city/state
+    await this.prisma.$executeRawUnsafe(`UPDATE zones SET city='Asaba', state='Delta' WHERE name IN ('Asaba Central','Asaba GRA','Okpanam Road','Illah Road','Inter Bus Roundabout') AND (city IS NULL OR city='')`);
+
+    // 3. Pricing for Asaba
+    const existingPricing = await this.prisma.$queryRaw<{ id: string }[]>`SELECT id FROM pricing_config WHERE city = 'Asaba' LIMIT 1`;
+    if (existingPricing.length > 0) {
+      results.push('Pricing for Asaba already exists, skipping');
+    } else {
+      const pricingConfigs = [
+        { vehicleType: 'keke', baseFare: 50000, perKmFare: 12000, perMinFare: 1500, minFare: 70000 },
+        { vehicleType: 'car', baseFare: 100000, perKmFare: 20000, perMinFare: 2500, minFare: 150000 },
+        { vehicleType: 'bike', baseFare: 30000, perKmFare: 8000, perMinFare: 1000, minFare: 50000 },
+      ];
+      for (const p of pricingConfigs) {
+        await this.prisma.$executeRaw`
+          INSERT INTO pricing_config (id, vehicle_type, city, base_fare, per_km_fare, per_min_fare, min_fare, rounding_increment, currency, is_active, updated_at)
+          VALUES (gen_random_uuid(), ${p.vehicleType}::"VehicleType", 'Asaba', ${p.baseFare}, ${p.perKmFare}, ${p.perMinFare}, ${p.minFare}, 5000, 'NGN', true, NOW())
+        `;
+      }
+      results.push('Created Asaba pricing configs (keke, car, bike)');
+    }
+
+    return { success: true, results };
+  }
 }
