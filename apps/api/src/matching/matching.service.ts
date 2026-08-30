@@ -88,6 +88,10 @@ export class MatchingService {
     return `dispatch:${tripId}:${driverId}`;
   }
 
+  private driverOffersKey(driverId: string) {
+    return `dispatch:driver_offers:${driverId}`;
+  }
+
   async dispatch(tripId: string): Promise<void> {
     const trip = await this.tripService.getTrip(tripId);
     if (!trip) {
@@ -179,6 +183,8 @@ export class MatchingService {
         expiresAt,
       };
       await this.redis.set(this.offerKey(tripId, candidate.driverId), JSON.stringify(offerData), 600);
+      await this.redis.raw.sadd(this.driverOffersKey(candidate.driverId), tripId);
+      await this.redis.expire(this.driverOffersKey(candidate.driverId), 600);
 
       const haversineKm = this.haversineDistance(trip.pickupLocation, trip.destinationLocation);
       const distanceKm = trip.distanceKm != null ? Number(trip.distanceKm) : Math.round(haversineKm * 10) / 10;
@@ -262,6 +268,7 @@ export class MatchingService {
       }
 
       await this.redis.del(key);
+      await this.redis.raw.srem(this.driverOffersKey(driverId), tripId);
     }
 
     await this.redis.del(offeredDriversKey);
@@ -325,6 +332,7 @@ export class MatchingService {
     }
 
     await this.redis.del(key);
+    await this.redis.raw.srem(this.driverOffersKey(driverId), tripId);
 
     this.logger.log(`Driver ${driverId} declined trip ${tripId} (Reason: ${reason || 'none'})`);
 
@@ -345,10 +353,12 @@ export class MatchingService {
     if (!trip || trip.status !== 'requested') {
       this.logger.warn(`Trip ${tripId} is no longer requested (${trip?.status}). Skipping timeout re-dispatch.`);
       await this.redis.del(key);
+      await this.redis.raw.srem(this.driverOffersKey(driverId), tripId);
       return;
     }
 
     await this.redis.del(key);
+    await this.redis.raw.srem(this.driverOffersKey(driverId), tripId);
 
     const matchSettings = await this.settings.getMatchSettings();
     this.logger.log(`Offer timeout (${matchSettings.offerTimeoutSec}s) for trip ${tripId} and driver ${driverId}`);
@@ -408,5 +418,62 @@ export class MatchingService {
         Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+  }
+
+  async checkPendingOffers(driverId: string): Promise<void> {
+    const tripIds = await this.redis.raw.smembers(this.driverOffersKey(driverId));
+    if (!tripIds?.length) return;
+
+    const matchSettings = await this.settings.getMatchSettings();
+    const passenger = null;
+
+    for (const tripId of tripIds) {
+      const key = this.offerKey(tripId, driverId);
+      const offerStr = await this.redis.get(key);
+      if (!offerStr) {
+        await this.redis.raw.srem(this.driverOffersKey(driverId), tripId);
+        continue;
+      }
+
+      const offer = JSON.parse(offerStr);
+      const trip = await this.tripService.getTrip(tripId);
+      if (!trip || trip.status !== 'requested') {
+        await this.redis.del(key);
+        await this.redis.raw.srem(this.driverOffersKey(driverId), tripId);
+        continue;
+      }
+
+      const remainingMs = offer.expiresAt - Date.now();
+      if (remainingMs <= 0) continue;
+
+      const p = passenger ?? await this.prisma.user.findUnique({
+        where: { id: trip.passengerId },
+      });
+      const haversineKm = this.haversineDistance(trip.pickupLocation, trip.destinationLocation);
+      const distanceKm = trip.distanceKm != null ? Number(trip.distanceKm) : Math.round(haversineKm * 10) / 10;
+      const durationMin = trip.durationMin ?? Math.max(1, Math.round(distanceKm * 2.5));
+
+      this.eventsGateway.server.to(`driver:${driverId}`).emit(
+        SOCKET_EVENTS.TRIP_NEW_REQUEST,
+        {
+          tripId,
+          pickup: trip.pickupLocation,
+          pickupAddress: trip.pickupAddress,
+          destination: trip.destinationLocation,
+          destinationAddress: trip.destinationAddress,
+          fare: trip.totalFare,
+          surgeMultiplier: trip.surgeMultiplier,
+          distanceKm,
+          durationMin,
+          passengerId: trip.passengerId,
+          passengerName: p?.name || null,
+          passengerPhone: p?.phone || null,
+          passengerRating: p ? Number(p.ratingAvg) : 5.0,
+          expiresInSeconds: Math.ceil(remainingMs / 1000),
+        }
+      );
+
+      this.logger.log(`Re-emitted pending offer trip=${tripId} to driver=${driverId} (remaining ${Math.ceil(remainingMs / 1000)}s)`);
+    }
   }
 }

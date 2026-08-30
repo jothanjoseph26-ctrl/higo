@@ -162,6 +162,13 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         this.roomService.joinTrip(client, activeTrip.id);
         this.logger.log(`Driver ${userId} re-joined trip room: ${activeTrip.id}`);
       }
+
+      // Re-emit any pending ride offers the driver missed while disconnected
+      try {
+        await this.matchingService.checkPendingOffers(userId);
+      } catch (err) {
+        this.logger.warn(`checkPendingOffers failed for ${userId}: ${err}`);
+      }
     } else if (type === 'admin') {
       this.roomService.joinAdmin(client);
     }
