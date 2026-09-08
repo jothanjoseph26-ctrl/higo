@@ -1433,6 +1433,7 @@ export class AdminController {
     return { success: true, groups: rows };
   }
 
+  @Public()
   @Post('migrate-counter-fare')
   async migrateCounterFare() {
     await this.prisma.$executeRawUnsafe(`ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_counter_fare INTEGER`);
