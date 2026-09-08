@@ -58,7 +58,7 @@ jobs:
           CI: 'true'
 
       - name: Build workspace libs
-        run: cd ../.. && npx nx run-many -t build -p @higo/brand-tokens,@higo/shared-types,@higo/api-client
+        run: cd ../.. && npx nx reset && npx nx run-many -t build -p @higo/brand-tokens,@higo/shared-types,@higo/api-client --verbose
 
       - name: Ensure notification ring sound is in Android raw resources
         run: |
