@@ -1433,6 +1433,12 @@ export class AdminController {
     return { success: true, groups: rows };
   }
 
+  @Post('migrate-counter-fare')
+  async migrateCounterFare() {
+    await this.prisma.$executeRawUnsafe(`ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_counter_fare INTEGER`);
+    return { success: true, message: 'driver_counter_fare column added to trips' };
+  }
+
   @Public()
   @Get('geo/detect-state')
   async detectStateFromIp(@Req() req: any) {

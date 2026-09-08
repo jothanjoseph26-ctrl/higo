@@ -21,9 +21,12 @@ import {
   DriverGoOfflinePayload,
   DriverTripAcceptPayload,
   DriverTripDeclinePayload,
+  DriverCounterFarePayload,
   DriverArrivedAtPickupPayload,
   DriverTripStartedPayload,
   DriverTripCompletedPayload,
+  PassengerCounterAcceptPayload,
+  PassengerCounterDeclinePayload,
   LatLng,
   TripMessage,
   TripStatus,
@@ -326,6 +329,56 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     await this.matchingService.declineOffer(driverId, payload.tripId, payload.reason);
   }
 
+  @SubscribeMessage(SOCKET_EVENTS.DRIVER_COUNTER_FARE)
+  async handleCounterFare(
+    @ConnectedSocket() client: AppSocket,
+    @MessageBody() payload: DriverCounterFarePayload,
+  ): Promise<void> {
+    const driverId = client.data.sub;
+    if (client.data.type !== 'driver') return;
+
+    this.logger.log(`Driver ${driverId} counter-fare ₦${payload.counterFare} on trip ${payload.tripId}`);
+
+    // Get trip and driver info
+    const trip = await this.tripService.getTrip(payload.tripId);
+    if (!trip) {
+      client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
+        tripId: payload.tripId,
+        reason: 'Trip not found',
+      });
+      return;
+    }
+
+    // Verify driver is matched to this trip
+    if (trip.driverId !== driverId) {
+      client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
+        tripId: payload.tripId,
+        reason: 'You are not assigned to this trip',
+      });
+      return;
+    }
+
+    // Get driver name
+    const driver = await this.prisma.driver.findUnique({ where: { id: driverId }, select: { name: true } });
+
+    // Store counter-fare on trip record
+    await this.prisma.trip.update({
+      where: { id: payload.tripId },
+      data: { driverCounterFare: payload.counterFare },
+    });
+
+    // Emit counter-fare to passenger
+    this.server.to(`passenger:${trip.passengerId}`).emit(SOCKET_EVENTS.TRIP_COUNTER_FARE, {
+      tripId: payload.tripId,
+      driverId,
+      driverName: driver?.name || 'Your driver',
+      counterFare: payload.counterFare,
+      originalFare: trip.totalFare,
+    });
+
+    this.logger.log(`Counter-fare ₦${payload.counterFare} sent to passenger ${trip.passengerId} for trip ${payload.tripId}`);
+  }
+
   @SubscribeMessage(SOCKET_EVENTS.DRIVER_ARRIVED_AT_PICKUP)
   async handleArrivedAtPickup(
     @ConnectedSocket() client: AppSocket,
@@ -437,6 +490,69 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         reason: `Trip completion failed: ${message}`,
       });
     }
+  }
+
+  @SubscribeMessage(SOCKET_EVENTS.PASSENGER_COUNTER_ACCEPT)
+  async handleCounterAccept(
+    @ConnectedSocket() client: AppSocket,
+    @MessageBody() payload: PassengerCounterAcceptPayload,
+  ): Promise<void> {
+    const passengerId = client.data.sub;
+    if (client.data.type !== 'passenger') return;
+
+    const trip = await this.tripService.getTrip(payload.tripId);
+    if (!trip || trip.passengerId !== passengerId) return;
+
+    // Get the last counter-fare from the trip's driver
+    // We store the counter-fare on the trip record itself
+    const counterFare = (trip as any).driverCounterFare;
+    if (!counterFare) {
+      this.logger.warn(`No counter-fare found for trip ${payload.tripId}`);
+      return;
+    }
+
+    // Update trip totalFare to the accepted counter-fare
+    await this.prisma.trip.update({
+      where: { id: payload.tripId },
+      data: { totalFare: counterFare, driverCounterFare: null },
+    });
+
+    // Notify driver
+    if (trip.driverId) {
+      this.server.to(`driver:${trip.driverId}`).emit(SOCKET_EVENTS.TRIP_COUNTER_ACCEPTED, {
+        tripId: payload.tripId,
+        finalFare: counterFare,
+      });
+    }
+
+    this.logger.log(`Passenger ${passengerId} accepted counter-fare ₦${counterFare} for trip ${payload.tripId}`);
+  }
+
+  @SubscribeMessage(SOCKET_EVENTS.PASSENGER_COUNTER_DECLINE)
+  async handleCounterDecline(
+    @ConnectedSocket() client: AppSocket,
+    @MessageBody() payload: PassengerCounterDeclinePayload,
+  ): Promise<void> {
+    const passengerId = client.data.sub;
+    if (client.data.type !== 'passenger') return;
+
+    const trip = await this.tripService.getTrip(payload.tripId);
+    if (!trip || trip.passengerId !== passengerId) return;
+
+    // Clear the counter-fare
+    await this.prisma.trip.update({
+      where: { id: payload.tripId },
+      data: { driverCounterFare: null },
+    });
+
+    // Notify driver
+    if (trip.driverId) {
+      this.server.to(`driver:${trip.driverId}`).emit(SOCKET_EVENTS.TRIP_COUNTER_DECLINED, {
+        tripId: payload.tripId,
+      });
+    }
+
+    this.logger.log(`Passenger ${passengerId} declined counter-fare for trip ${payload.tripId}`);
   }
 
   emitTripMessageNew(tripId: string, message: TripMessage): void {

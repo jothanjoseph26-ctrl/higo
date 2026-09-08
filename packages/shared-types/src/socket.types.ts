@@ -22,6 +22,7 @@ export const SOCKET_EVENTS = {
   DRIVER_TRIP_ACCEPT: 'driver:trip_accept',
   DRIVER_TRIP_ACCEPT_FAILED: 'driver:trip_accept_failed',
   DRIVER_TRIP_DECLINE: 'driver:trip_decline',
+  DRIVER_COUNTER_FARE: 'driver:counter_fare',
   DRIVER_ARRIVED_AT_PICKUP: 'driver:arrived_at_pickup',
   DRIVER_TRIP_STARTED: 'driver:trip_started',
   DRIVER_TRIP_COMPLETED: 'driver:trip_completed',
@@ -35,6 +36,9 @@ export const SOCKET_EVENTS = {
   TRIP_STARTED: 'trip:started',
   TRIP_COMPLETED: 'trip:completed',
   TRIP_CANCELLED: 'trip:cancelled',
+  TRIP_COUNTER_FARE: 'trip:counter_fare',
+  TRIP_COUNTER_ACCEPTED: 'trip:counter_accepted',
+  TRIP_COUNTER_DECLINED: 'trip:counter_declined',
 
   // ---- Client -> Server (trip chat) ----
   TRIP_MESSAGE_SEND: 'trip:message_send',
@@ -46,6 +50,9 @@ export const SOCKET_EVENTS = {
   NOTIFICATION_GENERAL: 'notification:general',
 
   // ---- HCE: voice & language events ----
+  PASSENGER_COUNTER_ACCEPT: 'passenger:counter_accept',
+  PASSENGER_COUNTER_DECLINE: 'passenger:counter_decline',
+
   HCE_VOICE_INPUT: 'hce:voice_input',
   HCE_VOICE_OUTPUT: 'hce:voice_output',
   HCE_LANGUAGE_CHANGED: 'hce:language_changed',
@@ -92,6 +99,36 @@ export interface DriverTripAcceptPayload {
 export interface DriverTripDeclinePayload {
   tripId: UUID;
   reason: 'manual' | 'timeout' | 'too_far' | 'restricted_zone' | string;
+}
+
+export interface DriverCounterFarePayload {
+  tripId: UUID;
+  counterFare: Kobo;
+}
+
+export interface TripCounterFarePayload {
+  tripId: UUID;
+  driverId: UUID;
+  driverName: string | null;
+  counterFare: Kobo;
+  originalFare: Kobo;
+}
+
+export interface TripCounterAcceptedPayload {
+  tripId: UUID;
+  finalFare: Kobo;
+}
+
+export interface TripCounterDeclinedPayload {
+  tripId: UUID;
+}
+
+export interface PassengerCounterAcceptPayload {
+  tripId: UUID;
+}
+
+export interface PassengerCounterDeclinePayload {
+  tripId: UUID;
 }
 
 export interface DriverArrivedAtPickupPayload {
@@ -274,12 +311,15 @@ export interface ClientToServerEvents {
   [SOCKET_EVENTS.DRIVER_GO_OFFLINE]: (p: DriverGoOfflinePayload) => void;
   [SOCKET_EVENTS.DRIVER_TRIP_ACCEPT]: (p: DriverTripAcceptPayload) => void;
   [SOCKET_EVENTS.DRIVER_TRIP_DECLINE]: (p: DriverTripDeclinePayload) => void;
+  [SOCKET_EVENTS.DRIVER_COUNTER_FARE]: (p: DriverCounterFarePayload) => void;
   [SOCKET_EVENTS.DRIVER_ARRIVED_AT_PICKUP]: (p: DriverArrivedAtPickupPayload) => void;
   [SOCKET_EVENTS.DRIVER_TRIP_STARTED]: (p: DriverTripStartedPayload) => void;
   [SOCKET_EVENTS.DRIVER_TRIP_COMPLETED]: (p: DriverTripCompletedPayload) => void;
   [SOCKET_EVENTS.TRIP_MESSAGE_SEND]: (p: TripMessageSendPayload) => void;
   [SOCKET_EVENTS.HCE_VOICE_INPUT]: (p: HceVoiceInputPayload) => void;
   [SOCKET_EVENTS.HCE_LANGUAGE_CHANGED]: (p: HceLanguageChangedPayload) => void;
+  [SOCKET_EVENTS.PASSENGER_COUNTER_ACCEPT]: (p: PassengerCounterAcceptPayload) => void;
+  [SOCKET_EVENTS.PASSENGER_COUNTER_DECLINE]: (p: PassengerCounterDeclinePayload) => void;
 }
 
 /** Events the server emits (server -> client). */
@@ -292,6 +332,9 @@ export interface ServerToClientEvents {
   [SOCKET_EVENTS.TRIP_STARTED]: (p: TripStartedPayload) => void;
   [SOCKET_EVENTS.TRIP_COMPLETED]: (p: TripCompletedPayload) => void;
   [SOCKET_EVENTS.TRIP_CANCELLED]: (p: TripCancelledPayload) => void;
+  [SOCKET_EVENTS.TRIP_COUNTER_FARE]: (p: TripCounterFarePayload) => void;
+  [SOCKET_EVENTS.TRIP_COUNTER_ACCEPTED]: (p: TripCounterAcceptedPayload) => void;
+  [SOCKET_EVENTS.TRIP_COUNTER_DECLINED]: (p: TripCounterDeclinedPayload) => void;
   [SOCKET_EVENTS.NOTIFICATION_GENERAL]: (p: NotificationGeneralPayload) => void;
   [SOCKET_EVENTS.MESSAGE_NEW]: (p: TripMessageNewPayload) => void;
   [SOCKET_EVENTS.HCE_VOICE_OUTPUT]: (p: HceVoiceOutputPayload) => void;

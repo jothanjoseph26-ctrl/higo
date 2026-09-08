@@ -729,6 +729,9 @@ model Trip {
   // Driver rejection tracking
   rejectionReason      String?     @map("rejection_reason") @db.VarChar(100)
 
+  // Driver counter-fare (when driver proposes their own fare)
+  driverCounterFare    Int?        @map("driver_counter_fare")
+
   // P0: City derived from pickup location for matching filter
   city                 String?     @map("city")
 
