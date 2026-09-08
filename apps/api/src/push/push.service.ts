@@ -58,16 +58,29 @@ export class PushService implements OnModuleInit {
     }
 
     try {
+      // Use android.notification (not top-level notification) so Android routes
+      // the notification to the correct channel even when the app is killed.
+      // Top-level notification may bypass channelId on some Android versions.
       const messageId = await this.firebase.messaging.send({
         token,
-        notification: {
-          title: payload.title,
-          body: payload.body,
-        },
         data: payload.data ?? {},
         android: {
           priority: 'high',
-          ...(payload.channelId ? { channelId: payload.channelId } : {}),
+          ...(payload.channelId
+            ? {
+                channelId: payload.channelId,
+                notification: {
+                  title: payload.title,
+                  body: payload.body,
+                  sound: 'ring',
+                },
+              }
+            : {
+                notification: {
+                  title: payload.title,
+                  body: payload.body,
+                },
+              }),
         },
         apns: {
           headers: { 'apns-priority': '10' },
