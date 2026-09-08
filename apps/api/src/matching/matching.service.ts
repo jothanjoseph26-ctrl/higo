@@ -256,6 +256,10 @@ export class MatchingService {
   }
 
   async cancelOtherOffersForTrip(tripId: string, acceptedDriverId: string): Promise<void> {
+    return this.cancelOtherOffers(tripId, acceptedDriverId);
+  }
+
+  private async cancelOtherOffers(tripId: string, acceptedDriverId: string): Promise<void> {
     const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
     const offeredStrList = await this.redis.raw.smembers(offeredDriversKey);
 
