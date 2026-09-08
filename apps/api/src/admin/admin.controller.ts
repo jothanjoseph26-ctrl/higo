@@ -1441,6 +1441,93 @@ export class AdminController {
   }
 
   @Public()
+  @Get('finance-summary')
+  async getFinanceSummary() {
+    const trips = await this.prisma.$queryRaw<any[]>`
+      SELECT 
+        id, status, total_fare, payment_method, payment_status,
+        driver_id, ride_mode, vehicle_type, created_at, completed_at,
+        cancelled_at, cancel_reason
+      FROM trips
+      ORDER BY created_at ASC
+    `;
+
+    const completed = trips.filter(t => t.status === 'completed');
+    const cancelled = trips.filter(t => t.status === 'cancelled');
+    const active = trips.filter(t => ['requested', 'matched', 'arrived', 'active'].includes(t.status));
+
+    const totalGross = completed.reduce((sum, t) => sum + (Number(t.total_fare) || 0), 0);
+    const platformFee = Math.round(totalGross * 0.10);
+    const driverPayout = totalGross - platformFee;
+
+    const cardTrips = completed.filter(t => t.payment_method === 'card');
+    const cashTrips = completed.filter(t => t.payment_method === 'cash' || !t.payment_method);
+    const cardTotal = cardTrips.reduce((sum, t) => sum + (Number(t.total_fare) || 0), 0);
+    const cashTotal = cashTrips.reduce((sum, t) => sum + (Number(t.total_fare) || 0), 0);
+
+    // Driver owes platform (from cash trips - not yet collected)
+    const cashOwedToPlatform = Math.round(cashTotal * 0.10);
+    // Platform already collected from card trips
+    const cardCollectedByPlatform = Math.round(cardTotal * 0.10);
+
+    const driverSummary = await this.prisma.$queryRaw<any[]>`
+      SELECT 
+        d.id as driver_id, d.name as driver_name, d.phone as driver_phone,
+        d.vehicle_type, d.is_online,
+        COUNT(t.id)::int as total_trips,
+        COUNT(CASE WHEN t.status = 'completed' THEN 1 END)::int as completed_trips,
+        COALESCE(SUM(CASE WHEN t.status = 'completed' THEN t.total_fare ELSE 0 END), 0)::bigint as gross_earnings,
+        COALESCE(SUM(CASE WHEN t.status = 'completed' THEN ROUND(t.total_fare * 0.10) ELSE 0 END), 0)::bigint as platform_fees_owed,
+        COALESCE(SUM(CASE WHEN t.status = 'completed' THEN ROUND(t.total_fare * 0.90) ELSE 0 END), 0)::bigint as driver_payout
+      FROM drivers d
+      LEFT JOIN trips t ON t.driver_id = d.id
+      GROUP BY d.id, d.name, d.phone, d.vehicle_type, d.is_online
+      HAVING COUNT(t.id) > 0
+      ORDER BY gross_earnings DESC
+    `;
+
+    return {
+      summary: {
+        totalTrips: trips.length,
+        completedTrips: completed.length,
+        cancelledTrips: cancelled.length,
+        activeTrips: active.length,
+        totalGrossFare: `₦${(totalGross / 100).toLocaleString()}`,
+        totalGrossFareRaw: totalGross,
+        platformFee: `₦${(platformFee / 100).toLocaleString()}`,
+        platformFeeRaw: platformFee,
+        driverPayout: `₦${(driverPayout / 100).toLocaleString()}`,
+        driverPayoutRaw: driverPayout,
+        cardPayments: { count: cardTrips.length, total: `₦${(cardTotal / 100).toLocaleString()}`, platformFee: `₦${(cardCollectedByPlatform / 100).toLocaleString()}` },
+        cashPayments: { count: cashTrips.length, total: `₦${(cashTotal / 100).toLocaleString()}`, owedToPlatform: `₦${(cashOwedToPlatform / 100).toLocaleString()}` },
+      },
+      driverBreakdown: driverSummary.map(d => ({
+        name: d.driver_name,
+        phone: d.driver_phone,
+        vehicleType: d.vehicle_type,
+        online: d.is_online,
+        totalTrips: d.total_trips,
+        completedTrips: d.completed_trips,
+        grossEarnings: `₦${(Number(d.gross_earnings) / 100).toLocaleString()}`,
+        platformFeesOwed: `₦${(Number(d.platform_fees_owed) / 100).toLocaleString()}`,
+        driverPayout: `₦${(Number(d.driver_payout) / 100).toLocaleString()}`,
+      })),
+      allTrips: trips.map(t => ({
+        id: t.id?.slice(0, 8),
+        status: t.status,
+        fare: `₦${(Number(t.total_fare) / 100).toLocaleString()}`,
+        fareRaw: Number(t.total_fare),
+        paymentMethod: t.payment_method,
+        paymentStatus: t.payment_status,
+        vehicleType: t.vehicle_type,
+        rideMode: t.ride_mode,
+        createdAt: t.created_at,
+        completedAt: t.completed_at,
+      })),
+    };
+  }
+
+  @Public()
   @Get('geo/detect-state')
   async detectStateFromIp(@Req() req: any) {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
