@@ -255,7 +255,7 @@ export class MatchingService {
     }
   }
 
-  private async cancelOtherOffers(tripId: string, acceptedDriverId: string): Promise<void> {
+  async cancelOtherOffersForTrip(tripId: string, acceptedDriverId: string): Promise<void> {
     const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
     const offeredStrList = await this.redis.raw.smembers(offeredDriversKey);
 
@@ -370,6 +370,11 @@ export class MatchingService {
     await this.redis.del(key);
     await this.redis.raw.srem(this.driverOffersKey(driverId), tripId);
 
+    // Remove declined driver from the trip's offered set so they can be re-offered
+    // in the next dispatch round (other drivers should still get a chance).
+    const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
+    await this.redis.raw.srem(offeredDriversKey, driverId);
+
     this.logger.log(`Driver ${driverId} declined trip ${tripId} (Reason: ${reason || 'none'})`);
 
     await this.dispatchIfNoActiveOffers(tripId, driverId);
@@ -396,6 +401,10 @@ export class MatchingService {
     await this.redis.del(key);
     await this.redis.raw.srem(this.driverOffersKey(driverId), tripId);
 
+    // Remove timed-out driver from offered set so they can be re-offered
+    const offeredDriversKey2 = `dispatch:offered_drivers:${tripId}`;
+    await this.redis.raw.srem(offeredDriversKey2, driverId);
+
     const matchSettings = await this.settings.getMatchSettings();
     this.logger.log(`Offer timeout (${matchSettings.offerTimeoutSec}s) for trip ${tripId} and driver ${driverId}`);
 
@@ -405,6 +414,16 @@ export class MatchingService {
     });
 
     await this.dispatchIfNoActiveOffers(tripId, driverId);
+  }
+
+  async dispatchIfNoActiveOffersPublic(tripId: string, excludeDriverId: string): Promise<void> {
+    // Clean up excluded driver's offer and offered set entry before re-dispatch
+    const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
+    await this.redis.raw.srem(offeredDriversKey, excludeDriverId);
+    const offerKey = this.offerKey(tripId, excludeDriverId);
+    await this.redis.del(offerKey);
+    await this.redis.raw.srem(this.driverOffersKey(excludeDriverId), tripId);
+    return this.dispatchIfNoActiveOffers(tripId, excludeDriverId);
   }
 
   private async dispatchIfNoActiveOffers(tripId: string, excludeDriverId: string): Promise<void> {
@@ -516,5 +535,27 @@ export class MatchingService {
 
       this.logger.log(`Re-emitted pending offer trip=${tripId} to driver=${driverId} (remaining ${Math.ceil(remainingMs / 1000)}s)`);
     }
+  }
+
+  async sendCounterFare(driverId: string, tripId: string, counterFare: number): Promise<void> {
+    // Verify driver has an active offer for this trip
+    const key = this.offerKey(tripId, driverId);
+    const offerStr = await this.redis.get(key);
+    if (!offerStr) {
+      throw new Error('No active offer for this trip');
+    }
+
+    // Cancel the timeout job so driver keeps the trip while waiting for passenger response
+    const offer = JSON.parse(offerStr);
+    if (offer.jobId) {
+      try {
+        const job = await this.dispatchQueue.getJob(offer.jobId);
+        if (job) await job.remove();
+      } catch (e) {
+        this.logger.warn(`Failed to remove timeout job for counter-fare: ${e}`);
+      }
+    }
+
+    this.logger.log(`Driver ${driverId} counter-fare ₦${counterFare} on trip ${tripId} — timeout cancelled`);
   }
 }
