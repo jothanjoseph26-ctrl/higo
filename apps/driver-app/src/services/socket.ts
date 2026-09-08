@@ -56,6 +56,14 @@ function registerSocketHandlers(sock: Socket<ServerToClientEvents, ClientToServe
     console.log('Trip accept failed / timed out:', payload.tripId, payload.reason);
     void useTripStore.getState().setIncomingRequest(null);
   });
+
+  sock.on('connect', () => {
+    console.log('[NativeSocket] Connected:', sock.id);
+  });
+
+  sock.on('disconnect', (reason) => {
+    console.log('[NativeSocket] Disconnected:', reason);
+  });
 }
 
 export async function connectSocket(): Promise<Socket<ServerToClientEvents, ClientToServerEvents>> {
@@ -70,6 +78,10 @@ export async function connectSocket(): Promise<Socket<ServerToClientEvents, Clie
         token: accessToken ? `Bearer ${accessToken}` : '',
       },
       autoConnect: false,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
     });
 
     registerSocketHandlers(socket);
@@ -82,6 +94,15 @@ export async function connectSocket(): Promise<Socket<ServerToClientEvents, Clie
 
   socket.connect();
   return socket;
+}
+
+/**
+ * Force-reconnect the native socket. Called when the app returns to foreground
+ * after being backgrounded — the OS may have killed the WebSocket.
+ */
+export async function reconnectSocket(): Promise<void> {
+  if (socket?.connected) return;
+  await connectSocket();
 }
 
 export function disconnectSocket() {

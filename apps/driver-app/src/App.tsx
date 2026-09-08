@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, AppState, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { WebViewShell } from './webview/WebViewShell';
 import { BRIDGE_INJECTED_JS, deliverToWebView, parseBridgeMessage } from './webview/bridge';
 import { setupFCMHandlers, registerFCM } from './services/fcm';
+import { reconnectSocket } from './services/socket';
 import { ringManager } from './services/ringManager';
 import { theme } from './theme';
 
@@ -66,6 +67,22 @@ export default function App() {
       responseSub.remove();
       ringManager.stop(); // Stop ring on unmount / app teardown
     };
+  }, []);
+
+  // Reconnect native socket + force WebView socket reconnect when app returns
+  // to foreground. The OS may have killed the WebSocket while backgrounded.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        // Reconnect native socket (triggers checkPendingOffers on server)
+        reconnectSocket().catch(() => {});
+        // Force PWA socket reconnect — the OS may have killed the WebSocket
+        webViewRef.current?.injectJavaScript(
+          `window.__higo_reconnect_socket?.(); true;`
+        );
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const handleWebViewLoad = () => {
