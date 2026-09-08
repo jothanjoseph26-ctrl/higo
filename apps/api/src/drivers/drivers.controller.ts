@@ -171,11 +171,15 @@ export class DriversController {
     @Body()
     dto: {
       name?: string;
+      phone?: string;
+      email?: string;
       vehiclePlate?: string;
       vehicleModel?: string;
       vehicleColor?: string;
       vehicleYear?: number;
       vehicleType?: string;
+      city?: string;
+      state?: string;
       fcmToken?: string;
     },
   ) {
@@ -194,12 +198,16 @@ export class DriversController {
     const driver = await this.prisma.driver.update({
       where: { id: user.sub },
       data: {
-        ...(dto.name && { name: dto.name }),
-        ...(dto.vehiclePlate && { vehiclePlate: dto.vehiclePlate }),
-        ...(dto.vehicleModel && { vehicleModel: dto.vehicleModel }),
-        ...(dto.vehicleColor && { vehicleColor: dto.vehicleColor }),
-        ...(dto.vehicleYear && { vehicleYear: dto.vehicleYear }),
+        ...(dto.name?.trim() && { name: dto.name.trim() }),
+        ...(dto.phone?.trim() && { phone: dto.phone.trim() }),
+        ...(dto.email !== undefined && { email: dto.email?.trim() || null }),
+        ...(dto.vehiclePlate?.trim() && { vehiclePlate: dto.vehiclePlate.trim().toUpperCase() }),
+        ...(dto.vehicleModel !== undefined && { vehicleModel: dto.vehicleModel?.trim() || null }),
+        ...(dto.vehicleColor !== undefined && { vehicleColor: dto.vehicleColor?.trim() || null }),
+        ...(dto.vehicleYear && { vehicleYear: Number(dto.vehicleYear) }),
         ...(dto.vehicleType && { vehicleType: dto.vehicleType as any }),
+        ...(dto.city !== undefined && { city: dto.city?.trim() || null }),
+        ...(dto.state !== undefined && { state: dto.state?.trim() || null }),
         ...(fcmToken !== undefined && { fcmToken }),
       },
     });
