@@ -63,7 +63,7 @@ jobs:
       - name: Ensure notification ring sound is in Android raw resources
         run: |
           mkdir -p app/src/main/res/raw
-          cp ../../src/assets/ring.mp3 app/src/main/res/raw/ring.mp3
+          cp ../src/assets/ring.mp3 app/src/main/res/raw/ring.mp3
 
       - name: Decode keystore
         if: ${{ env.KEYSTORE_BASE64 != '' }}
