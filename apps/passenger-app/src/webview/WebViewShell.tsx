@@ -13,10 +13,13 @@ import { theme } from '../theme';
 
 type Props = {
   appUrl?: string;
+  webViewRef?: React.RefObject<WebView>;
+  onWebViewLoad?: () => void;
 };
 
-export function WebViewShell({ appUrl = APP_URL }: Props) {
-  const webViewRef = useRef<WebView>(null);
+export function WebViewShell({ appUrl = APP_URL, webViewRef: externalRef, onWebViewLoad }: Props) {
+  const internalRef = useRef<WebView>(null);
+  const webViewRef = externalRef || internalRef;
   const [canGoBack, setCanGoBack] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -150,6 +153,9 @@ export function WebViewShell({ appUrl = APP_URL }: Props) {
         }}
         startInLoadingState
         renderLoading={() => <View style={[styles.container, { backgroundColor: theme.colors.lightGrey }]} />}
+        onLoad={() => onWebViewLoad?.()}
+        mediaPlaybackRequiresUserGesture={false}
+        allowsInlineMediaPlayback
         allowsBackForwardNavigationGestures
         setSupportMultipleWindows={false}
         thirdPartyCookiesEnabled

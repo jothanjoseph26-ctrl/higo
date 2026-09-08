@@ -194,3 +194,16 @@ export function disconnectSocket() {
 export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> | null {
   return socket;
 }
+
+export async function reconnectSocket(): Promise<void> {
+  if (socket?.connected) return;
+  const accessToken = await tokenStorage.getAccessToken();
+  if (socket) {
+    socket.auth = {
+      token: accessToken ? `Bearer ${accessToken}` : '',
+    };
+    socket.connect();
+  } else {
+    await connectSocket();
+  }
+}
