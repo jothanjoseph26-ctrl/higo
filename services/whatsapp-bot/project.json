@@ -1,0 +1,17 @@
+{
+  "name": "higo-whatsapp-bot",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "services/whatsapp-bot/src",
+  "projectType": "application",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "options": {
+        "outputPath": "dist/services/whatsapp-bot",
+        "main": "services/whatsapp-bot/src/main.ts",
+        "tsConfig": "services/whatsapp-bot/tsconfig.json"
+      }
+    }
+  },
+  "tags": ["service"]
+}
