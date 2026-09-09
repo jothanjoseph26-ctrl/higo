@@ -95,6 +95,11 @@ export async function connectSocket(): Promise<Socket<ServerToClientEvents, Clie
         totalFare: payload.fare,
       });
     }
+    // Terminal event — clear trip state after a brief delay so the UI can
+    // render the completed/summary screen before state is reset.
+    setTimeout(() => {
+      useTripStore.getState().clearTripState();
+    }, 2000);
   });
 
   socket.on(SOCKET_EVENTS.TRIP_CANCELLED, (payload: TripCancelledPayload) => {
@@ -111,6 +116,11 @@ export async function connectSocket(): Promise<Socket<ServerToClientEvents, Clie
         status: TripStatus.CANCELLED,
       });
     }
+    // Terminal event — clear all trip state after a brief delay so the UI
+    // can show the cancelled message before data is wiped clean.
+    setTimeout(() => {
+      useTripStore.getState().clearTripState();
+    }, 1500);
   });
 
   socket.on(SOCKET_EVENTS.TRIP_NO_DRIVERS_AVAILABLE, (_payload: TripNoDriversAvailablePayload) => {

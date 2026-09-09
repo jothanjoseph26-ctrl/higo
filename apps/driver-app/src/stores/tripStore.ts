@@ -235,14 +235,9 @@ export const useTripStore = create<TripState>((set, get) => ({
   handleTripCompleted(payload) {
     const current = get().activeTrip;
     if (!current || current.id !== payload.tripId) return;
-    set({
-      activeTrip: {
-        ...current,
-        status: TripStatus.COMPLETED,
-        totalFare: payload.fare,
-        completedAt: payload.completedAt,
-      },
-    });
+    // Completed trips are terminal — clear all state immediately so stale
+    // data does not leak into the next trip cycle.
+    void get().clearTripState();
   },
 
   async handleTripCancelled(payload) {
