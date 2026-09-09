@@ -8,7 +8,7 @@ const TRACK = 'alpha';
 
 async function main() {
   const auth = new google.auth.GoogleAuth({
-    keyFile: 'services-key/play-store-deployment.json',
+    keyFile: process.env.PLAY_STORE_KEY_FILE || 'services-key/play-store-deployment.json',
     scopes: ['https://www.googleapis.com/auth/androidpublisher'],
   });
 
