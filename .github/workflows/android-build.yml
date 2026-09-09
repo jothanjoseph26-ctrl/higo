@@ -133,6 +133,17 @@ jobs:
           name: higo-driver-aab
           path: apps/driver-app/android/app/build/outputs/bundle/release/
 
+      - name: Upload to Play Store (Driver)
+        if: ${{ github.event.inputs.build_type == 'aab' || startsWith(github.ref, 'refs/tags/') }}
+        working-directory: apps/driver-app/android
+        run: |
+          AAB_PATH=$(find app/build/outputs/bundle/release -name '*.aab' | head -1)
+          echo "$PLAY_STORE_SERVICE_KEY" > /tmp/play-store-deployment.json
+          cd ../..
+          node upload-play-store.mjs com.hiconnectgo.driver "$AAB_PATH"
+        env:
+          PLAY_STORE_SERVICE_KEY: ${{ secrets.PLAY_STORE_SERVICE_KEY }}
+
   build-passenger:
     if: >-
       github.event_name == 'workflow_dispatch' && (github.event.inputs.app == 'passenger' || github.event.inputs.app == 'both')
@@ -229,3 +240,14 @@ jobs:
         with:
           name: higo-passenger-aab
           path: apps/passenger-app/android/app/build/outputs/bundle/release/
+
+      - name: Upload to Play Store (Passenger)
+        if: ${{ github.event.inputs.build_type == 'aab' || startsWith(github.ref, 'refs/tags/') }}
+        working-directory: apps/passenger-app/android
+        run: |
+          AAB_PATH=$(find app/build/outputs/bundle/release -name '*.aab' | head -1)
+          echo "$PLAY_STORE_SERVICE_KEY" > /tmp/play-store-deployment.json
+          cd ../..
+          node upload-play-store.mjs com.higopassenger "$AAB_PATH"
+        env:
+          PLAY_STORE_SERVICE_KEY: ${{ secrets.PLAY_STORE_SERVICE_KEY }}
