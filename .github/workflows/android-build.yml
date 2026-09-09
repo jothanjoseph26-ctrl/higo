@@ -140,6 +140,7 @@ jobs:
           AAB_PATH=$(find app/build/outputs/bundle/release -name '*.aab' | head -1)
           echo "$PLAY_STORE_SERVICE_KEY" > /tmp/play-store-deployment.json
           cd ../../..
+          npm install googleapis
           node upload-play-store.mjs com.hiconnectgo.driver "$GITHUB_WORKSPACE/apps/driver-app/android/$AAB_PATH"
         env:
           PLAY_STORE_SERVICE_KEY: ${{ secrets.PLAY_STORE_SERVICE_KEY }}
@@ -249,6 +250,7 @@ jobs:
           AAB_PATH=$(find app/build/outputs/bundle/release -name '*.aab' | head -1)
           echo "$PLAY_STORE_SERVICE_KEY" > /tmp/play-store-deployment.json
           cd ../../..
+          npm install googleapis
           node upload-play-store.mjs com.higopassenger "$GITHUB_WORKSPACE/apps/passenger-app/android/$AAB_PATH"
         env:
           PLAY_STORE_SERVICE_KEY: ${{ secrets.PLAY_STORE_SERVICE_KEY }}
