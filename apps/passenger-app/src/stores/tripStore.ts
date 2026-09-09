@@ -34,6 +34,15 @@ interface TripState extends BookingInfo {
   isSubmitting: boolean;
   tripError: string | null;
 
+  // Counter-fare negotiation state
+  counterFare: {
+    tripId: string;
+    driverId: string;
+    driverName: string | null;
+    counterFare: number;
+    originalFare: number;
+  } | null;
+
   tripHistory: Trip[];
   historyLoading: boolean;
   historyError: string | null;
@@ -52,6 +61,7 @@ interface TripState extends BookingInfo {
   setEta: (eta: number | null) => void;
   setTripError: (error: string | null) => void;
   clearTripError: () => void;
+  setCounterFare: (counterFare: TripState['counterFare']) => void;
 
   requestTrip: () => Promise<RequestTripResponse>;
   cancelTrip: (reason: string) => Promise<CancelTripResponse>;
@@ -117,6 +127,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   setEta: (eta) => set({ eta }),
   setTripError: (tripError) => set({ tripError }),
   clearTripError: () => set({ tripError: null }),
+  setCounterFare: (counterFare) => set({ counterFare }),
 
   async requestTrip() {
     const { pickup, destination, vehicleType, paymentMethod, isShared } = get();
@@ -250,6 +261,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       eta: null,
       pointsEarned: 0,
       tripError: null,
+      counterFare: null,
       isSubmitting: false,
     }),
 }));

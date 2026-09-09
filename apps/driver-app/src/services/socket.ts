@@ -7,6 +7,8 @@ import {
   ServerToClientEvents,
   SOCKET_EVENTS,
   TripStatus,
+  TripCounterAcceptedPayload,
+  TripCounterDeclinedPayload,
 } from '@higo/shared-types';
 import { useTripStore } from '../stores/tripStore';
 
@@ -40,7 +42,7 @@ function registerSocketHandlers(sock: Socket<ServerToClientEvents, ClientToServe
     void useTripStore.getState().handleTripCancelled(payload);
   });
 
-  sock.on(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED, (payload) => {
+  sock.on(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED_AT_PICKUP, (payload) => {
     useTripStore.getState().handleTripDriverArrived(payload);
   });
 
@@ -55,6 +57,18 @@ function registerSocketHandlers(sock: Socket<ServerToClientEvents, ClientToServe
   sock.on(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, (payload) => {
     console.log('Trip accept failed / timed out:', payload.tripId, payload.reason);
     void useTripStore.getState().setIncomingRequest(null);
+  });
+
+  sock.on(SOCKET_EVENTS.TRIP_COUNTER_ACCEPTED, (payload: TripCounterAcceptedPayload) => {
+    console.log('Counter-fare accepted:', payload.tripId, payload.finalFare);
+    const store = useTripStore.getState();
+    // Passenger accepted our counter-offer — trip will be matched
+    // The TRIP_MATCHED event will follow, so just log for now
+  });
+
+  sock.on(SOCKET_EVENTS.TRIP_COUNTER_DECLINED, (payload: TripCounterDeclinedPayload) => {
+    console.log('Counter-fare declined:', payload.tripId);
+    // Passenger declined our counter-offer — we can send another or wait
   });
 
   sock.on('connect', () => {
@@ -115,4 +129,14 @@ export function disconnectSocket() {
 
 export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> | null {
   return socket;
+}
+
+/**
+ * Send a counter-fare offer from driver to passenger.
+ * Returns true if the emit was sent, false if socket is not connected.
+ */
+export function emitCounterFare(tripId: string, counterFare: number): boolean {
+  if (!socket?.connected) return false;
+  socket.emit(SOCKET_EVENTS.DRIVER_COUNTER_FARE, { tripId, counterFare });
+  return true;
 }

@@ -32,7 +32,7 @@ export const SOCKET_EVENTS = {
   TRIP_MATCHED: 'trip:matched',
   TRIP_NO_DRIVERS_AVAILABLE: 'trip:no_drivers_available',
   TRIP_DRIVER_LOCATION: 'trip:driver_location',
-  TRIP_DRIVER_ARRIVED: 'trip:driver_arrived',
+  TRIP_DRIVER_ARRIVED_AT_PICKUP: 'trip:driver_arrived_at_pickup',
   TRIP_STARTED: 'trip:started',
   TRIP_COMPLETED: 'trip:completed',
   TRIP_CANCELLED: 'trip:cancelled',
@@ -191,6 +191,8 @@ export interface TripMatchedPayload {
   driverDetails: MatchedDriverDetails;
   /** ETA to pickup in minutes. */
   eta: number;
+  /** Authoritative trip status after transition. */
+  status: 'matched';
 }
 
 export interface TripNoDriversAvailablePayload {
@@ -208,11 +210,15 @@ export interface TripDriverLocationPayload {
 
 export interface TripDriverArrivedPayload {
   tripId: UUID;
+  /** Authoritative trip status after transition. */
+  status: 'arrived';
 }
 
 export interface TripStartedPayload {
   tripId: UUID;
   startedAt: string; // ISO
+  /** Authoritative trip status after transition. */
+  status: 'active';
 }
 
 export interface TripCompletedPayload {
@@ -220,12 +226,16 @@ export interface TripCompletedPayload {
   fare: Kobo;
   paymentRef: string | null;
   completedAt: string; // ISO
+  /** Authoritative trip status after transition. */
+  status: 'completed';
 }
 
 export interface TripCancelledPayload {
   tripId: UUID;
   reason: string;
   cancelledBy: 'passenger' | 'driver' | 'system';
+  /** Authoritative trip status after transition. */
+  status: 'cancelled';
 }
 
 export interface NotificationGeneralPayload {
@@ -328,7 +338,7 @@ export interface ServerToClientEvents {
   [SOCKET_EVENTS.TRIP_MATCHED]: (p: TripMatchedPayload) => void;
   [SOCKET_EVENTS.TRIP_NO_DRIVERS_AVAILABLE]: (p: TripNoDriversAvailablePayload) => void;
   [SOCKET_EVENTS.TRIP_DRIVER_LOCATION]: (p: TripDriverLocationPayload) => void;
-  [SOCKET_EVENTS.TRIP_DRIVER_ARRIVED]: (p: TripDriverArrivedPayload) => void;
+  [SOCKET_EVENTS.TRIP_DRIVER_ARRIVED_AT_PICKUP]: (p: TripDriverArrivedPayload) => void;
   [SOCKET_EVENTS.TRIP_STARTED]: (p: TripStartedPayload) => void;
   [SOCKET_EVENTS.TRIP_COMPLETED]: (p: TripCompletedPayload) => void;
   [SOCKET_EVENTS.TRIP_CANCELLED]: (p: TripCancelledPayload) => void;

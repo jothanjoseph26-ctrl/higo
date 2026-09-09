@@ -1,10 +1,19 @@
 import { TripStatus } from '@higo/shared-types';
 
+/**
+ * Canonical trip state machine.
+ *
+ * REQUESTED → MATCHED → ARRIVED → ACTIVE → COMPLETED
+ *                                          ↗
+ * Any cancellable state → CANCELLED
+ *
+ * The backend is the single source of truth.
+ * Clients must not invent local state — they update from server events.
+ */
 export const ALLOWED_TRANSITIONS: Record<TripStatus, TripStatus[]> = {
   [TripStatus.REQUESTED]: [TripStatus.MATCHED, TripStatus.CANCELLED],
-  [TripStatus.MATCHED]: [TripStatus.ARRIVED, TripStatus.EN_ROUTE, TripStatus.CANCELLED],
+  [TripStatus.MATCHED]: [TripStatus.ARRIVED, TripStatus.CANCELLED],
   [TripStatus.ARRIVED]: [TripStatus.ACTIVE, TripStatus.CANCELLED],
-  [TripStatus.EN_ROUTE]: [TripStatus.ARRIVED, TripStatus.ACTIVE, TripStatus.CANCELLED],
   [TripStatus.ACTIVE]: [TripStatus.COMPLETED, TripStatus.CANCELLED],
   [TripStatus.COMPLETED]: [],
   [TripStatus.CANCELLED]: [],

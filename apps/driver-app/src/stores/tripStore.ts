@@ -131,11 +131,8 @@ export const useTripStore = create<TripState>((set, get) => ({
     } else {
       await enqueueJob('arrived', { tripId });
     }
-
-    const current = get().activeTrip;
-    if (current) {
-      set({ activeTrip: { ...current, status: TripStatus.EN_ROUTE } });
-    }
+    // Do NOT set local status here — the server will emit trip:driver_arrived_at_pickup
+    // with the authoritative status after GPS validation.
   },
 
   async startTrip(tripId) {
@@ -265,7 +262,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     set({
       activeTrip: {
         ...current,
-        status: TripStatus.EN_ROUTE,
+        status: TripStatus.ARRIVED,
       },
     });
   },

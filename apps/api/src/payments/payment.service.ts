@@ -106,6 +106,7 @@ export class PaymentService {
 
   /**
    * Logical escrow release: called by Agent 2 (TripService) upon trip completion.
+   * On failure, sets paymentStatus to 'release_pending' for manual reconciliation.
    */
   async releaseEscrow(tripId: string): Promise<void> {
     const trip = await this.prisma.trip.findUnique({
@@ -122,24 +123,48 @@ export class PaymentService {
       return;
     }
 
-    // Move state to released
-    await this.prisma.trip.update({
-      where: { id: tripId },
-      data: { paymentStatus: 'released' },
-    });
+    try {
+      // Move state to released
+      await this.prisma.trip.update({
+        where: { id: tripId },
+        data: { paymentStatus: 'released' },
+      });
 
-    await this.audit.logEvent({
-      action: 'escrow.release',
-      actorId: trip.driverId || undefined,
-      actorType: 'driver',
-      reference: trip.paystackReference || `escrow_rel_${tripId}`,
-      amount: trip.totalFare,
-      beforeStatus: 'held',
-      afterStatus: 'released',
-      metadata: { tripId },
-    });
+      await this.audit.logEvent({
+        action: 'escrow.release',
+        actorId: trip.driverId || undefined,
+        actorType: 'driver',
+        reference: trip.paystackReference || `escrow_rel_${tripId}`,
+        amount: trip.totalFare,
+        beforeStatus: 'held',
+        afterStatus: 'released',
+        metadata: { tripId },
+      });
 
-    this.logger.log(`Logical escrow released for tripId=${tripId}`);
+      this.logger.log(`Logical escrow released for tripId=${tripId}`);
+    } catch (err) {
+      this.logger.error(`Escrow release failed for tripId=${tripId}: ${err}`);
+      // Mark as release_pending for manual reconciliation — the financial
+      // obligation is recorded and will not be lost.
+      try {
+        await this.prisma.trip.update({
+          where: { id: tripId },
+          data: { paymentStatus: 'release_pending' },
+        });
+        await this.audit.logEvent({
+          action: 'escrow.release_failed',
+          actorId: trip.driverId || undefined,
+          actorType: 'driver',
+          reference: trip.paystackReference || `escrow_rel_${tripId}`,
+          amount: trip.totalFare,
+          beforeStatus: 'held',
+          afterStatus: 'release_pending',
+          metadata: { tripId, error: String(err) },
+        });
+      } catch {
+        this.logger.error(`CRITICAL: Failed to mark trip ${tripId} as release_pending. Manual intervention required.`);
+      }
+    }
   }
 
   /**

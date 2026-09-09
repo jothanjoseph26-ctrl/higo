@@ -7,11 +7,9 @@ describe('Trip Engine Unit Tests', () => {
     it('should allow valid transitions', () => {
       expect(validateTransition(TripStatus.REQUESTED, TripStatus.MATCHED)).toBe(true);
       expect(validateTransition(TripStatus.REQUESTED, TripStatus.CANCELLED)).toBe(true);
-      expect(validateTransition(TripStatus.MATCHED, TripStatus.EN_ROUTE)).toBe(true);
       expect(validateTransition(TripStatus.MATCHED, TripStatus.ARRIVED)).toBe(true);
       expect(validateTransition(TripStatus.ARRIVED, TripStatus.ACTIVE)).toBe(true);
       expect(validateTransition(TripStatus.MATCHED, TripStatus.CANCELLED)).toBe(true);
-      expect(validateTransition(TripStatus.EN_ROUTE, TripStatus.ACTIVE)).toBe(true);
       expect(validateTransition(TripStatus.ACTIVE, TripStatus.COMPLETED)).toBe(true);
     });
 

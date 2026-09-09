@@ -124,6 +124,7 @@ enum PaymentStatus {
   released  // disbursed/settled after trip completion
   failed
   refunded
+  release_pending  // escrow release failed, needs manual reconciliation
 }
 
 enum DeliveryStatus {

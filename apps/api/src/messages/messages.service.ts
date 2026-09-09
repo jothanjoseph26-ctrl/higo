@@ -20,7 +20,7 @@ import { PushService } from '../push/push.service';
 
 const ACTIVE_TRIP_STATUSES: PrismaTripStatus[] = [
   'matched',
-  'en_route',
+  'arrived',
   'active',
 ];
 

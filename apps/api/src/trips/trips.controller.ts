@@ -187,14 +187,14 @@ export class TripsController {
       activeTrip = await this.prisma.trip.findFirst({
         where: {
           passengerId: user.sub,
-          status: { in: ['requested', 'matched', 'arrived', 'en_route', 'active'] },
+          status: { in: ['requested', 'matched', 'arrived', 'active'] },
         },
       });
     } else if (user.type === 'driver') {
       activeTrip = await this.prisma.trip.findFirst({
         where: {
           driverId: user.sub,
-          status: { in: ['matched', 'arrived', 'en_route', 'active'] },
+          status: { in: ['matched', 'arrived', 'active'] },
         },
       });
     }

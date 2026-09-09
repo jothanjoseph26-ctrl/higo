@@ -18,7 +18,6 @@ export enum TripStatus {
   REQUESTED = 'requested',
   MATCHED = 'matched',
   ARRIVED = 'arrived',
-  EN_ROUTE = 'en_route',
   ACTIVE = 'active',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
@@ -101,6 +100,7 @@ export enum PaymentStatus {
   RELEASED = 'released',
   FAILED = 'failed',
   REFUNDED = 'refunded',
+  RELEASE_PENDING = 'release_pending',
 }
 
 export enum UserType {

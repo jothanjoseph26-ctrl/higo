@@ -128,7 +128,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       const activeTrip = await this.prisma.trip.findFirst({
         where: {
           passengerId: userId,
-          status: { in: ['requested', 'matched', 'en_route', 'active'] },
+          status: { in: ['requested', 'matched', 'arrived', 'active'] },
         },
         select: { id: true },
       });
@@ -157,7 +157,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       const activeTrip = await this.prisma.trip.findFirst({
         where: {
           driverId: userId,
-          status: { in: ['matched', 'arrived', 'en_route', 'active'] },
+          status: { in: ['matched', 'arrived', 'active'] },
         },
         select: { id: true },
       });
@@ -255,7 +255,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     // If bound to a trip, compute and broadcast live ETA
     if (payload.tripId) {
       const trip = await this.tripService.getTrip(payload.tripId);
-      if (trip && ['matched', 'en_route', 'active'].includes(trip.status)) {
+      if (trip && ['matched', 'arrived', 'active'].includes(trip.status)) {
         const target = trip.status === 'active' ? trip.destinationLocation : trip.pickupLocation;
         const distanceKm = this.haversineDistance({ lat: payload.lat, lng: payload.lng }, target);
         const eta = Math.max(1, Math.round(distanceKm * 2.5));

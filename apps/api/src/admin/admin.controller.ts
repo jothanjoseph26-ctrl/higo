@@ -672,7 +672,7 @@ function maskFcmServerKey(settings: PlatformSettingsPayload): PlatformSettingsPa
   };
 }
 
-const ACTIVE_TRIP_STATUSES = ['requested', 'matched', 'en_route', 'active'] as const;
+const ACTIVE_TRIP_STATUSES = ['requested', 'matched', 'arrived', 'active'] as const;
 
 function parseGeoPoint(geoJson: string | null | undefined): { lat: number; lng: number } | null {
   if (!geoJson) return null;
@@ -794,7 +794,7 @@ export class AdminController {
     ] = await Promise.all([
       this.prisma.driver.count(),
       this.prisma.user.count(),
-      this.prisma.trip.count({ where: { status: { in: ['requested', 'matched', 'en_route', 'active'] } } }),
+      this.prisma.trip.count({ where: { status: { in: ['requested', 'matched', 'arrived', 'active'] } } }),
       this.prisma.trip.count({ where: { status: 'completed' } }),
       this.prisma.driver.count({ where: { kycStatus: 'pending' } }),
       this.prisma.subscription.count({ where: { isActive: true } }),
@@ -932,7 +932,7 @@ export class AdminController {
         ST_AsGeoJSON(d.current_location) AS "driverLocationGeoJson"
       FROM trips t
       LEFT JOIN drivers d ON d.id = t.driver_id
-      WHERE t.status::text IN ('requested', 'matched', 'en_route', 'active');
+      WHERE t.status::text IN ('requested', 'matched', 'arrived', 'active');
     `;
 
     const trips = rows.map((row) => {

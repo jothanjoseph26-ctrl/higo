@@ -1121,7 +1121,7 @@ export class TripService {
         cancel_reason = 'Auto-cancelled: stale trip cleanup',
         cancelled_at = NOW()
       WHERE passenger_id = ${passengerId}::uuid
-        AND status::text IN ('requested', 'matched', 'en_route', 'active')
+        AND status::text IN ('requested', 'matched', 'arrived', 'active')
         AND created_at < ${staleThreshold}
     `;
     if (staleCancelled > 0) {
@@ -1131,7 +1131,7 @@ export class TripService {
     const activeTripRows = await this.prisma.$queryRaw<any[]>`
       SELECT id FROM trips
       WHERE passenger_id = ${passengerId}::uuid
-        AND status::text IN ('requested', 'matched', 'en_route', 'active')
+        AND status::text IN ('requested', 'matched', 'arrived', 'active')
       LIMIT 1;
     `;
     if (activeTripRows.length > 0) {
@@ -1223,7 +1223,13 @@ export class TripService {
       throw new AppException('INTERNAL_ERROR', undefined, 'Failed to create trip');
     }
 
-    this.dispatchRequestedTrip(tripId);
+    // Dispatch sequencing: cash trips dispatch immediately; card/transfer
+    // trips wait for Paystack webhook confirmation (handled in payment.service.ts
+    // charge.success handler) which triggers dispatch after paymentStatus = 'held'.
+    if (dto.paymentMethod === PaymentMethod.CASH) {
+      this.dispatchRequestedTrip(tripId);
+    }
+    // For CARD/TRANSFER: payment webhook will dispatch after payment confirmation
 
     this.logger.log(`Trip ${tripId} created for passenger ${passengerId}: status=requested, dispatch initiated`);
 
@@ -1461,27 +1467,45 @@ export class TripService {
     }
 
     if (to === TripStatus.MATCHED) {
-      const driver = await this.prisma.driver.findUnique({
-        where: { id: driverId! },
-      });
+      const driverRecord = await this.prisma.driver.findUnique({ where: { id: driverId! } });
+      if (!driverRecord) {
+        throw new AppException('NOT_FOUND', undefined, `Driver ${driverId} not found for match transition`);
+      }
 
-      const eta = 5;
+      // ETA: estimate from driver's last known location to pickup, fallback 5 min
+      let eta = 5;
+      try {
+        const driverLoc = await this.prisma.$queryRaw<any[]>`
+          SELECT ST_Distance(
+            current_location::geography,
+            ST_SetSRID(ST_MakePoint(${trip.pickupLng}::float, ${trip.pickupLat}::float), 4326)::geography
+          ) as distance_meters
+          FROM drivers WHERE id = ${driverId!}::uuid AND current_location IS NOT NULL
+          LIMIT 1
+        `;
+        if (driverLoc?.[0]?.distance_meters) {
+          eta = Math.max(1, Math.round((Number(driverLoc[0].distance_meters) / 1000) * 2.5));
+        }
+      } catch {
+        // fallback to default ETA
+      }
 
       const payload: TripMatchedPayload = {
         tripId,
         driverId: driverId!,
         driverDetails: {
           driverId: driverId!,
-          name: driver!.name,
-          phone: driver!.phone,
-          avatarUrl: driver!.avatarUrl,
-          vehiclePlate: driver!.vehiclePlate,
-          vehicleModel: driver!.vehicleModel,
-          vehicleColor: driver!.vehicleColor,
-          ratingAvg: Number(driver!.ratingAvg),
-          totalTrips: driver!.totalTrips,
+          name: driverRecord.name,
+          phone: driverRecord.phone,
+          avatarUrl: driverRecord.avatarUrl,
+          vehiclePlate: driverRecord.vehiclePlate,
+          vehicleModel: driverRecord.vehicleModel,
+          vehicleColor: driverRecord.vehicleColor,
+          ratingAvg: Number(driverRecord.ratingAvg),
+          totalTrips: driverRecord.totalTrips,
         },
         eta,
+        status: 'matched',
       };
 
       this.eventsGateway.server
@@ -1494,7 +1518,7 @@ export class TripService {
 
       void this.pushService.sendToPassenger(trip.passengerId, {
         title: 'Driver matched',
-        body: `${driver!.name} is on the way`,
+        body: `${driverRecord.name} is on the way`,
         data: {
           type: 'trip:matched',
           tripId,
@@ -1504,23 +1528,20 @@ export class TripService {
     } else if (to === TripStatus.ARRIVED) {
       this.eventsGateway.server
         .to(`trip:${tripId}`)
-        .emit(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED, { tripId });
+        .emit(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED_AT_PICKUP, { tripId, status: 'arrived' });
 
       void this.pushService.sendToPassenger(trip.passengerId, {
         title: 'Driver has arrived',
         body: 'Your driver is at the pickup location. Please come outside.',
-        data: { tripId, type: 'driver_arrived' },
+        data: { tripId, type: 'driver_arrived_at_pickup' },
       });
-    } else if (to === TripStatus.EN_ROUTE) {
-      this.eventsGateway.server
-        .to(`trip:${tripId}`)
-        .emit(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED, { tripId });
     } else if (to === TripStatus.ACTIVE) {
       this.eventsGateway.server
         .to(`trip:${tripId}`)
         .emit(SOCKET_EVENTS.TRIP_STARTED, {
           tripId,
           startedAt: updatedTrip.startedAt!,
+          status: 'active',
         });
     } else if (to === TripStatus.COMPLETED) {
       if (updatedTrip.paymentStatus === 'held') {
@@ -1534,6 +1555,7 @@ export class TripService {
           fare: updatedTrip.totalFare,
           paymentRef: updatedTrip.paystackReference,
           completedAt: updatedTrip.completedAt!,
+          status: 'completed',
         });
 
       void this.pushService.sendToPassenger(trip.passengerId, {
@@ -1548,6 +1570,7 @@ export class TripService {
           tripId,
           reason: updatedTrip.cancelReason || '',
           cancelledBy: actor,
+          status: 'cancelled',
         });
 
       // Also notify all offered drivers who haven't accepted yet
@@ -1560,6 +1583,7 @@ export class TripService {
             tripId,
             reason: updatedTrip.cancelReason || '',
             cancelledBy: actor,
+            status: 'cancelled',
           });
       }
     }

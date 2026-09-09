@@ -15,6 +15,9 @@ import {
   TripCancelledPayload,
   TripNoDriversAvailablePayload,
   TripMessageNewPayload,
+  TripCounterFarePayload,
+  TripCounterAcceptedPayload,
+  TripCounterDeclinedPayload,
 } from '@higo/shared-types';
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
@@ -72,9 +75,9 @@ export async function connectSocket(): Promise<Socket<ServerToClientEvents, Clie
     store.setEta(payload.eta);
   });
 
-  socket.on(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED, () => {
+  socket.on(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED_AT_PICKUP, () => {
     const store = useTripStore.getState();
-    store.setStatus(TripStatus.EN_ROUTE);
+    store.setStatus(TripStatus.ARRIVED);
   });
 
   socket.on(SOCKET_EVENTS.TRIP_STARTED, () => {
@@ -114,6 +117,33 @@ export async function connectSocket(): Promise<Socket<ServerToClientEvents, Clie
     const store = useTripStore.getState();
     store.setStatus(null);
     store.setTripError('No drivers available nearby. Please try again later.');
+  });
+
+  socket.on(SOCKET_EVENTS.TRIP_COUNTER_FARE, (payload: TripCounterFarePayload) => {
+    const store = useTripStore.getState();
+    store.setCounterFare({
+      tripId: payload.tripId,
+      driverId: payload.driverId,
+      driverName: payload.driverName,
+      counterFare: payload.counterFare,
+      originalFare: payload.originalFare,
+    });
+  });
+
+  socket.on(SOCKET_EVENTS.TRIP_COUNTER_ACCEPTED, (payload: TripCounterAcceptedPayload) => {
+    const store = useTripStore.getState();
+    store.setCounterFare(null);
+    if (store.currentTrip) {
+      store.setCurrentTrip({
+        ...store.currentTrip,
+        totalFare: payload.finalFare,
+      });
+    }
+  });
+
+  socket.on(SOCKET_EVENTS.TRIP_COUNTER_DECLINED, (payload: TripCounterDeclinedPayload) => {
+    const store = useTripStore.getState();
+    store.setCounterFare(null);
   });
 
   socket.on(SOCKET_EVENTS.MESSAGE_NEW, (payload: TripMessageNewPayload) => {
