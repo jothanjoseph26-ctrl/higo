@@ -36,6 +36,7 @@ export class DriversController {
       query.lat,
       query.lng,
       query.radiusKm,
+      query.vehicleType,
     );
     return { drivers };
   }

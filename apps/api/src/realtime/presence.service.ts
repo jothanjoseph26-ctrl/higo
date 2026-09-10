@@ -104,11 +104,14 @@ export class PresenceService {
     lat: number,
     lng: number,
     radiusKm: number,
+    vehicleType?: string,
   ): Promise<NearbyDriver[]> {
     const radiusMeters = radiusKm * 1000;
     const candidates = await this.geoRepo.findNearbyOnlineDrivers(
       { lat, lng },
       radiusMeters,
+      50,
+      vehicleType,
     );
 
     const drivers: NearbyDriver[] = [];

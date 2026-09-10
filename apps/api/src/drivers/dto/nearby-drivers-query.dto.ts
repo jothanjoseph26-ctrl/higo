@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsOptional, Max, Min } from 'class-validator';
+import { IsIn, IsOptional, Max, Min } from 'class-validator';
 
 export class NearbyDriversQueryDto {
   @Type(() => Number)
@@ -17,4 +17,8 @@ export class NearbyDriversQueryDto {
   @Min(0.5)
   @Max(50)
   radiusKm: number = 5;
+
+  @IsOptional()
+  @IsIn(['keke', 'car', 'bike'])
+  vehicleType?: string;
 }
