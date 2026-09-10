@@ -1097,15 +1097,13 @@ export class TripService {
           tripId,
           driverId: response.driverId,
           driverDetails: {
-            driverId: driver.id,
+            id: driver.id,
             name: driver.name,
-            phone: driver.phone,
             avatarUrl: driver.avatarUrl,
             vehiclePlate: driver.vehiclePlate,
             vehicleModel: driver.vehicleModel,
             vehicleColor: driver.vehicleColor,
             ratingAvg: Number(driver.ratingAvg),
-            totalTrips: driver.totalTrips,
           },
           eta: response.driverEtaMin,
         });
@@ -1299,15 +1297,13 @@ export class TripService {
       });
       if (driver) {
         driverDetails = {
-          driverId: driver.id,
+          id: driver.id,
           name: driver.name,
-          phone: driver.phone,
           avatarUrl: driver.avatarUrl,
           vehiclePlate: driver.vehiclePlate,
           vehicleModel: driver.vehicleModel,
           vehicleColor: driver.vehicleColor,
           ratingAvg: Number(driver.ratingAvg),
-          totalTrips: driver.totalTrips,
         };
 
         const locStr = await this.redis.get(`loc:driver:${driver.id}`);
@@ -1496,15 +1492,13 @@ export class TripService {
         tripId,
         driverId: driverId!,
         driverDetails: {
-          driverId: driverId!,
+          id: driverId!,
           name: driverRecord.name,
-          phone: driverRecord.phone,
           avatarUrl: driverRecord.avatarUrl,
           vehiclePlate: driverRecord.vehiclePlate,
           vehicleModel: driverRecord.vehicleModel,
           vehicleColor: driverRecord.vehicleColor,
           ratingAvg: Number(driverRecord.ratingAvg),
-          totalTrips: driverRecord.totalTrips,
         },
         eta,
         status: 'matched',
@@ -1560,6 +1554,9 @@ export class TripService {
           status: 'completed',
         });
 
+      // End any active in-app call
+      void this.eventsGateway.endCallForTrip(tripId, 'trip_ended');
+
       void this.pushService.sendToPassenger(trip.passengerId, {
         title: 'Trip completed',
         body: `Your trip is complete. Fare: ₦${(updatedTrip.totalFare ?? 0).toLocaleString()}`,
@@ -1574,6 +1571,9 @@ export class TripService {
           cancelledBy: actor,
           status: 'cancelled',
         });
+
+      // End any active in-app call
+      void this.eventsGateway.endCallForTrip(tripId, 'trip_cancelled');
 
       // Also notify all offered drivers who haven't accepted yet
       const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;

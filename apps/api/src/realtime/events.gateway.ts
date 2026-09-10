@@ -40,6 +40,13 @@ import { PresenceService } from './presence.service';
 import { RoomService } from './room.service';
 import { TripService } from '../trips/trips.service';
 import { MatchingService } from '../matching/matching.service';
+import { CallsService } from '../calls/calls.service';
+import {
+  CallInitiatePayload,
+  CallAnswerPayload,
+  CallIceCandidatePayload,
+  CallHangUpPayload,
+} from '@higo/shared-types';
 
 type AppSocket = Socket<ClientToServerEvents, ServerToClientEvents> & {
   data: SocketAuthData;
@@ -62,6 +69,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     private readonly tripService: TripService,
     @Inject(forwardRef(() => MatchingService))
     private readonly matchingService: MatchingService,
+    private readonly callsService: CallsService,
   ) {}
 
   afterInit(server: any): void {
@@ -538,31 +546,32 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       // Cancel other offers
       await this.matchingService.cancelOtherOffersForTrip(payload.tripId, driverId);
 
-      // Get driver details for passenger
-      const driver = await this.prisma.driver.findUnique({
-        where: { id: driverId },
-        select: { name: true, phone: true, vehiclePlate: true, vehicleModel: true, ratingAvg: true, vehicleType: true },
-      });
+    // Get driver details for passenger
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { name: true, vehiclePlate: true, vehicleModel: true, vehicleColor: true, ratingAvg: true, avatarUrl: true },
+    });
 
       const passenger = await this.prisma.user.findUnique({
         where: { id: passengerId },
         select: { name: true },
       });
 
-      // Emit TRIP_MATCHED to passenger
-      this.server.to(`passenger:${passengerId}`).emit(SOCKET_EVENTS.TRIP_MATCHED, {
-        tripId: payload.tripId,
-        driverId,
-        driverDetails: {
-          name: driver?.name || 'Driver',
-          phone: driver?.phone || null,
-          avatarUrl: null,
-          vehiclePlate: driver?.vehiclePlate || null,
-          vehicleModel: driver?.vehicleModel || null,
-          ratingAvg: driver?.ratingAvg != null ? Number(driver.ratingAvg) : 5.0,
-        },
-        eta: 5,
-      });
+    // Emit TRIP_MATCHED to passenger
+    this.server.to(`passenger:${passengerId}`).emit(SOCKET_EVENTS.TRIP_MATCHED, {
+      tripId: payload.tripId,
+      driverId,
+      driverDetails: {
+        id: driverId,
+        name: driver?.name || 'Driver',
+        avatarUrl: driver?.avatarUrl || null,
+        vehiclePlate: driver?.vehiclePlate || null,
+        vehicleModel: driver?.vehicleModel || null,
+        vehicleColor: driver?.vehicleColor || null,
+        ratingAvg: driver?.ratingAvg != null ? Number(driver.ratingAvg) : 5.0,
+      },
+      eta: 5,
+    });
 
       // Emit TRIP_COUNTER_ACCEPTED to driver
       this.server.to(`driver:${driverId}`).emit(SOCKET_EVENTS.TRIP_COUNTER_ACCEPTED, {
@@ -606,6 +615,239 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
 
     this.logger.log(`Passenger ${passengerId} declined counter-fare for trip ${payload.tripId}`);
+  }
+
+  // ==========================================================================
+  // IN-APP CALLING — WebRTC SIGNALING
+  // ==========================================================================
+
+  @SubscribeMessage(SOCKET_EVENTS.CALL_INITIATE)
+  async handleCallInitiate(
+    @ConnectedSocket() client: AppSocket,
+    @MessageBody() payload: CallInitiatePayload,
+  ): Promise<void> {
+    const callerId = client.data.sub;
+    const callerRole = client.data.type as 'passenger' | 'driver';
+
+    if (callerRole !== 'passenger' && callerRole !== 'driver') {
+      client.emit(SOCKET_EVENTS.CALL_FAILED, {
+        callId: '' as any,
+        tripId: payload.tripId,
+        reason: 'Unauthorized',
+      });
+      return;
+    }
+
+    // Validate trip and participant
+    const trip = await this.prisma.trip.findUnique({
+      where: { id: payload.tripId },
+      select: {
+        id: true,
+        passengerId: true,
+        driverId: true,
+        status: true,
+      },
+    });
+
+    if (!trip) {
+      client.emit(SOCKET_EVENTS.CALL_FAILED, {
+        callId: '' as any,
+        tripId: payload.tripId,
+        reason: 'Trip not found',
+      });
+      return;
+    }
+
+    const isPassenger = callerRole === 'passenger' && trip.passengerId === callerId;
+    const isDriver = callerRole === 'driver' && trip.driverId === callerId;
+    if (!isPassenger && !isDriver) {
+      client.emit(SOCKET_EVENTS.CALL_FAILED, {
+        callId: '' as any,
+        tripId: payload.tripId,
+        reason: 'Not a trip participant',
+      });
+      return;
+    }
+
+    // Must be in a callable status
+    const callableStatuses = ['matched', 'arrived', 'active'];
+    if (!callableStatuses.includes(trip.status)) {
+      client.emit(SOCKET_EVENTS.CALL_FAILED, {
+        callId: '' as any,
+        tripId: payload.tripId,
+        reason: 'Trip is not in a callable state',
+      });
+      return;
+    }
+
+    // Determine callee
+    const calleeId = isPassenger ? trip.driverId : trip.passengerId;
+    if (!calleeId) {
+      client.emit(SOCKET_EVENTS.CALL_FAILED, {
+        callId: '' as any,
+        tripId: payload.tripId,
+        reason: 'No other party in this trip',
+      });
+      return;
+    }
+
+    // Look up caller name
+    const caller = callerRole === 'passenger'
+      ? await this.prisma.user.findUnique({ where: { id: callerId }, select: { name: true } })
+      : await this.prisma.driver.findUnique({ where: { id: callerId }, select: { name: true } });
+
+    // Look up callee name
+    const callee = callerRole === 'passenger'
+      ? await this.prisma.driver.findUnique({ where: { id: calleeId }, select: { name: true } })
+      : await this.prisma.user.findUnique({ where: { id: calleeId }, select: { name: true } });
+
+    try {
+      const callId = await this.callsService.createCall({
+        tripId: payload.tripId,
+        callerId,
+        calleeId,
+        callerName: caller?.name || 'User',
+        calleeName: callee?.name || 'User',
+        callerRole,
+      });
+
+      // Emit incoming call to callee (both passenger and driver rooms in case of multiple devices)
+      const calleeType = callerRole === 'passenger' ? 'driver' : 'passenger';
+      this.server.to(`${calleeType}:${calleeId}`).emit(
+        SOCKET_EVENTS.CALL_INCOMING,
+        {
+          callId,
+          tripId: payload.tripId,
+          callerId,
+          callerName: caller?.name || 'User',
+          callerRole,
+        },
+      );
+
+      this.logger.log(`Call ${callId} initiated: ${callerId} → ${calleeId} for trip ${payload.tripId}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create call';
+      this.logger.warn(`Call initiation failed: ${message}`);
+      client.emit(SOCKET_EVENTS.CALL_FAILED, {
+        callId: '' as any,
+        tripId: payload.tripId,
+        reason: message,
+      });
+    }
+  }
+
+  @SubscribeMessage(SOCKET_EVENTS.CALL_ANSWER)
+  async handleCallAnswer(
+    @ConnectedSocket() client: AppSocket,
+    @MessageBody() payload: CallAnswerPayload,
+  ): Promise<void> {
+    const userId = client.data.sub;
+
+    const call = await this.callsService.getCall(payload.callId);
+    if (!call || call.tripId !== payload.tripId) {
+      client.emit(SOCKET_EVENTS.CALL_FAILED, {
+        callId: payload.callId,
+        tripId: payload.tripId,
+        reason: 'Call not found',
+      });
+      return;
+    }
+
+    if (call.calleeId !== userId) {
+      client.emit(SOCKET_EVENTS.CALL_FAILED, {
+        callId: payload.callId,
+        tripId: payload.tripId,
+        reason: 'Not authorized to answer this call',
+      });
+      return;
+    }
+
+    // Relay SDP answer to caller (both passenger and driver rooms)
+    this.server.to(`passenger:${call.callerId}`).emit(SOCKET_EVENTS.CALL_ANSWERED, {
+      callId: payload.callId,
+      tripId: payload.tripId,
+      sdp: payload.sdp,
+    });
+    this.server.to(`driver:${call.callerId}`).emit(SOCKET_EVENTS.CALL_ANSWERED, {
+      callId: payload.callId,
+      tripId: payload.tripId,
+      sdp: payload.sdp,
+    });
+
+    await this.callsService.updateCallStatus(payload.callId, 'connecting');
+  }
+
+  @SubscribeMessage(SOCKET_EVENTS.CALL_ICE_CANDIDATE)
+  async handleCallIceCandidate(
+    @ConnectedSocket() client: AppSocket,
+    @MessageBody() payload: CallIceCandidatePayload,
+  ): Promise<void> {
+    const userId = client.data.sub;
+
+    const call = await this.callsService.getCall(payload.callId);
+    if (!call || call.tripId !== payload.tripId) return;
+    if (call.callerId !== userId && call.calleeId !== userId) return;
+
+    // Relay to the other party
+    const otherPartyId = call.callerId === userId ? call.calleeId : call.callerId;
+    const otherPartyType = call.callerId === userId
+      ? call.callerRole
+      : (call.callerRole === 'passenger' ? 'driver' : 'passenger');
+
+    this.server.to(`${otherPartyType}:${otherPartyId}`).emit(SOCKET_EVENTS.CALL_ICE_CANDIDATE, {
+      callId: payload.callId,
+      tripId: payload.tripId,
+      candidate: payload.candidate,
+    });
+  }
+
+  @SubscribeMessage(SOCKET_EVENTS.CALL_HANG_UP)
+  async handleCallHangUp(
+    @ConnectedSocket() client: AppSocket,
+    @MessageBody() payload: CallHangUpPayload,
+  ): Promise<void> {
+    const userId = client.data.sub;
+
+    const call = await this.callsService.getCall(payload.callId);
+    if (!call || call.tripId !== payload.tripId) return;
+    if (call.callerId !== userId && call.calleeId !== userId) return;
+
+    const reason = payload.reason || (userId === call.callerId ? 'caller_hangup' : 'callee_hangup');
+
+    // Notify both parties
+    const parties = [
+      { id: call.callerId, type: call.callerRole },
+      { id: call.calleeId, type: call.callerRole === 'passenger' ? 'driver' : 'passenger' },
+    ];
+    for (const party of parties) {
+      this.server.to(`${party.type}:${party.id}`).emit(SOCKET_EVENTS.CALL_ENDED, {
+        callId: payload.callId,
+        tripId: payload.tripId,
+        reason,
+      });
+    }
+
+    await this.callsService.endCall(payload.callId);
+  }
+
+  /** End any active call when trip ends or is cancelled. Called from tripService.transition(). */
+  async endCallForTrip(tripId: string, reason: 'trip_ended' | 'trip_cancelled'): Promise<void> {
+    const call = await this.callsService.endCallForTrip(tripId);
+    if (!call) return;
+
+    const parties = [
+      { id: call.callerId, type: call.callerRole },
+      { id: call.calleeId, type: call.callerRole === 'passenger' ? 'driver' : 'passenger' },
+    ];
+    for (const party of parties) {
+      this.server.to(`${party.type}:${party.id}`).emit(SOCKET_EVENTS.CALL_ENDED, {
+        callId: call.callId,
+        tripId,
+        reason,
+      });
+    }
+
+    this.logger.log(`Call ${call.callId} ended due to ${reason} for trip ${tripId}`);
   }
 
   emitTripMessageNew(tripId: string, message: TripMessage): void {

@@ -40,6 +40,7 @@ import { LoyaltyModule } from './loyalty/loyalty.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SupportModule } from './support/support.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
+import { CallsModule } from './calls/calls.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
     LoyaltyModule,
     NotificationsModule,
     SupportModule,
+    CallsModule,
     // WhatsAppModule, // TODO: re-enable once circular dependency is resolved
   ],
   providers: [

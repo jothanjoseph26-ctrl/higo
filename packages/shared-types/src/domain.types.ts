@@ -678,6 +678,50 @@ export interface MatchedDriverDetails {
   totalTrips: number;
 }
 
+/** Public driver detail — NO phone number. Used in passenger/driver-facing payloads. */
+export interface PublicDriverDetails {
+  id: UUID;
+  name: string;
+  avatarUrl: string | null;
+  vehiclePlate: string | null;
+  vehicleModel: string | null;
+  vehicleColor: string | null;
+  ratingAvg: number | null;
+}
+
+/** Public passenger detail — NO phone number. Used in driver-facing payloads. */
+export interface PublicPassengerDetails {
+  id: UUID;
+  name: string | null;
+  rating: number;
+}
+
+// ============================================================================
+// CALL TYPES
+// ============================================================================
+
+export type CallState =
+  | 'idle'
+  | 'outgoing'
+  | 'ringing'
+  | 'connecting'
+  | 'connected'
+  | 'ending'
+  | 'ended'
+  | 'failed';
+
+export type CallEndReason =
+  | 'caller_hangup'
+  | 'callee_hangup'
+  | 'callee_rejected'
+  | 'trip_ended'
+  | 'trip_cancelled'
+  | 'timeout'
+  | 'ice_failed'
+  | 'microphone_denied'
+  | 'socket_disconnected'
+  | 'error';
+
 /** Weekly KPI snapshot for admin dashboard. */
 export interface WeeklyKpi {
   driverActiveRate: number;

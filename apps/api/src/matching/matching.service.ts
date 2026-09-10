@@ -207,7 +207,6 @@ export class MatchingService {
         durationMin,
         passengerId: trip.passengerId,
         passengerName: passenger?.name || null,
-        passengerPhone: passenger?.phone || null,
         passengerRating: passenger ? Number(passenger.ratingAvg) : 5.0,
         expiresInSeconds: matchSettings.offerTimeoutSec,
       };
@@ -531,7 +530,6 @@ export class MatchingService {
           durationMin,
           passengerId: trip.passengerId,
           passengerName: p?.name || null,
-          passengerPhone: p?.phone || null,
           passengerRating: p ? Number(p.ratingAvg) : 5.0,
           expiresInSeconds: Math.ceil(remainingMs / 1000),
         }

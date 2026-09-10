@@ -8,7 +8,16 @@
  * Use SOCKET_EVENTS constants everywhere — never inline event-name strings.
  */
 
-import { LatLng, UUID, Kobo, MatchedDriverDetails } from './domain.types';
+import {
+  LatLng,
+  UUID,
+  Kobo,
+  MatchedDriverDetails,
+  PublicDriverDetails,
+  PublicPassengerDetails,
+  CallState,
+  CallEndReason,
+} from './domain.types';
 
 // ============================================================================
 // EVENT NAME CONSTANTS
@@ -67,6 +76,16 @@ export const SOCKET_EVENTS = {
   // ---- Connection lifecycle (Socket.io reserved-style, app-level) ----
   CONNECT_ERROR: 'connect_error',
   AUTH_ERROR: 'auth:error',
+
+  // ---- In-app calling (WebRTC signaling) ----
+  CALL_INITIATE: 'call:initiate',
+  CALL_INCOMING: 'call:incoming',
+  CALL_ANSWER: 'call:answer',
+  CALL_ANSWERED: 'call:answered',
+  CALL_ICE_CANDIDATE: 'call:ice-candidate',
+  CALL_HANG_UP: 'call:hang-up',
+  CALL_ENDED: 'call:ended',
+  CALL_FAILED: 'call:failed',
 } as const;
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
@@ -179,7 +198,6 @@ export interface TripNewRequestPayload {
   durationMin: number;
   passengerId: UUID;
   passengerName: string | null;
-  passengerPhone: string | null;
   passengerRating: number;
   /** Seconds the driver has to accept before auto-decline (15). */
   expiresInSeconds: number;
@@ -188,7 +206,7 @@ export interface TripNewRequestPayload {
 export interface TripMatchedPayload {
   tripId: UUID;
   driverId: UUID;
-  driverDetails: MatchedDriverDetails;
+  driverDetails: PublicDriverDetails;
   /** ETA to pickup in minutes. */
   eta: number;
   /** Authoritative trip status after transition. */
@@ -311,6 +329,73 @@ export interface FraudAlertPayload {
 }
 
 // ============================================================================
+// CALL PAYLOADS
+// ============================================================================
+
+export interface CallInitiatePayload {
+  tripId: UUID;
+}
+
+export interface CallInitiateAck {
+  success: boolean;
+  callId?: UUID;
+  reason?: string;
+}
+
+export interface CallIncomingPayload {
+  callId: UUID;
+  tripId: UUID;
+  callerId: UUID;
+  callerName: string;
+  callerRole: 'passenger' | 'driver';
+}
+
+export interface CallAnswerPayload {
+  callId: UUID;
+  tripId: UUID;
+  sdp: string;
+}
+
+export interface CallAnsweredPayload {
+  callId: UUID;
+  tripId: UUID;
+  sdp: string;
+}
+
+export interface CallAnswerAck {
+  success: boolean;
+  reason?: string;
+}
+
+export interface CallIceCandidatePayload {
+  callId: UUID;
+  tripId: UUID;
+  candidate: RTCIceCandidateInit;
+}
+
+export interface CallHangUpPayload {
+  callId: UUID;
+  tripId: UUID;
+  reason?: CallEndReason;
+}
+
+export interface CallHangUpAck {
+  success: boolean;
+}
+
+export interface CallEndedPayload {
+  callId: UUID;
+  tripId: UUID;
+  reason: CallEndReason;
+}
+
+export interface CallFailedPayload {
+  callId: UUID;
+  tripId: UUID;
+  reason: string;
+}
+
+// ============================================================================
 // TYPED EVENT MAPS (for socket.io typed sockets)
 // ============================================================================
 
@@ -330,6 +415,10 @@ export interface ClientToServerEvents {
   [SOCKET_EVENTS.HCE_LANGUAGE_CHANGED]: (p: HceLanguageChangedPayload) => void;
   [SOCKET_EVENTS.PASSENGER_COUNTER_ACCEPT]: (p: PassengerCounterAcceptPayload) => void;
   [SOCKET_EVENTS.PASSENGER_COUNTER_DECLINE]: (p: PassengerCounterDeclinePayload) => void;
+  [SOCKET_EVENTS.CALL_INITIATE]: (p: CallInitiatePayload, ack: (res: CallInitiateAck) => void) => void;
+  [SOCKET_EVENTS.CALL_ANSWER]: (p: CallAnswerPayload, ack: (res: CallAnswerAck) => void) => void;
+  [SOCKET_EVENTS.CALL_ICE_CANDIDATE]: (p: CallIceCandidatePayload) => void;
+  [SOCKET_EVENTS.CALL_HANG_UP]: (p: CallHangUpPayload, ack: (res: CallHangUpAck) => void) => void;
 }
 
 /** Events the server emits (server -> client). */
@@ -357,6 +446,11 @@ export interface ServerToClientEvents {
     tripId: UUID;
     reason: string;
   }) => void;
+  [SOCKET_EVENTS.CALL_INCOMING]: (p: CallIncomingPayload) => void;
+  [SOCKET_EVENTS.CALL_ANSWERED]: (p: CallAnsweredPayload) => void;
+  [SOCKET_EVENTS.CALL_ICE_CANDIDATE]: (p: CallIceCandidatePayload) => void;
+  [SOCKET_EVENTS.CALL_ENDED]: (p: CallEndedPayload) => void;
+  [SOCKET_EVENTS.CALL_FAILED]: (p: CallFailedPayload) => void;
 }
 
 /** JWT data attached to the socket after auth middleware. */
