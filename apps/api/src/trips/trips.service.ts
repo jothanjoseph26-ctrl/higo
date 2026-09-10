@@ -428,6 +428,7 @@ export class TripService {
         cash_confirmed_by_driver AS "cashConfirmedByDriver",
         cash_confirmed_at AS "cashConfirmedAt",
         rejection_reason AS "rejectionReason",
+        driver_counter_fare AS "driverCounterFare",
         city,
         created_at AS "createdAt"
       FROM trips
