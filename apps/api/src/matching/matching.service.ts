@@ -560,6 +560,12 @@ export class MatchingService {
       }
     }
 
-    this.logger.log(`Driver ${driverId} counter-fare ₦${counterFare} on trip ${tripId} — timeout cancelled`);
+    // Persist counter-fare to database so getTrip() returns it for acceptance
+    await this.prisma.trip.update({
+      where: { id: tripId },
+      data: { driverCounterFare: counterFare },
+    });
+
+    this.logger.log(`Driver ${driverId} counter-fare ₦${counterFare} on trip ${tripId} — persisted & timeout cancelled`);
   }
 }
