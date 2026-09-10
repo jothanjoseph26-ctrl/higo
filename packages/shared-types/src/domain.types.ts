@@ -313,6 +313,9 @@ export interface Trip {
   // Driver rejection tracking
   rejectionReason: string | null;
 
+  // Counter-fare during negotiation (kobo)
+  driverCounterFare: Kobo | null;
+
   // P0: City derived from pickup location for matching filter
   city: string | null;
 

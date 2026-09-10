@@ -512,7 +512,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       }
 
       // Get the counter-fare from the trip record
-      const counterFare = (trip as any).driverCounterFare;
+      const counterFare = trip.driverCounterFare;
       if (!counterFare) {
         this.logger.warn(`Counter-accept rejected: no counter-fare on trip ${payload.tripId}. trip.status=${trip.status} trip.driverId=${trip.driverId}`);
         return;

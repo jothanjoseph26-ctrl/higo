@@ -370,6 +370,7 @@ export class TripService {
       cashConfirmedByDriver: row.cashConfirmedByDriver,
       cashConfirmedAt: row.cashConfirmedAt ? row.cashConfirmedAt.toISOString() : null,
       rejectionReason: row.rejectionReason,
+      driverCounterFare: row.driverCounterFare ?? null,
       city: row.city ?? null,
       createdAt: row.createdAt.toISOString(),
     };
