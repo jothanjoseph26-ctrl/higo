@@ -229,6 +229,27 @@ export class TripsController {
     return this.tripService.cancelTrip(id, cancelledBy, dto.reason);
   }
 
+  @Get('driver/active')
+  async getDriverActiveTrip(@CurrentUser() user: AuthUser) {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can access this endpoint');
+    }
+    
+    const activeTrip = await this.prisma.trip.findFirst({
+      where: {
+        driverId: user.sub,
+        status: { in: ['matched', 'arrived', 'active'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    
+    if (!activeTrip) {
+      return null;
+    }
+    
+    return this.tripService.getTrip(activeTrip.id);
+  }
+
   @Get(':id')
   async getTrip(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     const trip = await this.tripService.getTrip(id);
