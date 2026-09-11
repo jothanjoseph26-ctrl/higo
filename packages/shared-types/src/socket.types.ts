@@ -12,10 +12,7 @@ import {
   LatLng,
   UUID,
   Kobo,
-  MatchedDriverDetails,
   PublicDriverDetails,
-  PublicPassengerDetails,
-  CallState,
   CallEndReason,
 } from './domain.types';
 
@@ -370,7 +367,7 @@ export interface CallAnswerAck {
 export interface CallIceCandidatePayload {
   callId: UUID;
   tripId: UUID;
-  candidate: RTCIceCandidateInit;
+  candidate: { sdpMid?: string | null; sdpMLineIndex?: number | null; candidate: string; usernameFragment?: string | null };
 }
 
 export interface CallHangUpPayload {

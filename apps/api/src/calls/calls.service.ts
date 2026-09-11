@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { Redis } from 'ioredis';
 import axios from 'axios';
-import { nanoid } from 'nanoid';
+import * as crypto from 'crypto';
 
 const CALL_TTL_SEC = 120; // 2 min max call lifetime
 const CALL_STATUS_KEY = 'call:status:';
@@ -42,7 +42,7 @@ export class CallsService {
     calleeName: string;
     callerRole: 'passenger' | 'driver';
   }): Promise<string> {
-    const callId = nanoid(12);
+    const callId = crypto.randomBytes(9).toString('base64url');
 
     // Check no existing active call for this trip
     const existingCallId = await this.redis.get(`${CALL_TRIP_KEY}${params.tripId}`);
@@ -146,7 +146,7 @@ export class CallsService {
   }
 
   async getTurnCredentials(): Promise<{
-    iceServers: RTCIceServer[];
+    iceServers: Array<{ urls: string | string[]; username?: string; credential?: string }>;
     expiresInSeconds: number;
   }> {
     const accountSid = this.config.get<string>('TWILIO_ACCOUNT_SID');

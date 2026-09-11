@@ -18,7 +18,7 @@ export class CallsController {
     @Req() req: { user: AuthUser },
   ) {
     if (!tripId) {
-      throw new AppException('BAD_REQUEST', undefined, 'tripId is required');
+      throw new AppException('VALIDATION_ERROR', undefined, 'tripId is required');
     }
 
     // Verify user is participant in the trip
