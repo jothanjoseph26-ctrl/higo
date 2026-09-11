@@ -4,6 +4,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { TripsModule } from '../trips/trips.module';
 import { MatchingModule } from '../matching/matching.module';
+import { CallsModule } from '../calls/calls.module';
 import { EventsGateway } from './events.gateway';
 import { PresenceService } from './presence.service';
 import { RoomService } from './room.service';
@@ -15,6 +16,7 @@ import { RoomService } from './room.service';
     RedisModule,
     forwardRef(() => TripsModule),
     forwardRef(() => MatchingModule),
+    forwardRef(() => CallsModule),
   ],
   providers: [PresenceService, RoomService, EventsGateway],
   exports: [PresenceService, RoomService, EventsGateway],

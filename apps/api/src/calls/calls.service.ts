@@ -24,14 +24,19 @@ export interface CallRecord {
 @Injectable()
 export class CallsService {
   private readonly logger = new Logger(CallsService.name);
-  private readonly redis: Redis;
+  private redis: Redis;
 
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
-  ) {
-    const redisUrl = this.config.get<string>('REDIS_URL');
-    this.redis = redisUrl ? new Redis(redisUrl) : new Redis();
+  ) {}
+
+  private getRedis(): Redis {
+    if (!this.redis) {
+      const redisUrl = this.config.get<string>('REDIS_URL');
+      this.redis = redisUrl ? new Redis(redisUrl) : new Redis();
+    }
+    return this.redis;
   }
 
   async createCall(params: {
@@ -45,9 +50,9 @@ export class CallsService {
     const callId = crypto.randomBytes(9).toString('base64url');
 
     // Check no existing active call for this trip
-    const existingCallId = await this.redis.get(`${CALL_TRIP_KEY}${params.tripId}`);
+    const existingCallId = await this.getRedis().get(`${CALL_TRIP_KEY}${params.tripId}`);
     if (existingCallId) {
-      const existingStatus = await this.redis.get(`${CALL_STATUS_KEY}${existingCallId}`);
+      const existingStatus = await this.getRedis().get(`${CALL_STATUS_KEY}${existingCallId}`);
       if (existingStatus && existingStatus !== 'ended') {
         throw new Error('Call already active for this trip');
       }
@@ -65,13 +70,13 @@ export class CallsService {
       createdAt: Date.now(),
     };
 
-    await this.redis.set(
+    await this.getRedis().set(
       `${CALL_STATUS_KEY}${callId}`,
       JSON.stringify(record),
       'EX',
       CALL_TTL_SEC,
     );
-    await this.redis.set(
+    await this.getRedis().set(
       `${CALL_TRIP_KEY}${params.tripId}`,
       callId,
       'EX',
@@ -101,7 +106,7 @@ export class CallsService {
     const record = await this.getCall(callId);
     if (!record) return;
     record.status = status;
-    await this.redis.set(
+    await this.getRedis().set(
       `${CALL_STATUS_KEY}${callId}`,
       JSON.stringify(record),
       'EX',
@@ -113,14 +118,14 @@ export class CallsService {
     const record = await this.getCall(callId);
     if (!record) return;
     record.status = 'ended';
-    await this.redis.set(
+    await this.getRedis().set(
       `${CALL_STATUS_KEY}${callId}`,
       JSON.stringify(record),
       'EX',
       30, // keep for 30s for final signaling
     );
     // Clean up trip→call mapping
-    await this.redis.del(`${CALL_TRIP_KEY}${record.tripId}`);
+    await this.getRedis().del(`${CALL_TRIP_KEY}${record.tripId}`);
   }
 
   async endCallForTrip(tripId: string): Promise<CallRecord | null> {
