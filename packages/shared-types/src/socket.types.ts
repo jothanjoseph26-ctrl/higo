@@ -117,9 +117,21 @@ export interface DriverTripDeclinePayload {
   reason: 'manual' | 'timeout' | 'too_far' | 'restricted_zone' | string;
 }
 
+export interface NegotiationTier {
+  /** Tier identifier: 'base' | 'quick' | 'priority' | 'fastest' */
+  tier: 'base' | 'quick' | 'priority' | 'fastest';
+  /** Fare amount in kobo (server-computed from base fare) */
+  fare: Kobo;
+  /** Percentage of base fare (e.g. 1.0, 1.10, 1.15, 1.20) */
+  multiplier: number;
+  /** Human-readable label for driver UI */
+  label: string;
+}
+
 export interface DriverCounterFarePayload {
   tripId: UUID;
-  counterFare: Kobo;
+  /** The selected tier identifier — backend re-derives the amount server-side */
+  selectedTier: NegotiationTier['tier'];
 }
 
 export interface TripCounterFarePayload {
@@ -198,6 +210,8 @@ export interface TripNewRequestPayload {
   passengerRating: number;
   /** Seconds the driver has to accept before auto-decline (15). */
   expiresInSeconds: number;
+  /** Pre-computed negotiation tiers (base + 3 higher options) */
+  negotiationTiers: NegotiationTier[];
 }
 
 export interface TripMatchedPayload {

@@ -133,10 +133,11 @@ export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> 
 
 /**
  * Send a counter-fare offer from driver to passenger.
+ * Uses a pre-computed tier from the platform — no raw fare amounts.
  * Returns true if the emit was sent, false if socket is not connected.
  */
-export function emitCounterFare(tripId: string, counterFare: number): boolean {
+export function emitCounterFare(tripId: string, selectedTier: 'base' | 'quick' | 'priority' | 'fastest'): boolean {
   if (!socket?.connected) return false;
-  socket.emit(SOCKET_EVENTS.DRIVER_COUNTER_FARE, { tripId, counterFare });
+  socket.emit(SOCKET_EVENTS.DRIVER_COUNTER_FARE, { tripId, selectedTier });
   return true;
 }

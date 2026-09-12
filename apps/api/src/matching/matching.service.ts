@@ -15,6 +15,7 @@ import { PresenceService } from '../realtime/presence.service';
 import {
   CompositeTrustScore,
   LatLng,
+  NegotiationTier,
   RankedCandidate,
   SOCKET_EVENTS,
   TripStatus,
@@ -40,6 +41,16 @@ export class MatchingService {
     @InjectQueue('dispatch')
     private readonly dispatchQueue: Queue,
   ) {}
+
+  /** Compute platform-controlled negotiation tiers from the base fare. */
+  computeNegotiationTiers(baseFare: number): NegotiationTier[] {
+    return [
+      { tier: 'base', fare: baseFare, multiplier: 1.0, label: 'Platform fare' },
+      { tier: 'quick', fare: Math.round(baseFare * 1.10), multiplier: 1.10, label: 'Quick match' },
+      { tier: 'priority', fare: Math.round(baseFare * 1.15), multiplier: 1.15, label: 'Priority match' },
+      { tier: 'fastest', fare: Math.round(baseFare * 1.20), multiplier: 1.20, label: 'Fastest match' },
+    ];
+  }
 
   /**
    * P0: findCandidates now accepts an optional `city` parameter.
@@ -209,6 +220,7 @@ export class MatchingService {
         passengerName: passenger?.name || null,
         passengerRating: passenger ? Number(passenger.ratingAvg) : 5.0,
         expiresInSeconds: matchSettings.offerTimeoutSec,
+        negotiationTiers: this.computeNegotiationTiers(trip.totalFare),
       };
 
       this.eventsGateway.server.to(`driver:${candidate.driverId}`).emit(
@@ -532,6 +544,7 @@ export class MatchingService {
           passengerName: p?.name || null,
           passengerRating: p ? Number(p.ratingAvg) : 5.0,
           expiresInSeconds: Math.ceil(remainingMs / 1000),
+          negotiationTiers: this.computeNegotiationTiers(trip.totalFare),
         }
       );
 

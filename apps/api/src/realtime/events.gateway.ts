@@ -27,6 +27,7 @@ import {
   DriverTripCompletedPayload,
   PassengerCounterAcceptPayload,
   PassengerCounterDeclinePayload,
+  NegotiationTier,
   LatLng,
   TripMessage,
   TripStatus,
@@ -345,7 +346,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const driverId = client.data.sub;
     if (client.data.type !== 'driver') return;
 
-    this.logger.log(`Driver ${driverId} counter-fare ₦${payload.counterFare} on trip ${payload.tripId}`);
+    this.logger.log(`Driver ${driverId} selecting tier '${payload.selectedTier}' on trip ${payload.tripId}`);
 
     // Get trip and driver info
     const trip = await this.tripService.getTrip(payload.tripId);
@@ -357,9 +358,22 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       return;
     }
 
+    // Validate the selected tier against platform-computed tiers
+    const tiers = this.matchingService.computeNegotiationTiers(trip.totalFare);
+    const selected = tiers.find((t) => t.tier === payload.selectedTier);
+    if (!selected || selected.tier === 'base') {
+      client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
+        tripId: payload.tripId,
+        reason: 'Invalid fare tier',
+      });
+      return;
+    }
+
+    const counterFare = selected.fare;
+
     // Cancel timeout job via matching service
     try {
-      await this.matchingService.sendCounterFare(driverId, payload.tripId, payload.counterFare);
+      await this.matchingService.sendCounterFare(driverId, payload.tripId, counterFare);
     } catch (err) {
       client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
         tripId: payload.tripId,
@@ -374,7 +388,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     // Store counter-fare + assign driver to the trip
     await this.prisma.trip.update({
       where: { id: payload.tripId },
-      data: { driverCounterFare: payload.counterFare, driverId: driverId },
+      data: { driverCounterFare: counterFare, driverId: driverId },
     });
 
     // Emit counter-fare to passenger
@@ -382,11 +396,11 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       tripId: payload.tripId,
       driverId,
       driverName: driver?.name || 'Your driver',
-      counterFare: payload.counterFare,
+      counterFare,
       originalFare: trip.totalFare,
     });
 
-    this.logger.log(`Counter-fare ₦${payload.counterFare} sent to passenger ${trip.passengerId} for trip ${payload.tripId}`);
+    this.logger.log(`Counter-fare ₦${counterFare} (tier: ${selected.tier}) sent to passenger ${trip.passengerId} for trip ${payload.tripId}`);
   }
 
   @SubscribeMessage(SOCKET_EVENTS.DRIVER_ARRIVED_AT_PICKUP)
