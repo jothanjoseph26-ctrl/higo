@@ -5,6 +5,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { TripsModule } from '../trips/trips.module';
 import { DriversController } from './drivers.controller';
 import { HceModule } from '../hce/hce.module';
+import { MatchingModule } from '../matching/matching.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { HceModule } from '../hce/hce.module';
     forwardRef(() => TripsModule),
     RealtimeModule,
     HceModule,
+    forwardRef(() => MatchingModule),
   ],
   controllers: [DriversController],
 })

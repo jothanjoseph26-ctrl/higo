@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GeoRepository } from './geo.repository';
 import { CtsService, CtsContext } from './cts.service';
 import { TripService } from '../trips/trips.service';
+import { CashSettlementService } from '../payments/cash-settlement.service';
 import { EventsGateway } from '../realtime/events.gateway';
 import { PushService } from '../push/push.service';
 import { WebPushService } from '../push/web-push.service';
@@ -33,6 +34,7 @@ export class MatchingService {
     private readonly ctsService: CtsService,
     @Inject(forwardRef(() => TripService))
     private readonly tripService: TripService,
+    private readonly settlementService: CashSettlementService,
     private readonly eventsGateway: EventsGateway,
     private readonly pushService: PushService,
     private readonly webPushService: WebPushService,
@@ -97,6 +99,10 @@ export class MatchingService {
 
   private offerKey(tripId: string, driverId: string) {
     return `dispatch:${tripId}:${driverId}`;
+  }
+
+  private declinedKey(tripId: string) {
+    return `dispatch:declined:${tripId}`;
   }
 
   private driverOffersKey(driverId: string) {
@@ -266,6 +272,123 @@ export class MatchingService {
     }
   }
 
+  async getRequestRoomTrips(driverId: string): Promise<Array<{
+    tripId: string;
+    pickup: { lat: number; lng: number };
+    pickupAddress: string;
+    destination: { lat: number; lng: number };
+    destinationAddress: string;
+    fare: number;
+    surgeMultiplier: number;
+    distanceKm: number;
+    durationMin: number;
+    passengerId: string;
+    passengerName: string | null;
+    passengerPhone: string | null;
+    passengerRating: number;
+    expiresInSeconds: number;
+    createdAt: string;
+  }>> {
+    const driver = await this.prisma.driver.findUnique({ where: { id: driverId } });
+    if (!driver) return [];
+    // Only show room to eligible drivers — same gates as dispatch but without hard fail
+    if (driver.kycStatus !== 'approved' || driver.isSuspended) return [];
+
+    const matchSettings = await this.settings.getMatchSettings();
+    const radius = matchSettings.radiusMeters;
+    const vehicleType = driver.vehicleType as any;
+
+    // Resolve driver point: Redis loc first (fresher), fallback to PostGIS current_location
+    let driverLat: number | null = null;
+    let driverLng: number | null = null;
+    try {
+      const locStr = await this.redis.get(`loc:driver:${driverId}`);
+      if (locStr) {
+        const loc = JSON.parse(locStr);
+        if (loc?.lat != null && loc?.lng != null) {
+          driverLat = Number(loc.lat);
+          driverLng = Number(loc.lng);
+        }
+      }
+    } catch {}
+    if (driverLat == null || driverLng == null) {
+      const rows = await this.prisma.$queryRaw<any[]>`SELECT ST_Y(current_location::geometry) as lat, ST_X(current_location::geometry) as lng FROM drivers WHERE id = ${driverId}::uuid`;
+      if (rows[0]?.lat != null) {
+        driverLat = Number(rows[0].lat);
+        driverLng = Number(rows[0].lng);
+      }
+    }
+    if (driverLat == null || driverLng == null) return [];
+
+    // Query requested trips of driver's vehicle type within radius, payment-eligible, not yet matched/cancelled
+    // Payment: cash always eligible, card/bank only when held (mirrors dispatch sequencing)
+    const trips = await this.prisma.$queryRaw<any[]>`
+      SELECT
+        t.id as trip_id,
+        ST_Y(t.pickup_location::geometry) as pickup_lat,
+        ST_X(t.pickup_location::geometry) as pickup_lng,
+        t.pickup_address,
+        ST_Y(t.destination_location::geometry) as dest_lat,
+        ST_X(t.destination_location::geometry) as dest_lng,
+        t.destination_address,
+        t.total_fare,
+        t.surge_multiplier,
+        t.distance_km,
+        t.duration_min,
+        t.passenger_id,
+        u.name as passenger_name,
+        u.phone as passenger_phone,
+        COALESCE(u.rating_avg, 5.0) as passenger_rating,
+        t.created_at,
+        ST_Distance(t.pickup_location, ST_SetSRID(ST_MakePoint(${driverLng}, ${driverLat}), 4326)::geography) as dist_meters
+      FROM trips t
+      JOIN users u ON u.id = t.passenger_id
+      WHERE t.status = 'requested'::"TripStatus"
+        AND t.vehicle_type = ${vehicleType}::"VehicleType"
+        AND t.pickup_location IS NOT NULL
+        AND ST_DWithin(t.pickup_location, ST_SetSRID(ST_MakePoint(${driverLng}, ${driverLat}), 4326)::geography, ${radius})
+        AND (
+          t.payment_method = 'cash'::"PaymentMethod"
+          OR (t.payment_method IN ('card'::"PaymentMethod", 'bank'::"PaymentMethod") AND t.payment_status = 'held'::"PaymentStatus")
+        )
+      ORDER BY dist_meters ASC, t.created_at DESC
+      LIMIT 20;
+    `;
+
+    const result: any[] = [];
+    for (const row of trips) {
+      const tripId = row.trip_id as string;
+      // Hide trips this driver explicitly declined (timeout stays visible per spec)
+      const declinedMembers = await this.redis.raw.smembers(this.declinedKey(tripId));
+      if (declinedMembers.includes(driverId)) continue;
+
+      const pickup = { lat: Number(row.pickup_lat), lng: Number(row.pickup_lng) };
+      const destination = { lat: Number(row.dest_lat), lng: Number(row.dest_lng) };
+      const haversineKm = this.haversineDistance(pickup, destination);
+      const distanceKm = row.distance_km != null ? Number(row.distance_km) : Math.round(haversineKm * 10) / 10;
+      const durationMin = row.duration_min != null ? Number(row.duration_min) : Math.max(1, Math.round(distanceKm * 2.5));
+
+      result.push({
+        tripId,
+        pickup,
+        pickupAddress: row.pickup_address as string,
+        destination,
+        destinationAddress: row.destination_address as string,
+        fare: Number(row.total_fare),
+        surgeMultiplier: row.surge_multiplier != null ? Number(row.surge_multiplier) : 1,
+        distanceKm,
+        durationMin,
+        passengerId: row.passenger_id as string,
+        passengerName: row.passenger_name as string | null,
+        passengerPhone: row.passenger_phone as string | null,
+        passengerRating: Number(row.passenger_rating),
+        expiresInSeconds: matchSettings.offerTimeoutSec,
+        createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      });
+    }
+    return result;
+  }
+
   async cancelOtherOffersForTrip(tripId: string, acceptedDriverId: string): Promise<void> {
     return this.cancelOtherOffers(tripId, acceptedDriverId);
   }
@@ -341,6 +464,15 @@ export class MatchingService {
         throw new Error('Offer was not made to you or is stale');
       }
 
+      // P0: Check settlement threshold for cash trips before accepting
+      const trip = await this.tripService.getTrip(tripId);
+      if (trip?.paymentMethod === 'cash') {
+        const { allowed, reason } = await this.settlementService.canAcceptCashTrip(driverId);
+        if (!allowed) {
+          throw new Error(reason || 'Cannot accept cash trips at this time');
+        }
+      }
+
       // Remove this driver's offer + Bull timeout job
       if (offer.jobId) {
         try {
@@ -389,6 +521,9 @@ export class MatchingService {
     // in the next dispatch round (other drivers should still get a chance).
     const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
     await this.redis.raw.srem(offeredDriversKey, driverId);
+    // Track explicit decline — Request Room will hide this trip for this driver
+    await this.redis.raw.sadd(this.declinedKey(tripId), driverId);
+    await this.redis.expire(this.declinedKey(tripId), 600);
 
     this.logger.log(`Driver ${driverId} declined trip ${tripId} (Reason: ${reason || 'none'})`);
 

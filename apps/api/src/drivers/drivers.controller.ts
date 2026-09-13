@@ -1,4 +1,4 @@
-import { Controller, Post, Put, Body, Get, Query } from '@nestjs/common';
+import { Controller, Post, Put, Body, Get, Query, Param } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { GetNearbyDriversResponse } from '@higo/shared-types';
 import { PresenceService } from '../realtime/presence.service';
@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NearbyDriversQueryDto } from './dto/nearby-drivers-query.dto';
 import { HceService } from '../hce/hce.service';
 import { RedisService } from '../redis/redis.service';
+import { MatchingService } from '../matching/matching.service';
 
 const TRAINING_MODULES = [
   { key: 'safety_basics', title: 'Safety basics', required: true },
@@ -26,6 +27,7 @@ export class DriversController {
     private readonly config: ConfigService,
     private readonly hce: HceService,
     private readonly redis: RedisService,
+    private readonly matchingService: MatchingService,
   ) {}
 
   @Get('nearby')
@@ -259,6 +261,31 @@ export class DriversController {
     ]);
 
     return { trips, total, limit, offset };
+  }
+
+  @Get('request-room')
+  async getRequestRoom(@CurrentUser() user: AuthUser) {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can access request room');
+    }
+    const trips = await this.matchingService.getRequestRoomTrips(user.sub);
+    return { trips };
+  }
+
+  @Post('request-room/:tripId/accept')
+  async acceptFromRequestRoom(
+    @CurrentUser() user: AuthUser,
+    @Param('tripId') tripId: string,
+  ) {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can accept trips');
+    }
+    try {
+      await this.matchingService.acceptOffer(user.sub, tripId);
+      return { accepted: true, tripId };
+    } catch (e) {
+      throw new AppException('VALIDATION_ERROR', undefined, (e as Error).message || 'Accept failed');
+    }
   }
 
   @Get('training/progress')
