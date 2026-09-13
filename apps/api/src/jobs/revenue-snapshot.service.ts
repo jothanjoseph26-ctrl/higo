@@ -23,14 +23,19 @@ export class RevenueSnapshotService {
       0.1,
     );
 
-    const [completedTrips, subscriptionsStarted, activeDriverCounts] =
+    const [completedTrips, subscriptionsStarted, activeDriverCounts, refunds, cashSettlements] =
       await Promise.all([
         this.prisma.trip.findMany({
           where: {
             status: 'completed',
             completedAt: { gte: dayStart, lte: dayEnd },
           },
-          select: { totalFare: true, driverId: true },
+          select: {
+            totalFare: true,
+            driverId: true,
+            paymentMethod: true,
+            settlementStatus: true,
+          },
         }),
         this.prisma.subscription.findMany({
           where: { startedAt: { gte: dayStart, lte: dayEnd } },
@@ -48,6 +53,22 @@ export class RevenueSnapshotService {
           },
           _count: { _all: true },
         }),
+        // P0: Query actual refund amounts from financial audit logs
+        this.prisma.financialAudit.findMany({
+          where: {
+            action: 'refund.processed',
+            createdAt: { gte: dayStart, lte: dayEnd },
+          },
+          select: { amount: true },
+        }),
+        // P0: Query actual cash settlements confirmed today
+        this.prisma.cashSettlement.findMany({
+          where: {
+            status: 'confirmed',
+            confirmedAt: { gte: dayStart, lte: dayEnd },
+          },
+          select: { amount: true },
+        }),
       ]);
 
     const grossGmv = completedTrips.reduce((sum, trip) => sum + trip.totalFare, 0);
@@ -56,7 +77,17 @@ export class RevenueSnapshotService {
       (sum, sub) => sum + sub.amount,
       0,
     );
-    const refundsIssued = 0;
+
+    // P0: Calculate real refunds from audit logs
+    const refundsIssued = refunds.reduce((sum, r) => sum + (r.amount || 0), 0);
+
+    // P0: Calculate real cash metrics
+    const cashTrips = completedTrips.filter((t) => t.paymentMethod === 'cash');
+    const cashFeeCollected = cashSettlements.reduce((sum, s) => sum + s.amount, 0);
+    const cashFeeOutstanding = cashTrips
+      .filter((t) => t.settlementStatus === 'outstanding')
+      .reduce((sum, t) => sum + Math.round(t.totalFare * commissionRate), 0);
+
     const netRevenue = platformCommission + subscriptionRevenue - refundsIssued;
     const activeDrivers = activeDriverCounts.filter(
       (row) => row._count._all >= 3,
@@ -74,13 +105,15 @@ export class RevenueSnapshotService {
         refunds_issued, net_revenue, active_drivers, completed_trips, avg_trip_value
       ) VALUES (
         ${dayStart}, ${grossGmv}, ${platformCommission}, ${subscriptionRevenue},
-        0, 0, 0, ${refundsIssued}, ${netRevenue}, ${activeDrivers},
-        ${completedTripsCount}, ${avgTripValue}
+        0, ${cashFeeCollected}, ${cashFeeOutstanding}, ${refundsIssued},
+        ${netRevenue}, ${activeDrivers}, ${completedTripsCount}, ${avgTripValue}
       )
       ON CONFLICT (date) DO UPDATE SET
         gross_gmv = EXCLUDED.gross_gmv,
         platform_commission = EXCLUDED.platform_commission,
         subscription_revenue = EXCLUDED.subscription_revenue,
+        cash_fee_collected = EXCLUDED.cash_fee_collected,
+        cash_fee_outstanding = EXCLUDED.cash_fee_outstanding,
         refunds_issued = EXCLUDED.refunds_issued,
         net_revenue = EXCLUDED.net_revenue,
         active_drivers = EXCLUDED.active_drivers,
@@ -89,7 +122,7 @@ export class RevenueSnapshotService {
     `;
 
     this.logger.log(
-      `Revenue snapshot saved for ${dayStart.toISOString().slice(0, 10)}: net=${netRevenue} kobo`,
+      `Revenue snapshot saved for ${dayStart.toISOString().slice(0, 10)}: net=${netRevenue} kobo, cash_collected=${cashFeeCollected}, cash_outstanding=${cashFeeOutstanding}, refunds=${refundsIssued}`,
     );
   }
 }

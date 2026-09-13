@@ -5,6 +5,8 @@ import { PricingService } from '../pricing/pricing.service';
 import { MatchingService } from '../matching/matching.service';
 import { EventsGateway } from '../realtime/events.gateway';
 import { PaymentService } from '../payments/payment.service';
+import { LedgerService } from '../payments/ledger.service';
+import { CashSettlementService } from '../payments/cash-settlement.service';
 import { PushService } from '../push/push.service';
 import { PromosService } from '../promos/promos.service';
 import { MapsService } from '../maps/maps.service';
@@ -67,6 +69,8 @@ export class TripService {
     private readonly eventsGateway: EventsGateway,
     @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
+    private readonly ledgerService: LedgerService,
+    private readonly settlementService: CashSettlementService,
     private readonly pushService: PushService,
     private readonly promosService: PromosService,
     private readonly mapsService: MapsService,
@@ -1325,6 +1329,7 @@ export class TripService {
       paymentStatus: trip.paymentStatus,
       driver: driverDetails,
       driverLocation,
+      driverCounterFare: trip.driverCounterFare,
     };
   }
 
@@ -1394,6 +1399,7 @@ export class TripService {
     to: TripStatus,
     actor: 'passenger' | 'driver' | 'system',
     driverId?: string,
+    counterFare?: number,
   ): Promise<Trip> {
     const trip = await this.getTrip(tripId);
     if (!trip) {
@@ -1420,10 +1426,20 @@ export class TripService {
       if (!driverId) {
         throw new AppException('VALIDATION_ERROR', undefined, 'Driver ID is required for matching');
       }
-      updateResult = await this.prisma.$executeRaw`
-        UPDATE trips SET status = ${to}::"TripStatus", driver_id = ${driverId}::uuid
-        WHERE id = ${tripId}::uuid AND status = ${currentStatus}::"TripStatus"
-      `;
+      // When counterFare is provided (counter-fare accept), atomically update
+      // totalFare + clear driverCounterFare in the same CAS statement.
+      if (counterFare != null) {
+        updateResult = await this.prisma.$executeRaw`
+          UPDATE trips SET status = ${to}::"TripStatus", driver_id = ${driverId}::uuid,
+            total_fare = ${counterFare}, driver_counter_fare = NULL
+          WHERE id = ${tripId}::uuid AND status = ${currentStatus}::"TripStatus"
+        `;
+      } else {
+        updateResult = await this.prisma.$executeRaw`
+          UPDATE trips SET status = ${to}::"TripStatus", driver_id = ${driverId}::uuid
+          WHERE id = ${tripId}::uuid AND status = ${currentStatus}::"TripStatus"
+        `;
+      }
     } else if (to === TripStatus.ACTIVE) {
       updateResult = await this.prisma.$executeRaw`
         UPDATE trips SET status = ${to}::"TripStatus", started_at = NOW()
@@ -1436,6 +1452,18 @@ export class TripService {
           payment_status = ${paymentStatus}::"PaymentStatus"
         WHERE id = ${tripId}::uuid AND status = ${currentStatus}::"TripStatus"
       `;
+
+      // P0: Create financial ledger entries for every completed trip
+      if (updateResult > 0) {
+        void this.ledgerService.recordTripCompletion({
+          id: trip.id,
+          driverId: trip.driverId,
+          totalFare: trip.totalFare,
+          paymentMethod: trip.paymentMethod,
+        }).catch((err) => {
+          this.logger.error(`Ledger recording failed for trip ${tripId}: ${err.message}`);
+        });
+      }
     } else if (to === TripStatus.CANCELLED) {
       const cancelReason = `${actor}: cancelled`;
       updateResult = await this.prisma.$executeRaw`

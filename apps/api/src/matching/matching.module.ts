@@ -4,6 +4,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { TripsModule } from '../trips/trips.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { MatchingService } from './matching.service';
 import { CtsService } from './cts.service';
 import { GeoRepository } from './geo.repository';
@@ -17,6 +18,7 @@ import { PlatformSettingsModule } from '../admin/platform-settings.module';
     PushModule,
     forwardRef(() => TripsModule),
     forwardRef(() => RealtimeModule),
+    forwardRef(() => PaymentsModule),
     BullModule.registerQueue({
       name: 'dispatch',
     }),

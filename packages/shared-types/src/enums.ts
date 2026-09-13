@@ -294,3 +294,37 @@ export enum HceService {
   ASSISTANT = 'assistant',
   INTENT_EXTRACT = 'intent_extract',
 }
+
+// ============================================================================
+// P0: CASH LEDGER & SETTLEMENT ENUMS
+// ============================================================================
+
+export enum LedgerEntryType {
+  FARE_COLLECTION = 'fare_collection',
+  CASH_COLLECTED = 'cash_collected',
+  COMMISSION_EARNED = 'commission_earned',
+  COMMISSION_PAID = 'commission_paid',
+  DRIVER_PAYOUT = 'driver_payout',
+  REFUND = 'refund',
+  SUBSCRIPTION_FEE = 'subscription_fee',
+}
+
+export enum SettlementStatus {
+  NOT_APPLICABLE = 'not_applicable',
+  OUTSTANDING = 'outstanding',
+  PARTIALLY_SETTLED = 'partially_settled',
+  SETTLED = 'settled',
+  OVERDUE = 'overdue',
+}
+
+export enum CashSettlementMethod {
+  BANK_TRANSFER = 'bank_transfer',
+  PAYSTACK = 'paystack',
+  IN_PERSON = 'in_person',
+}
+
+export enum CashSettlementStatus {
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  FAILED = 'failed',
+}

@@ -16,6 +16,8 @@ import { PaymentService } from './payment.service';
 import { DisbursementService } from './disbursement.service';
 import { SubscriptionService } from './subscription.service';
 import { EarningsService } from './earnings.service';
+import { LedgerService } from './ledger.service';
+import { CashSettlementService } from './cash-settlement.service';
 import { WebhookHandler } from './webhooks/webhook.handler';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -38,6 +40,12 @@ import {
   FinancialReportQuery,
   FinancialReportResponse,
   WebhookAck,
+  GetWalletResponse,
+  GetWalletLedgerQuery,
+  GetWalletLedgerResponse,
+  SettleCommissionRequest,
+  SettleCommissionResponse,
+  PaginationQuery,
 } from '@higo/shared-types';
 
 @Controller('payments')
@@ -47,6 +55,8 @@ export class PaymentsController {
     private readonly disbursementService: DisbursementService,
     private readonly subscriptionService: SubscriptionService,
     private readonly earningsService: EarningsService,
+    private readonly ledgerService: LedgerService,
+    private readonly settlementService: CashSettlementService,
     private readonly webhookHandler: WebhookHandler,
   ) {}
 
@@ -192,5 +202,64 @@ export class PaymentsController {
     @Query() q: FinancialReportQuery,
   ): Promise<FinancialReportResponse> {
     return this.earningsService.getFinancialReport(q);
+  }
+
+  // ========================================================================
+  // P0: DRIVER WALLET ENDPOINTS
+  // ========================================================================
+
+  @Get('wallet')
+  async getWallet(@CurrentUser() user: AuthUser): Promise<GetWalletResponse> {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can view wallet');
+    }
+    return this.ledgerService.getWalletBalance(user.sub);
+  }
+
+  @Get('wallet/ledger')
+  async getWalletLedger(
+    @CurrentUser() user: AuthUser,
+    @Query() q: GetWalletLedgerQuery,
+  ): Promise<GetWalletLedgerResponse> {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can view ledger');
+    }
+    return this.ledgerService.getDriverLedger(user.sub, q);
+  }
+
+  @Get('wallet/settlement-history')
+  async getSettlementHistory(
+    @CurrentUser() user: AuthUser,
+    @Query() q: PaginationQuery,
+  ) {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can view settlement history');
+    }
+    return this.ledgerService.getSettlementHistory(user.sub, q);
+  }
+
+  @Post('wallet/settle')
+  @HttpCode(HttpStatus.OK)
+  async settleCommission(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: SettleCommissionRequest,
+  ): Promise<SettleCommissionResponse> {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can settle commission');
+    }
+    const result = await this.settlementService.initiateSettlement(user.sub, dto.amount, dto.method);
+    return {
+      settlementId: result.id,
+      amount: result.amount,
+      status: result.status,
+    };
+  }
+
+  @Get('wallet/can-accept-cash')
+  async canAcceptCashTrip(@CurrentUser() user: AuthUser) {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can check cash eligibility');
+    }
+    return this.settlementService.canAcceptCashTrip(user.sub);
   }
 }

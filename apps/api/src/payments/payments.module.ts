@@ -3,11 +3,14 @@ import { PaymentsController } from './payments.controller';
 import { AdminFinancialController } from './admin-financial.controller';
 import { AdminFinanceController } from './admin-finance.controller';
 import { AdminCouponsController } from './admin-coupons.controller';
+import { AdminSettlementsController } from './admin-settlements.controller';
 import { AdminFinanceService } from './admin-finance.service';
 import { PaymentService } from './payment.service';
 import { DisbursementService } from './disbursement.service';
 import { SubscriptionService } from './subscription.service';
 import { EarningsService } from './earnings.service';
+import { LedgerService } from './ledger.service';
+import { CashSettlementService } from './cash-settlement.service';
 import { PaystackClient } from './paystack/paystack.client';
 import { WebhookHandler } from './webhooks/webhook.handler';
 import { FinancialAuditService } from './audit/financial-audit.service';
@@ -19,17 +22,33 @@ import { MatchingModule } from '../matching/matching.module';
 
 @Module({
   imports: [PrismaModule, RedisModule, CryptoModule, AiModule, forwardRef(() => MatchingModule)],
-  controllers: [PaymentsController, AdminFinancialController, AdminFinanceController, AdminCouponsController],
+  controllers: [
+    PaymentsController,
+    AdminFinancialController,
+    AdminFinanceController,
+    AdminCouponsController,
+    AdminSettlementsController,
+  ],
   providers: [
     AdminFinanceService,
     PaymentService,
     DisbursementService,
     SubscriptionService,
     EarningsService,
+    LedgerService,
+    CashSettlementService,
     PaystackClient,
     WebhookHandler,
     FinancialAuditService,
   ],
-  exports: [PaymentService, SubscriptionService, DisbursementService, EarningsService, AdminFinanceService],
+  exports: [
+    PaymentService,
+    SubscriptionService,
+    DisbursementService,
+    EarningsService,
+    AdminFinanceService,
+    LedgerService,
+    CashSettlementService,
+  ],
 })
 export class PaymentsModule {}

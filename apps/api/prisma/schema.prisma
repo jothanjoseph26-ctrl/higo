@@ -372,6 +372,38 @@ enum HceService {
   intent_extract
 }
 
+// --- Cash Ledger & Settlement enums ---
+
+enum LedgerEntryType {
+  fare_collection       // Passenger paid (card/bank)
+  cash_collected        // Driver collected cash from passenger
+  commission_earned     // Platform commission owed
+  commission_paid       // Driver paid commission to platform (settlement)
+  driver_payout         // Platform paid driver (card trips)
+  refund                // Refund issued
+  subscription_fee      // Driver subscription
+}
+
+enum SettlementStatus {
+  not_applicable        // Card trip (auto-settled)
+  outstanding           // Cash trip, commission not yet paid
+  partially_settled     // Partial payment received
+  settled               // Commission fully paid
+  overdue               // Past threshold deadline
+}
+
+enum CashSettlementMethod {
+  bank_transfer
+  paystack
+  in_person
+}
+
+enum CashSettlementStatus {
+  pending
+  confirmed
+  failed
+}
+
 // ============================================================================
 // USERS (passengers)
 // ============================================================================
@@ -492,6 +524,10 @@ model Driver {
   // Financial
   feeOwed               Decimal          @default(0) @map("fee_owed") @db.Decimal(10, 2)
 
+  // P0: Cash ledger & settlement
+  cashCommissionOwed    Int              @default(0) @map("cash_commission_owed") // kobo
+  settlementThreshold   Int              @default(500000) @map("settlement_threshold") // kobo (₦5,000 default)
+
   // Activity tracking (recalculated nightly by DriverActivityJob)
   activityStatus        String           @default("dormant") @map("activity_status") // ActivityStatus enum value
   lastTripAt            DateTime?        @map("last_trip_at")
@@ -527,6 +563,8 @@ model Driver {
   deliveriesAsRider   Delivery[]          @relation("DeliveryRider")
   base44ReferralsReceived Referral[]      @relation("ReferralReferredDriver")
   subscriptionCouponRedemptions SubscriptionCouponRedemption[]
+  ledgerEntries         DriverLedger[]   @relation("DriverLedger")
+  settlements           CashSettlement[] @relation("DriverSettlements")
 
   @@index([kycStatus])
   @@index([isSuspended])
@@ -727,6 +765,10 @@ model Trip {
   cashConfirmedByDriver Boolean   @default(false) @map("cash_confirmed_by_driver")
   cashConfirmedAt      DateTime?  @map("cash_confirmed_at")
 
+  // P0: Cash ledger & settlement tracking
+  settlementStatus      SettlementStatus @default(not_applicable) @map("settlement_status")
+  driverCommissionOwed  Int              @default(0) @map("driver_commission_owed") // kobo
+
   // Driver rejection tracking
   rejectionReason      String?     @map("rejection_reason") @db.VarChar(100)
 
@@ -747,6 +789,7 @@ model Trip {
   fraudEvents          FraudEvent[]    @relation("TripFraudEvents")
   fareWatchAlerts      FareWatchAlert[] @relation("TripFareWatchAlerts")
   landmarkResolutions  LandmarkResolution[] @relation("TripLandmarkResolutions")
+  ledgerEntries        DriverLedger[]   @relation("TripLedger")
 
   @@index([status])
   @@index([passengerId])
@@ -756,6 +799,7 @@ model Trip {
   @@index([negotiationId])
   @@index([createdAt])
   @@index([city])
+  @@index([settlementStatus])
   // GiST on pickup_location for geofencing checks (raw SQL migration):
   //   CREATE INDEX idx_trips_pickup_location ON trips USING GIST (pickup_location);
   @@map("trips")
@@ -1818,4 +1862,49 @@ model WhatsAppMessage {
   @@index([conversationId, createdAt])
   @@index([status])
   @@map("whatsapp_messages")
+}
+
+// ============================================================================
+// P0: CASH LEDGER & SETTLEMENT — Immutable financial records
+// ============================================================================
+
+model DriverLedger {
+  id              String          @id @default(uuid()) @db.Uuid
+  driverId        String          @map("driver_id") @db.Uuid
+  tripId          String?         @map("trip_id") @db.Uuid
+  entryType       LedgerEntryType @map("entry_type")
+  amount          Int             // kobo: positive = credit to driver, negative = debit (commission owed)
+  balanceAfter    Int             @map("balance_after") // running balance snapshot
+  description     String
+  metadata        Json?           @db.JsonB
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  driver          Driver          @relation("DriverLedger", fields: [driverId], references: [id])
+  trip            Trip?           @relation("TripLedger", fields: [tripId], references: [id])
+
+  @@index([driverId])
+  @@index([tripId])
+  @@index([entryType])
+  @@index([createdAt])
+  @@map("driver_ledger")
+}
+
+model CashSettlement {
+  id              String                @id @default(uuid()) @db.Uuid
+  driverId        String                @map("driver_id") @db.Uuid
+  amount          Int                   // kobo
+  method          CashSettlementMethod  @map("method")
+  status          CashSettlementStatus  @default(pending)
+  reference       String?               @unique @map("reference")
+  confirmedBy     String?               @map("confirmed_by") @db.Uuid // admin userId
+  confirmedAt     DateTime?             @map("confirmed_at")
+  metadata        Json?                 @db.JsonB
+  createdAt       DateTime              @default(now()) @map("created_at")
+
+  driver          Driver                @relation("DriverSettlements", fields: [driverId], references: [id])
+
+  @@index([driverId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("cash_settlements")
 }

@@ -40,6 +40,10 @@ import {
   LanguageCode,
   LandmarkType,
   HceService,
+  LedgerEntryType,
+  SettlementStatus,
+  CashSettlementMethod,
+  CashSettlementStatus,
 } from './enums';
 
 // ============================================================================
@@ -76,6 +80,10 @@ export {
   ComplianceEventType,
   NotificationType,
   HceService,
+  LedgerEntryType,
+  SettlementStatus,
+  CashSettlementMethod,
+  CashSettlementStatus,
 } from './enums';
 
 // ============================================================================
@@ -739,4 +747,82 @@ export interface BookingIntent {
   lng: number | null;
   vehicleType: VehicleType | null;
   confidence: number;
+}
+
+// ============================================================================
+// P0: CASH LEDGER & SETTLEMENT TYPES
+// ============================================================================
+
+/** Immutable ledger entry for a driver's financial transactions. */
+export interface DriverLedgerEntry {
+  id: UUID;
+  tripId: UUID | null;
+  entryType: LedgerEntryType;
+  amount: Kobo;
+  balanceAfter: Kobo;
+  description: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: ISODateString;
+}
+
+/** Driver's wallet balance breakdown. */
+export interface WalletBalance {
+  availableBalance: Kobo;
+  cashCollected: Kobo;
+  commissionOwed: Kobo;
+  commissionSettled: Kobo;
+  outstanding: Kobo;
+}
+
+/** Per-trip earnings detail for driver view. */
+export interface TripEarningsDetail {
+  tripId: UUID;
+  date: ISODateString;
+  grossFare: Kobo;
+  platformFee: Kobo;
+  driverPayout: Kobo;
+  paymentMethod: PaymentMethod;
+  settlementStatus: SettlementStatus;
+}
+
+/** Driver settlement summary for admin dashboard. */
+export interface DriverSettlementSummary {
+  driverId: UUID;
+  driverName: string;
+  cashCollected: Kobo;
+  commissionOwed: Kobo;
+  tripsCount: number;
+  status: 'outstanding' | 'partial' | 'settled';
+}
+
+/** Cash collection dashboard for admin. */
+export interface CashCollectionDashboard {
+  totalCashCollected: Kobo;
+  totalCommissionOutstanding: Kobo;
+  totalDriverEarnings: Kobo;
+  unsettledTripCount: number;
+  drivers: DriverSettlementSummary[];
+}
+
+/** Cash trip completion alert for admin activity feed. */
+export interface CashTripAlert {
+  tripId: UUID;
+  driverId: UUID;
+  driverName: string;
+  fare: Kobo;
+  commission: Kobo;
+  driverEarnings: Kobo;
+  settlementStatus: SettlementStatus;
+  completedAt: ISODateString;
+}
+
+/** Cash settlement record (driver payment to platform). */
+export interface CashSettlementRecord {
+  id: UUID;
+  amount: Kobo;
+  method: CashSettlementMethod;
+  status: CashSettlementStatus;
+  reference: string | null;
+  confirmedAt: ISODateString | null;
+  createdAt: ISODateString;
 }

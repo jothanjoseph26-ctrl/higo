@@ -21,6 +21,7 @@ import {
   Inbox,
   Activity,
   Gauge,
+  Wallet,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -39,6 +40,7 @@ export const Sidebar: React.FC = () => {
     { to: '/weekly-kpis', label: 'Weekly KPIs', icon: Gauge },
     { to: '/transaction-logs', label: 'Transaction Logs', icon: Receipt },
     { to: '/refund-management', label: 'Refunds', icon: Undo2 },
+    { to: '/cash-settlements', label: 'Cash & Settlements', icon: Wallet, roles: ['super_admin', 'admin'] },
     { to: '/complaints-inbox', label: 'Complaints', icon: Inbox },
     { to: '/disputes', label: 'Disputes', icon: Scale },
     { to: '/zones', label: 'Zones/Geofencing', icon: MapPin },

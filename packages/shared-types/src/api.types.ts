@@ -49,6 +49,12 @@ import {
   LanguageCode,
   PromoCode,
   Conversation,
+  WalletBalance,
+  DriverLedgerEntry,
+  CashCollectionDashboard,
+  DriverSettlementSummary,
+  CashTripAlert,
+  CashSettlementRecord,
 } from './domain.types';
 
 import {
@@ -57,6 +63,10 @@ import {
   HceService,
   FraudEventStatus,
   RideMode,
+  LedgerEntryType,
+  SettlementStatus,
+  CashSettlementMethod,
+  CashSettlementStatus,
 } from './enums';
 
 // ============================================================================
@@ -1225,4 +1235,67 @@ export interface HealthCheckResponse {
   uptime: number;
   database: 'connected' | 'disconnected';
   redis: 'connected' | 'disconnected';
+}
+
+// ============================================================================
+// P0: CASH LEDGER & SETTLEMENT API TYPES
+// ============================================================================
+
+// --- Driver Wallet ---
+
+export type GetWalletResponse = WalletBalance;
+
+export interface GetWalletLedgerQuery extends PaginationQuery {
+  entryType?: LedgerEntryType;
+}
+
+export type GetWalletLedgerResponse = PaginatedResponse<DriverLedgerEntry>;
+
+export type GetWalletSettlementHistoryResponse = PaginatedResponse<CashSettlementRecord>;
+
+export interface SettleCommissionRequest {
+  amount: Kobo;
+  method: CashSettlementMethod;
+}
+
+export interface SettleCommissionResponse {
+  settlementId: UUID;
+  amount: Kobo;
+  status: CashSettlementStatus;
+}
+
+// --- Admin Settlements ---
+
+export interface GetCashDashboardQuery {
+  from?: string;
+  to?: string;
+}
+
+export type GetCashDashboardResponse = CashCollectionDashboard;
+
+export interface GetDriverSettlementsQuery extends PaginationQuery {
+  status?: SettlementStatus;
+}
+
+export type GetDriverSettlementsResponse = PaginatedResponse<DriverSettlementSummary>;
+
+export interface ConfirmSettlementRequest {
+  confirmedBy: UUID;
+}
+
+export type ConfirmSettlementResponse = CashSettlementRecord;
+
+export interface UpdateSettlementThresholdRequest {
+  thresholdKobo: Kobo;
+}
+
+export type GetCashAlertsResponse = PaginatedResponse<CashTripAlert>;
+
+// --- Driver trip request with threshold check ---
+
+export interface CanAcceptCashTripResponse {
+  allowed: boolean;
+  reason?: string;
+  outstandingKobo?: Kobo;
+  thresholdKobo?: Kobo;
 }
