@@ -88,13 +88,13 @@ export class CallsService {
   }
 
   async getCall(callId: string): Promise<CallRecord | null> {
-    const data = await this.redis.get(`${CALL_STATUS_KEY}${callId}`);
+    const data = await this.getRedis().get(`${CALL_STATUS_KEY}${callId}`);
     if (!data) return null;
     return JSON.parse(data) as CallRecord;
   }
 
   async getActiveCallForTrip(tripId: string): Promise<CallRecord | null> {
-    const callId = await this.redis.get(`${CALL_TRIP_KEY}${tripId}`);
+    const callId = await this.getRedis().get(`${CALL_TRIP_KEY}${tripId}`);
     if (!callId) return null;
     return this.getCall(callId);
   }
@@ -129,7 +129,7 @@ export class CallsService {
   }
 
   async endCallForTrip(tripId: string): Promise<CallRecord | null> {
-    const callId = await this.redis.get(`${CALL_TRIP_KEY}${tripId}`);
+    const callId = await this.getRedis().get(`${CALL_TRIP_KEY}${tripId}`);
     if (!callId) return null;
     const record = await this.getCall(callId);
     await this.endCall(callId);
