@@ -386,19 +386,32 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const driver = await this.prisma.driver.findUnique({ where: { id: driverId }, select: { name: true } });
 
     // Store counter-fare + assign driver to the trip
-    await this.prisma.trip.update({
-      where: { id: payload.tripId },
-      data: { driverCounterFare: counterFare, driverId: driverId },
-    });
+    try {
+      await this.prisma.trip.update({
+        where: { id: payload.tripId },
+        data: { driverCounterFare: counterFare, driverId: driverId },
+      });
+    } catch (err) {
+      this.logger.error(`Failed to assign driver to trip ${payload.tripId}: ${err}`);
+      client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
+        tripId: payload.tripId,
+        reason: 'Failed to save offer',
+      });
+      return;
+    }
 
-    // Emit counter-fare to passenger
-    this.server.to(`passenger:${trip.passengerId}`).emit(SOCKET_EVENTS.TRIP_COUNTER_FARE, {
-      tripId: payload.tripId,
-      driverId,
-      driverName: driver?.name || 'Your driver',
-      counterFare,
-      originalFare: trip.totalFare,
-    });
+    // Emit counter-fare to passenger (non-blocking — log if passenger is offline)
+    try {
+      this.server.to(`passenger:${trip.passengerId}`).emit(SOCKET_EVENTS.TRIP_COUNTER_FARE, {
+        tripId: payload.tripId,
+        driverId,
+        driverName: driver?.name || 'Your driver',
+        counterFare,
+        originalFare: trip.totalFare,
+      });
+    } catch (err) {
+      this.logger.warn(`Socket emit failed (passenger may be offline): ${err}`);
+    }
 
     this.logger.log(`Counter-fare ₦${counterFare} (tier: ${selected.tier}) sent to passenger ${trip.passengerId} for trip ${payload.tripId}`);
   }
@@ -548,14 +561,8 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
       const driverId = trip.driverId;
 
-      // Update fare + match the trip to this driver (same as acceptOffer logic)
-      await this.prisma.trip.update({
-        where: { id: payload.tripId },
-        data: { totalFare: counterFare, driverCounterFare: null },
-      });
-
-      // Transition trip to MATCHED
-      await this.tripService.transition(payload.tripId, TripStatus.MATCHED, 'driver', driverId);
+      // Atomic: update totalFare + clear driverCounterFare + transition to MATCHED in one SQL statement
+      await this.tripService.transition(payload.tripId, TripStatus.MATCHED, 'driver', driverId, counterFare);
 
       // Cancel other offers
       await this.matchingService.cancelOtherOffersForTrip(payload.tripId, driverId);

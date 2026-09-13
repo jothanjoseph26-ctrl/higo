@@ -393,6 +393,31 @@ export class MatchingService {
     return this.cancelOtherOffers(tripId, acceptedDriverId);
   }
 
+  /** Release all Redis offer keys for a trip (used by auto-cancel cron). */
+  async releaseOfferKeys(tripId: string): Promise<void> {
+    const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
+    const offeredStrList = await this.redis.raw.smembers(offeredDriversKey);
+
+    for (const driverId of offeredStrList) {
+      const key = this.offerKey(tripId, driverId);
+      const offerStr = await this.redis.get(key);
+      if (!offerStr) continue;
+
+      const offer = JSON.parse(offerStr);
+      if (offer.jobId) {
+        try {
+          const job = await this.dispatchQueue.getJob(offer.jobId);
+          if (job) await job.remove();
+        } catch {}
+      }
+
+      await this.redis.del(key);
+      await this.redis.raw.srem(this.driverOffersKey(driverId), tripId);
+    }
+
+    await this.redis.del(offeredDriversKey);
+  }
+
   private async cancelOtherOffers(tripId: string, acceptedDriverId: string): Promise<void> {
     const offeredDriversKey = `dispatch:offered_drivers:${tripId}`;
     const offeredStrList = await this.redis.raw.smembers(offeredDriversKey);
