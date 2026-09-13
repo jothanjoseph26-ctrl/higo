@@ -409,4 +409,113 @@ export class CashSettlementService {
       `Threshold updated for driver ${driverId.slice(0, 8)}: ₦${(thresholdKobo / 100).toLocaleString()}`,
     );
   }
+
+  /**
+   * Backfill: create ledger entries for all existing completed cash trips that don't have them.
+   * Called once via POST /admin/settlements/backfill
+   */
+  async backfillExistingCashTrips(): Promise<{
+    tripsProcessed: number;
+    ledgerEntriesCreated: number;
+    driversUpdated: number;
+  }> {
+    const commissionRate = Number(this.config.get<number>('PLATFORM_COMMISSION_RATE', 0.10));
+
+    const cashTrips = await this.prisma.trip.findMany({
+      where: {
+        paymentMethod: 'cash',
+        status: 'completed',
+        driverId: { not: null },
+      },
+      include: { ledgerEntries: true },
+    });
+
+    const tripsNeedingBackfill = cashTrips.filter((t) => t.ledgerEntries.length === 0);
+    this.logger.log(`Backfill: ${tripsNeedingBackfill.length} of ${cashTrips.length} cash trips need ledger entries`);
+
+    const driverTrips = new Map<string, typeof tripsNeedingBackfill>();
+    for (const trip of tripsNeedingBackfill) {
+      const driverId = trip.driverId!;
+      if (!driverTrips.has(driverId)) driverTrips.set(driverId, []);
+      driverTrips.get(driverId)!.push(trip);
+    }
+
+    let tripsProcessed = 0;
+    let ledgerEntriesCreated = 0;
+    let driversUpdated = 0;
+
+    for (const [driverId, trips] of driverTrips) {
+      try {
+        const existingBalance = await this.prisma.driverLedger.aggregate({
+          where: { driverId },
+          _sum: { amount: true },
+        });
+        let runningBalance = existingBalance._sum.amount || 0;
+        let totalCommissionOwed = 0;
+
+        const sortedTrips = trips.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        const entries: Array<{
+          driverId: string;
+          tripId: string;
+          entryType: string;
+          amount: number;
+          balanceAfter: number;
+          description: string;
+          createdAt: Date;
+        }> = [];
+
+        for (const trip of sortedTrips) {
+          const commission = Math.round(trip.totalFare * commissionRate);
+
+          runningBalance += trip.totalFare;
+          entries.push({
+            driverId,
+            tripId: trip.id,
+            entryType: 'cash_collected',
+            amount: trip.totalFare,
+            balanceAfter: runningBalance,
+            description: `Cash collected — trip ${trip.id.slice(0, 8)} (backfill)`,
+            createdAt: trip.completedAt || trip.createdAt,
+          });
+
+          runningBalance -= commission;
+          entries.push({
+            driverId,
+            tripId: trip.id,
+            entryType: 'commission_earned',
+            amount: -commission,
+            balanceAfter: runningBalance,
+            description: `HiGO commission (10%) — trip ${trip.id.slice(0, 8)} (backfill)`,
+            createdAt: trip.completedAt || trip.createdAt,
+          });
+
+          totalCommissionOwed += commission;
+        }
+
+        await this.prisma.driverLedger.createMany({ data: entries as any });
+
+        for (const trip of sortedTrips) {
+          const commission = Math.round(trip.totalFare * commissionRate);
+          await this.prisma.trip.update({
+            where: { id: trip.id },
+            data: { settlementStatus: 'outstanding', driverCommissionOwed: commission },
+          });
+        }
+
+        await this.prisma.driver.update({
+          where: { id: driverId },
+          data: { cashCommissionOwed: { increment: totalCommissionOwed } },
+        });
+
+        driversUpdated++;
+        tripsProcessed += trips.length;
+        ledgerEntriesCreated += entries.length;
+      } catch (err: any) {
+        this.logger.error(`Backfill error for driver ${driverId}: ${err.message}`);
+      }
+    }
+
+    this.logger.log(`Backfill complete: ${tripsProcessed} trips, ${ledgerEntriesCreated} entries, ${driversUpdated} drivers`);
+    return { tripsProcessed, ledgerEntriesCreated, driversUpdated };
+  }
 }
