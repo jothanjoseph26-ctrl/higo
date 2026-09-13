@@ -95,10 +95,4 @@ export class AdminSettlementsController {
   ): Promise<GetCashAlertsResponse> {
     return this.settlementService.getCashAlerts(q);
   }
-
-  @Post('backfill')
-  @HttpCode(HttpStatus.OK)
-  async backfillCashLedger() {
-    return this.settlementService.backfillExistingCashTrips();
-  }
 }
