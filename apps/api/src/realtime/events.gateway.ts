@@ -578,6 +578,12 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         select: { name: true },
       });
 
+    // Join passenger to trip room so they receive driver:location_update broadcasts immediately
+    const passengerSockets = await this.server.in(`passenger:${passengerId}`).fetchSockets();
+    for (const pSock of passengerSockets) {
+      pSock.join(`trip:${payload.tripId}`);
+    }
+
     // Emit TRIP_MATCHED to passenger
     this.server.to(`passenger:${passengerId}`).emit(SOCKET_EVENTS.TRIP_MATCHED, {
       tripId: payload.tripId,
