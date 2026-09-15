@@ -61,4 +61,9 @@ export class UpdateCouponDto {
   @IsOptional()
   @IsDateString()
   validUntil?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  durationDays?: number;
 }

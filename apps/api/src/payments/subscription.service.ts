@@ -332,6 +332,7 @@ export class SubscriptionService {
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.validUntil !== undefined && { validUntil: new Date(dto.validUntil) }),
+        ...(dto.durationDays !== undefined && { durationDays: dto.durationDays }),
       },
     });
 
