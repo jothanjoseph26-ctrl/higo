@@ -250,6 +250,27 @@ export class TripsController {
     return this.tripService.getTrip(activeTrip.id);
   }
 
+  @Get('passenger/active')
+  async getPassengerActiveTrip(@CurrentUser() user: AuthUser) {
+    if (user.type !== 'passenger') {
+      throw new AppException('FORBIDDEN', undefined, 'Only passengers can access this endpoint');
+    }
+    
+    const activeTrip = await this.prisma.trip.findFirst({
+      where: {
+        passengerId: user.sub,
+        status: { in: ['requested', 'matched', 'arrived', 'active'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    
+    if (!activeTrip) {
+      return null;
+    }
+    
+    return this.tripService.getTrip(activeTrip.id);
+  }
+
   @Get(':id')
   async getTrip(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     const trip = await this.tripService.getTrip(id);

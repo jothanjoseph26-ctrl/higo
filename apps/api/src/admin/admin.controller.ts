@@ -1441,6 +1441,84 @@ export class AdminController {
   }
 
   @Public()
+  @Post('migrate-vehicle-pricing')
+  async migrateVehiclePricing() {
+    const results: string[] = [];
+
+    // 1. Global pricing (city=NULL) — ensure keke, car, bike all exist
+    const globalDefaults = [
+      { vehicleType: 'keke', baseFare: 50000, perKmFare: 12000, perMinFare: 1500, minFare: 70000 },
+      { vehicleType: 'car', baseFare: 100000, perKmFare: 20000, perMinFare: 2500, minFare: 150000 },
+      { vehicleType: 'bike', baseFare: 30000, perKmFare: 8000, perMinFare: 1000, minFare: 50000 },
+    ];
+    for (const p of globalDefaults) {
+      const existing = await this.prisma.pricingConfig.findFirst({
+        where: { vehicleType: p.vehicleType as any, city: null, isActive: true },
+      });
+      if (!existing) {
+        await this.prisma.pricingConfig.create({
+          data: {
+            vehicleType: p.vehicleType as any,
+            city: null,
+            baseFare: p.baseFare,
+            perKmFare: p.perKmFare,
+            perMinFare: p.perMinFare,
+            minFare: p.minFare,
+            roundingIncrement: 5000,
+            currency: 'NGN',
+            isActive: true,
+          },
+        });
+        results.push(`Created global ${p.vehicleType} pricing`);
+      } else {
+        results.push(`Global ${p.vehicleType} pricing already exists`);
+      }
+    }
+
+    // 2. City-specific pricing — for each city, ensure all 3 vehicle types exist
+    const cities = await this.prisma.$queryRaw<{ name: string }[]>`SELECT DISTINCT name FROM cities WHERE status = 'active'`;
+    const cityPricingMap: Record<string, Record<string, { baseFare: number; perKmFare: number; perMinFare: number; minFare: number }>> = {
+      Warri: {
+        keke: { baseFare: 50000, perKmFare: 30000, perMinFare: 1500, minFare: 50000 },
+        car: { baseFare: 100000, perKmFare: 25000, perMinFare: 2500, minFare: 500000 },
+        bike: { baseFare: 30000, perKmFare: 15000, perMinFare: 1000, minFare: 200000 },
+      },
+    };
+    const defaultCityPricing: Record<string, { baseFare: number; perKmFare: number; perMinFare: number; minFare: number }> = {
+      keke: { baseFare: 50000, perKmFare: 12000, perMinFare: 1500, minFare: 70000 },
+      car: { baseFare: 100000, perKmFare: 20000, perMinFare: 2500, minFare: 150000 },
+      bike: { baseFare: 30000, perKmFare: 8000, perMinFare: 1000, minFare: 50000 },
+    };
+
+    for (const city of cities) {
+      const pricing = cityPricingMap[city.name] || defaultCityPricing;
+      for (const [vt, p] of Object.entries(pricing)) {
+        const existing = await this.prisma.pricingConfig.findFirst({
+          where: { vehicleType: vt as any, city: city.name, isActive: true },
+        });
+        if (!existing) {
+          await this.prisma.pricingConfig.create({
+            data: {
+              vehicleType: vt as any,
+              city: city.name,
+              baseFare: p.baseFare,
+              perKmFare: p.perKmFare,
+              perMinFare: p.perMinFare,
+              minFare: p.minFare,
+              roundingIncrement: 5000,
+              currency: 'NGN',
+              isActive: true,
+            },
+          });
+          results.push(`Created ${vt} pricing for ${city.name}`);
+        }
+      }
+    }
+
+    return { success: true, results };
+  }
+
+  @Public()
   @Get('finance-summary')
   async getFinanceSummary() {
     const trips = await this.prisma.$queryRaw<any[]>`
