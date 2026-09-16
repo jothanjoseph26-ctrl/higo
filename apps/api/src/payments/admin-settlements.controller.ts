@@ -12,8 +12,11 @@ import {
 } from '@nestjs/common';
 import { CashSettlementService } from './cash-settlement.service';
 import { LedgerService } from './ledger.service';
+import { FinancialEventService } from './financial-event.service';
+import { FinancialBackfillService } from './financial-backfill.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { AuthUser } from '../common/types/auth-user';
 import { AppException } from '../common/errors/app.exception';
@@ -36,6 +39,8 @@ export class AdminSettlementsController {
   constructor(
     private readonly settlementService: CashSettlementService,
     private readonly ledgerService: LedgerService,
+    private readonly financialEventService: FinancialEventService,
+    private readonly financialBackfillService: FinancialBackfillService,
   ) {}
 
   @Get('dashboard')
@@ -94,5 +99,29 @@ export class AdminSettlementsController {
     @Query() q: PaginationQuery,
   ): Promise<GetCashAlertsResponse> {
     return this.settlementService.getCashAlerts(q);
+  }
+
+  // ── PHASE 1C: Reconciliation & Backfill ──
+
+  @Get('reconcile/:driverId')
+  async reconcileDriver(@Param('driverId') driverId: string) {
+    return this.financialEventService.reconcileBalances(driverId);
+  }
+
+  @Get('balances/:driverId')
+  async getDriverBalances(@Param('driverId') driverId: string) {
+    return this.financialEventService.getDriverBalances(driverId);
+  }
+
+  @Post('backfill/:driverId')
+  @HttpCode(HttpStatus.OK)
+  async backfillDriver(@Param('driverId') driverId: string) {
+    return this.financialBackfillService.backfillDriver(driverId);
+  }
+
+  @Post('backfill-all')
+  @HttpCode(HttpStatus.OK)
+  async backfillAll(@Body() body: { batchSize?: number }) {
+    return this.financialBackfillService.backfillAll(body.batchSize ?? 50);
   }
 }

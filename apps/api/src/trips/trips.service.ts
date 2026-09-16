@@ -1552,6 +1552,7 @@ export class TripService {
     } else if (to === TripStatus.ARRIVED) {
       this.eventsGateway.server
         .to(`trip:${tripId}`)
+        .to(`passenger:${trip.passengerId}`)
         .emit(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED_AT_PICKUP, { tripId, status: 'arrived' });
 
       void this.pushService.sendToPassenger(trip.passengerId, {
@@ -1562,6 +1563,7 @@ export class TripService {
     } else if (to === TripStatus.ACTIVE) {
       this.eventsGateway.server
         .to(`trip:${tripId}`)
+        .to(`passenger:${trip.passengerId}`)
         .emit(SOCKET_EVENTS.TRIP_STARTED, {
           tripId,
           startedAt: updatedTrip.startedAt!,
@@ -1574,6 +1576,7 @@ export class TripService {
 
       this.eventsGateway.server
         .to(`trip:${tripId}`)
+        .to(`passenger:${trip.passengerId}`)
         .emit(SOCKET_EVENTS.TRIP_COMPLETED, {
           tripId,
           fare: updatedTrip.totalFare,

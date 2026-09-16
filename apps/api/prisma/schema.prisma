@@ -375,13 +375,59 @@ enum HceService {
 // --- Cash Ledger & Settlement enums ---
 
 enum LedgerEntryType {
-  fare_collection       // Passenger paid (card/bank)
-  cash_collected        // Driver collected cash from passenger
-  commission_earned     // Platform commission owed
-  commission_paid       // Driver paid commission to platform (settlement)
-  driver_payout         // Platform paid driver (card trips)
-  refund                // Refund issued
-  subscription_fee      // Driver subscription
+  // ── CANONICAL (Phase 1B) ──
+  TRIP_EARNING          // +EARNINGS: driver earned trip fare
+  BONUS                 // +EARNINGS: bonus credited
+  ADJUSTMENT_CREDIT     // +EARNINGS: manual credit
+  PLATFORM_COMMISSION   // +LIABILITY: cash/outstanding commission owed
+  SUBSCRIPTION_CHARGE   // +LIABILITY: subscription owed
+  SUBSCRIPTION_PAYMENT  // -LIABILITY: driver paid subscription
+  PENALTY               // +LIABILITY: penalty owed
+  ADJUSTMENT_DEBIT      // +LIABILITY: additional liability
+  COMMISSION_PAYMENT    // -LIABILITY + SETTLEMENT: driver settled commission
+  DRIVER_PAYOUT         // -EARNINGS: platform disbursed funds to driver
+  REFUND                // reverses original entries (sign follows original)
+  REVERSAL              // reverses any entry (sign follows original)
+  CASH_COLLECTION       // METRIC: driver received cash (not a balance)
+
+  // ── LEGACY (deprecated — database values preserved via @map) ──
+  LEGACY_FARE_COLLECTION     @map("fare_collection")
+  LEGACY_CASH_COLLECTED      @map("cash_collected")
+  LEGACY_COMMISSION_EARNED   @map("commission_earned")
+  LEGACY_COMMISSION_PAID     @map("commission_paid")
+  LEGACY_DRIVER_PAYOUT       @map("driver_payout")
+  LEGACY_REFUND              @map("refund")
+  LEGACY_SUBSCRIPTION_FEE    @map("subscription_fee")
+}
+
+// ── PHASE 1B: Business event types (what happened) ──
+enum FinancialEventType {
+  TRIP_COMPLETED
+  COMMISSION_SETTLED
+  SUBSCRIPTION_CHARGED
+  SUBSCRIPTION_PAID
+  BONUS_GRANTED
+  PENALTY_APPLIED
+  ADJUSTMENT_CREDITED
+  ADJUSTMENT_DEBITED
+  REFUND_ISSUED
+  PAYOUT_COMPLETED
+  ENTRY_REVERSED
+}
+
+// ── PHASE 1B: Balance position types ──
+enum BalanceType {
+  EARNINGS       // Driver's available balance
+  LIABILITY      // Driver's commission debt to platform
+  SETTLEMENT     // Settlement tracking
+  METRIC         // Operational metrics (CASH_COLLECTION)
+}
+
+// ── PHASE 1B: Settlement allocation status ──
+enum SettlementAllocationStatus {
+  pending
+  allocated
+  partial
 }
 
 enum SettlementStatus {
@@ -565,6 +611,10 @@ model Driver {
   subscriptionCouponRedemptions SubscriptionCouponRedemption[]
   ledgerEntries         DriverLedger[]   @relation("DriverLedger")
   settlements           CashSettlement[] @relation("DriverSettlements")
+  financialEvents       FinancialEvent[] @relation("FinancialEvents")
+  ledgerEarningsBalance Int              @default(0) @map("ledger_earnings_balance")
+  ledgerLiabilityBalance Int             @default(0) @map("ledger_liability_balance")
+  ledgerSettlementBalance Int            @default(0) @map("ledger_settlement_balance")
 
   @@index([kycStatus])
   @@index([isSuspended])
@@ -790,6 +840,7 @@ model Trip {
   fareWatchAlerts      FareWatchAlert[] @relation("TripFareWatchAlerts")
   landmarkResolutions  LandmarkResolution[] @relation("TripLandmarkResolutions")
   ledgerEntries        DriverLedger[]   @relation("TripLedger")
+  financialEvents      FinancialEvent[] @relation("TripFinancialEvents")
 
   @@index([status])
   @@index([passengerId])
@@ -1890,21 +1941,89 @@ model DriverLedger {
 }
 
 model CashSettlement {
-  id              String                @id @default(uuid()) @db.Uuid
-  driverId        String                @map("driver_id") @db.Uuid
-  amount          Int                   // kobo
-  method          CashSettlementMethod  @map("method")
-  status          CashSettlementStatus  @default(pending)
-  reference       String?               @unique @map("reference")
-  confirmedBy     String?               @map("confirmed_by") @db.Uuid // admin userId
-  confirmedAt     DateTime?             @map("confirmed_at")
-  metadata        Json?                 @db.JsonB
-  createdAt       DateTime              @default(now()) @map("created_at")
+  id              String                      @id @default(uuid()) @db.Uuid
+  driverId        String                      @map("driver_id") @db.Uuid
+  amount          Int                         // kobo
+  method          CashSettlementMethod        @map("method")
+  status          CashSettlementStatus        @default(pending)
+  reference       String?                     @unique @map("reference")
+  confirmedBy     String?                     @map("confirmed_by") @db.Uuid // admin userId
+  confirmedAt     DateTime?                   @map("confirmed_at")
+  metadata        Json?                       @db.JsonB
+  allocationStatus SettlementAllocationStatus @default(pending) @map("allocation_status")
+  allocatedEventId String?                    @map("allocated_event_id") @db.Uuid
+  createdAt       DateTime                    @default(now()) @map("created_at")
 
-  driver          Driver                @relation("DriverSettlements", fields: [driverId], references: [id])
+  driver          Driver                      @relation("DriverSettlements", fields: [driverId], references: [id])
 
   @@index([driverId])
   @@index([status])
   @@index([createdAt])
+  @@index([allocationStatus])
   @@map("cash_settlements")
+}
+
+// ============================================================================
+// PHASE 1B: Financial Event Architecture
+// ============================================================================
+
+model FinancialEvent {
+  id              String               @id @default(uuid()) @db.Uuid
+  driverId        String               @map("driver_id") @db.Uuid
+  eventType       FinancialEventType   @map("event_type")
+  tripId          String?              @map("trip_id") @db.Uuid
+  paymentMethod   PaymentMethod?       @map("payment_method")
+
+  idempotencyKey  String?              @unique @map("idempotency_key") @db.VarChar(255)
+  description     String               @db.VarChar(500)
+  metadata        Json?                @db.JsonB
+  version         Int                  @default(1)
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  driver          Driver               @relation("FinancialEvents", fields: [driverId], references: [id])
+  trip            Trip?                @relation("TripFinancialEvents", fields: [tripId], references: [id])
+  deltas          BalanceMovement[]
+  settlementSources SettlementAllocation[] @relation("SettlementSource")
+  settlementTargets SettlementAllocation[] @relation("SettlementTarget")
+
+  @@index([driverId])
+  @@index([tripId])
+  @@index([eventType])
+  @@index([idempotencyKey])
+  @@index([createdAt])
+  @@map("financial_events")
+}
+
+model BalanceMovement {
+  id              String          @id @default(uuid()) @db.Uuid
+  eventId         String          @map("event_id") @db.Uuid
+  balanceType     BalanceType     @map("balance_type")
+  movementType    LedgerEntryType @map("movement_type")
+  amount          Int             // kobo: signed relative to balance bucket
+
+  allocatedFrom   String?         @map("allocated_from") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  event           FinancialEvent  @relation(fields: [eventId], references: [id])
+
+  @@index([eventId])
+  @@index([balanceType])
+  @@index([movementType])
+  @@index([allocatedFrom])
+  @@map("balance_movements")
+}
+
+model SettlementAllocation {
+  id                String          @id @default(uuid()) @db.Uuid
+  settlementEventId String          @map("settlement_event_id") @db.Uuid
+  liabilityEventId  String          @map("liability_event_id") @db.Uuid
+  amount            Int
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  settlementEvent   FinancialEvent  @relation("SettlementSource", fields: [settlementEventId], references: [id])
+  liabilityEvent    FinancialEvent  @relation("SettlementTarget", fields: [liabilityEventId], references: [id])
+
+  @@index([settlementEventId])
+  @@index([liabilityEventId])
+  @@map("settlement_allocations")
 }

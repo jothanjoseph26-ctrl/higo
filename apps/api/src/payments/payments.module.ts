@@ -11,6 +11,8 @@ import { SubscriptionService } from './subscription.service';
 import { EarningsService } from './earnings.service';
 import { LedgerService } from './ledger.service';
 import { CashSettlementService } from './cash-settlement.service';
+import { FinancialEventService } from './financial-event.service';
+import { FinancialBackfillService } from './financial-backfill.service';
 import { PaystackClient } from './paystack/paystack.client';
 import { WebhookHandler } from './webhooks/webhook.handler';
 import { FinancialAuditService } from './audit/financial-audit.service';
@@ -37,6 +39,8 @@ import { MatchingModule } from '../matching/matching.module';
     EarningsService,
     LedgerService,
     CashSettlementService,
+    FinancialEventService,
+    FinancialBackfillService,
     PaystackClient,
     WebhookHandler,
     FinancialAuditService,
@@ -49,6 +53,8 @@ import { MatchingModule } from '../matching/matching.module';
     AdminFinanceService,
     LedgerService,
     CashSettlementService,
+    FinancialEventService,
+    FinancialBackfillService,
   ],
 })
 export class PaymentsModule {}

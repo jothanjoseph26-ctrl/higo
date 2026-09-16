@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { LedgerEntryType as PrismaLedgerEntryType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  LedgerEntryType,
+  LedgerEntryType as SharedLedgerEntryType,
   SettlementStatus,
   PaymentMethod,
   Kobo,
@@ -13,8 +14,65 @@ import {
   GetWalletLedgerResponse,
   GetWalletSettlementHistoryResponse,
   CashSettlementRecord,
+  FinancialEventType,
+  BalanceType,
 } from '@higo/shared-types';
 import { AppException } from '../common/errors/app.exception';
+import { FinancialEventService } from './financial-event.service';
+
+const SHARED_TO_PRISMA_LEDGER_ENTRY_TYPE: Record<string, PrismaLedgerEntryType> = {
+  [SharedLedgerEntryType.TRIP_EARNING]: PrismaLedgerEntryType.TRIP_EARNING,
+  [SharedLedgerEntryType.BONUS]: PrismaLedgerEntryType.BONUS,
+  [SharedLedgerEntryType.ADJUSTMENT_CREDIT]: PrismaLedgerEntryType.ADJUSTMENT_CREDIT,
+  [SharedLedgerEntryType.PLATFORM_COMMISSION]: PrismaLedgerEntryType.PLATFORM_COMMISSION,
+  [SharedLedgerEntryType.SUBSCRIPTION_CHARGE]: PrismaLedgerEntryType.SUBSCRIPTION_CHARGE,
+  [SharedLedgerEntryType.SUBSCRIPTION_PAYMENT]: PrismaLedgerEntryType.SUBSCRIPTION_PAYMENT,
+  [SharedLedgerEntryType.PENALTY]: PrismaLedgerEntryType.PENALTY,
+  [SharedLedgerEntryType.ADJUSTMENT_DEBIT]: PrismaLedgerEntryType.ADJUSTMENT_DEBIT,
+  [SharedLedgerEntryType.COMMISSION_PAYMENT]: PrismaLedgerEntryType.COMMISSION_PAYMENT,
+  [SharedLedgerEntryType.DRIVER_PAYOUT]: PrismaLedgerEntryType.DRIVER_PAYOUT,
+  [SharedLedgerEntryType.REFUND]: PrismaLedgerEntryType.REFUND,
+  [SharedLedgerEntryType.REVERSAL]: PrismaLedgerEntryType.REVERSAL,
+  [SharedLedgerEntryType.CASH_COLLECTION]: PrismaLedgerEntryType.CASH_COLLECTION,
+  [SharedLedgerEntryType.LEGACY_FARE_COLLECTION]: PrismaLedgerEntryType.LEGACY_FARE_COLLECTION,
+  [SharedLedgerEntryType.LEGACY_CASH_COLLECTED]: PrismaLedgerEntryType.LEGACY_CASH_COLLECTED,
+  [SharedLedgerEntryType.LEGACY_COMMISSION_EARNED]: PrismaLedgerEntryType.LEGACY_COMMISSION_EARNED,
+  [SharedLedgerEntryType.LEGACY_COMMISSION_PAID]: PrismaLedgerEntryType.LEGACY_COMMISSION_PAID,
+  [SharedLedgerEntryType.LEGACY_DRIVER_PAYOUT]: PrismaLedgerEntryType.LEGACY_DRIVER_PAYOUT,
+  [SharedLedgerEntryType.LEGACY_REFUND]: PrismaLedgerEntryType.LEGACY_REFUND,
+  [SharedLedgerEntryType.LEGACY_SUBSCRIPTION_FEE]: PrismaLedgerEntryType.LEGACY_SUBSCRIPTION_FEE,
+};
+
+const PRISMA_TO_SHARED_LEDGER_ENTRY_TYPE: Record<string, SharedLedgerEntryType> = {
+  [PrismaLedgerEntryType.TRIP_EARNING]: SharedLedgerEntryType.TRIP_EARNING,
+  [PrismaLedgerEntryType.BONUS]: SharedLedgerEntryType.BONUS,
+  [PrismaLedgerEntryType.ADJUSTMENT_CREDIT]: SharedLedgerEntryType.ADJUSTMENT_CREDIT,
+  [PrismaLedgerEntryType.PLATFORM_COMMISSION]: SharedLedgerEntryType.PLATFORM_COMMISSION,
+  [PrismaLedgerEntryType.SUBSCRIPTION_CHARGE]: SharedLedgerEntryType.SUBSCRIPTION_CHARGE,
+  [PrismaLedgerEntryType.SUBSCRIPTION_PAYMENT]: SharedLedgerEntryType.SUBSCRIPTION_PAYMENT,
+  [PrismaLedgerEntryType.PENALTY]: SharedLedgerEntryType.PENALTY,
+  [PrismaLedgerEntryType.ADJUSTMENT_DEBIT]: SharedLedgerEntryType.ADJUSTMENT_DEBIT,
+  [PrismaLedgerEntryType.COMMISSION_PAYMENT]: SharedLedgerEntryType.COMMISSION_PAYMENT,
+  [PrismaLedgerEntryType.DRIVER_PAYOUT]: SharedLedgerEntryType.DRIVER_PAYOUT,
+  [PrismaLedgerEntryType.REFUND]: SharedLedgerEntryType.REFUND,
+  [PrismaLedgerEntryType.REVERSAL]: SharedLedgerEntryType.REVERSAL,
+  [PrismaLedgerEntryType.CASH_COLLECTION]: SharedLedgerEntryType.CASH_COLLECTION,
+  [PrismaLedgerEntryType.LEGACY_FARE_COLLECTION]: SharedLedgerEntryType.LEGACY_FARE_COLLECTION,
+  [PrismaLedgerEntryType.LEGACY_CASH_COLLECTED]: SharedLedgerEntryType.LEGACY_CASH_COLLECTED,
+  [PrismaLedgerEntryType.LEGACY_COMMISSION_EARNED]: SharedLedgerEntryType.LEGACY_COMMISSION_EARNED,
+  [PrismaLedgerEntryType.LEGACY_COMMISSION_PAID]: SharedLedgerEntryType.LEGACY_COMMISSION_PAID,
+  [PrismaLedgerEntryType.LEGACY_DRIVER_PAYOUT]: SharedLedgerEntryType.LEGACY_DRIVER_PAYOUT,
+  [PrismaLedgerEntryType.LEGACY_REFUND]: SharedLedgerEntryType.LEGACY_REFUND,
+  [PrismaLedgerEntryType.LEGACY_SUBSCRIPTION_FEE]: SharedLedgerEntryType.LEGACY_SUBSCRIPTION_FEE,
+};
+
+function toPrismaLedgerEntryType(value: SharedLedgerEntryType | string): PrismaLedgerEntryType {
+  return SHARED_TO_PRISMA_LEDGER_ENTRY_TYPE[value] ?? (value as PrismaLedgerEntryType);
+}
+
+function toSharedLedgerEntryType(value: PrismaLedgerEntryType | string): SharedLedgerEntryType {
+  return PRISMA_TO_SHARED_LEDGER_ENTRY_TYPE[value] ?? (value as SharedLedgerEntryType);
+}
 
 @Injectable()
 export class LedgerService {
@@ -24,6 +82,7 @@ export class LedgerService {
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService,
+    private readonly financialEventService: FinancialEventService,
   ) {
     this.commissionRate = Number(config.get<number>('PLATFORM_COMMISSION_RATE', 0.10));
   }
@@ -59,7 +118,7 @@ export class LedgerService {
           data: {
             driverId: trip.driverId,
             tripId: trip.id,
-            entryType: LedgerEntryType.CASH_COLLECTED,
+            entryType: PrismaLedgerEntryType.LEGACY_CASH_COLLECTED,
             amount: trip.totalFare,
             balanceAfter: currentBalance + trip.totalFare,
             description: `Cash collected — trip ${trip.id.slice(0, 8)}`,
@@ -70,7 +129,7 @@ export class LedgerService {
           data: {
             driverId: trip.driverId,
             tripId: trip.id,
-            entryType: LedgerEntryType.COMMISSION_EARNED,
+            entryType: PrismaLedgerEntryType.LEGACY_COMMISSION_EARNED,
             amount: -commission,
             balanceAfter: currentBalance + trip.totalFare - commission,
             description: `HiGO commission (10%) — trip ${trip.id.slice(0, 8)}`,
@@ -104,7 +163,7 @@ export class LedgerService {
           data: {
             driverId: trip.driverId,
             tripId: trip.id,
-            entryType: LedgerEntryType.DRIVER_PAYOUT,
+            entryType: PrismaLedgerEntryType.LEGACY_DRIVER_PAYOUT,
             amount: driverNet,
             balanceAfter: currentBalance + driverNet,
             description: `Earnings — trip ${trip.id.slice(0, 8)}`,
@@ -115,7 +174,7 @@ export class LedgerService {
           data: {
             driverId: trip.driverId,
             tripId: trip.id,
-            entryType: LedgerEntryType.COMMISSION_EARNED,
+            entryType: PrismaLedgerEntryType.LEGACY_COMMISSION_EARNED,
             amount: -commission,
             balanceAfter: currentBalance + driverNet - commission,
             description: `HiGO commission (10%) — trip ${trip.id.slice(0, 8)}`,
@@ -125,6 +184,57 @@ export class LedgerService {
 
       this.logger.log(
         `Card trip ${trip.id.slice(0, 8)} — driver payout ₦${(driverNet / 100).toLocaleString()} recorded`,
+      );
+    }
+
+    // ── PHASE 1C: Dual-write to FinancialEvent + BalanceMovement ──
+    try {
+      const deltas = isCash
+        ? [
+            {
+              balanceType: BalanceType.EARNINGS as const,
+              movementType: SharedLedgerEntryType.TRIP_EARNING as const,
+              amount: driverNet,
+            },
+            {
+              balanceType: BalanceType.LIABILITY as const,
+              movementType: SharedLedgerEntryType.PLATFORM_COMMISSION as const,
+              amount: commission,
+            },
+            {
+              balanceType: BalanceType.METRIC as const,
+              movementType: SharedLedgerEntryType.CASH_COLLECTION as const,
+              amount: trip.totalFare,
+            },
+          ]
+        : [
+            // Card/Bank trip: only earnings. Commission retained at source — no liability.
+            {
+              balanceType: BalanceType.EARNINGS as const,
+              movementType: SharedLedgerEntryType.TRIP_EARNING as const,
+              amount: driverNet,
+            },
+          ];
+
+      await this.financialEventService.createEvent({
+        driverId: trip.driverId,
+        eventType: FinancialEventType.TRIP_COMPLETED,
+        tripId: trip.id,
+        paymentMethod: trip.paymentMethod ?? undefined,
+        idempotencyKey: `trip:${trip.id}:completed`,
+        description: `Trip completed — ${isCash ? 'cash' : 'card'} — ₦${(trip.totalFare / 100).toLocaleString()}`,
+        metadata: {
+          totalFare: trip.totalFare,
+          commission,
+          driverNet,
+          isCash,
+        },
+        deltas,
+      });
+    } catch (error) {
+      // Dual-write failure must not block legacy ledger
+      this.logger.error(
+        `FinancialEvent dual-write failed for trip ${trip.id}: ${error.message}`,
       );
     }
   }
@@ -141,7 +251,7 @@ export class LedgerService {
         data: {
           driverId,
           tripId: null,
-          entryType: LedgerEntryType.COMMISSION_PAID,
+          entryType: PrismaLedgerEntryType.LEGACY_COMMISSION_PAID,
           amount,
           balanceAfter: currentBalance + amount,
           description: `Commission settlement — ${settlementId.slice(0, 8)}`,
@@ -158,6 +268,33 @@ export class LedgerService {
     ]);
 
     this.logger.log(`Settlement recorded: driver ${driverId.slice(0, 8)} paid ₦${(amount / 100).toLocaleString()}`);
+
+    // ── PHASE 1C: Dual-write to FinancialEvent + BalanceMovement ──
+    try {
+      await this.financialEventService.createEvent({
+        driverId,
+        eventType: FinancialEventType.COMMISSION_SETTLED,
+        idempotencyKey: `settlement:${settlementId}`,
+        description: `Commission settlement — ₦${(amount / 100).toLocaleString()}`,
+        metadata: { settlementId, amount },
+        deltas: [
+          {
+            balanceType: BalanceType.LIABILITY,
+            movementType: SharedLedgerEntryType.COMMISSION_PAYMENT,
+            amount: -amount, // -LIABILITY: reduces what driver owes
+          },
+          {
+            balanceType: BalanceType.SETTLEMENT,
+            movementType: SharedLedgerEntryType.COMMISSION_PAYMENT,
+            amount: amount, // +SETTLEMENT: records settlement
+          },
+        ],
+      });
+    } catch (error) {
+      this.logger.error(
+        `FinancialEvent dual-write failed for settlement ${settlementId}: ${error.message}`,
+      );
+    }
   }
 
   /**
@@ -181,27 +318,27 @@ export class LedgerService {
       throw new AppException('NOT_FOUND', undefined, 'Driver not found');
     }
 
-    // Cash collected (sum of CASH_COLLECTED entries)
+    // Cash collected (sum of LEGACY_CASH_COLLECTED entries)
     const cashCollectedResult = await this.prisma.driverLedger.aggregate({
-      where: { driverId, entryType: LedgerEntryType.CASH_COLLECTED },
+      where: { driverId, entryType: PrismaLedgerEntryType.LEGACY_CASH_COLLECTED },
       _sum: { amount: true },
     });
 
-    // Commission owed (sum of COMMISSION_EARNED entries — these are negative)
+    // Commission owed (sum of LEGACY_COMMISSION_EARNED entries — these are negative)
     const commissionOwedResult = await this.prisma.driverLedger.aggregate({
-      where: { driverId, entryType: LedgerEntryType.COMMISSION_EARNED },
+      where: { driverId, entryType: PrismaLedgerEntryType.LEGACY_COMMISSION_EARNED },
       _sum: { amount: true },
     });
 
-    // Commission paid (sum of COMMISSION_PAID entries — these are positive)
+    // Commission paid (sum of LEGACY_COMMISSION_PAID entries — these are positive)
     const commissionPaidResult = await this.prisma.driverLedger.aggregate({
-      where: { driverId, entryType: LedgerEntryType.COMMISSION_PAID },
+      where: { driverId, entryType: PrismaLedgerEntryType.LEGACY_COMMISSION_PAID },
       _sum: { amount: true },
     });
 
     // Available balance from card/bank trips
     const driverPayoutResult = await this.prisma.driverLedger.aggregate({
-      where: { driverId, entryType: LedgerEntryType.DRIVER_PAYOUT },
+      where: { driverId, entryType: PrismaLedgerEntryType.LEGACY_DRIVER_PAYOUT },
       _sum: { amount: true },
     });
 
@@ -228,14 +365,14 @@ export class LedgerService {
    */
   async getDriverLedger(
     driverId: string,
-    q: PaginationQuery & { entryType?: LedgerEntryType },
+    q: PaginationQuery & { entryType?: SharedLedgerEntryType },
   ): Promise<GetWalletLedgerResponse> {
     const limit = Math.min(q.limit || 20, 50);
     const cursor = q.cursor;
 
     const where: any = { driverId };
     if (q.entryType) {
-      where.entryType = q.entryType;
+      where.entryType = toPrismaLedgerEntryType(q.entryType);
     }
 
     const entries = await this.prisma.driverLedger.findMany({
@@ -253,7 +390,7 @@ export class LedgerService {
       items: items.map((e) => ({
         id: e.id,
         tripId: e.tripId,
-        entryType: e.entryType as LedgerEntryType,
+        entryType: toSharedLedgerEntryType(e.entryType),
         amount: e.amount,
         balanceAfter: e.balanceAfter,
         description: e.description,

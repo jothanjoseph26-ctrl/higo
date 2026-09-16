@@ -4,7 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AesService, EncryptedBlob } from '../common/crypto/aes.service';
 import { PaystackClient } from './paystack/paystack.client';
 import { FinancialAuditService } from './audit/financial-audit.service';
-import { BankDetails, Kobo, WithdrawResponse, PaymentStatus, PaymentMethod } from '@higo/shared-types';
+import { FinancialEventService } from './financial-event.service';
+import { BankDetails, Kobo, WithdrawResponse, PaymentStatus, PaymentMethod, FinancialEventType, BalanceType, LedgerEntryType } from '@higo/shared-types';
 import { AppException } from '../common/errors/app.exception';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -18,6 +19,7 @@ export class DisbursementService {
     private readonly aesService: AesService,
     private readonly paystack: PaystackClient,
     private readonly audit: FinancialAuditService,
+    private readonly financialEventService: FinancialEventService,
     config: ConfigService,
   ) {
     this.commissionRate = Number(config.get<number>('PLATFORM_COMMISSION_RATE', 0.10));
@@ -193,6 +195,26 @@ export class DisbursementService {
           beforeStatus: 'processing',
           afterStatus: 'success',
         });
+
+        // ── PHASE 1D: Dual-write to FinancialEvent ──
+        try {
+          await this.financialEventService.createEvent({
+            driverId,
+            eventType: FinancialEventType.PAYOUT_COMPLETED,
+            idempotencyKey: `payout:${reference}`,
+            description: `Driver payout: ${amount} kobo`,
+            metadata: { transferReference: reference },
+            deltas: [
+              {
+                balanceType: BalanceType.EARNINGS,
+                movementType: LedgerEntryType.DRIVER_PAYOUT,
+                amount: -amount,
+              },
+            ],
+          });
+        } catch (error) {
+          this.logger.error(`Failed to create FinancialEvent for payout ${reference}: ${error.message}`);
+        }
       } else if (transfer.status === 'failed') {
         throw new Error('Paystack transfer failed immediately');
       }

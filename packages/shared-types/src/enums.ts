@@ -300,13 +300,56 @@ export enum HceService {
 // ============================================================================
 
 export enum LedgerEntryType {
-  FARE_COLLECTION = 'fare_collection',
-  CASH_COLLECTED = 'cash_collected',
-  COMMISSION_EARNED = 'commission_earned',
-  COMMISSION_PAID = 'commission_paid',
-  DRIVER_PAYOUT = 'driver_payout',
-  REFUND = 'refund',
-  SUBSCRIPTION_FEE = 'subscription_fee',
+  // Canonical (Phase 1B)
+  TRIP_EARNING = 'TRIP_EARNING',
+  BONUS = 'BONUS',
+  ADJUSTMENT_CREDIT = 'ADJUSTMENT_CREDIT',
+  PLATFORM_COMMISSION = 'PLATFORM_COMMISSION',
+  SUBSCRIPTION_CHARGE = 'SUBSCRIPTION_CHARGE',
+  SUBSCRIPTION_PAYMENT = 'SUBSCRIPTION_PAYMENT',
+  PENALTY = 'PENALTY',
+  ADJUSTMENT_DEBIT = 'ADJUSTMENT_DEBIT',
+  COMMISSION_PAYMENT = 'COMMISSION_PAYMENT',
+  DRIVER_PAYOUT = 'DRIVER_PAYOUT',
+  REFUND = 'REFUND',
+  REVERSAL = 'REVERSAL',
+  CASH_COLLECTION = 'CASH_COLLECTION',
+
+  // Legacy (deprecated — database values preserved)
+  LEGACY_FARE_COLLECTION = 'fare_collection',
+  LEGACY_CASH_COLLECTED = 'cash_collected',
+  LEGACY_COMMISSION_EARNED = 'commission_earned',
+  LEGACY_COMMISSION_PAID = 'commission_paid',
+  LEGACY_DRIVER_PAYOUT = 'driver_payout',
+  LEGACY_REFUND = 'refund',
+  LEGACY_SUBSCRIPTION_FEE = 'subscription_fee',
+}
+
+export enum FinancialEventType {
+  TRIP_COMPLETED = 'TRIP_COMPLETED',
+  COMMISSION_SETTLED = 'COMMISSION_SETTLED',
+  SUBSCRIPTION_CHARGED = 'SUBSCRIPTION_CHARGED',
+  SUBSCRIPTION_PAID = 'SUBSCRIPTION_PAID',
+  BONUS_GRANTED = 'BONUS_GRANTED',
+  PENALTY_APPLIED = 'PENALTY_APPLIED',
+  ADJUSTMENT_CREDITED = 'ADJUSTMENT_CREDITED',
+  ADJUSTMENT_DEBITED = 'ADJUSTMENT_DEBITED',
+  REFUND_ISSUED = 'REFUND_ISSUED',
+  PAYOUT_COMPLETED = 'PAYOUT_COMPLETED',
+  ENTRY_REVERSED = 'ENTRY_REVERSED',
+}
+
+export enum BalanceType {
+  EARNINGS = 'EARNINGS',
+  LIABILITY = 'LIABILITY',
+  SETTLEMENT = 'SETTLEMENT',
+  METRIC = 'METRIC',
+}
+
+export enum SettlementAllocationStatus {
+  PENDING = 'pending',
+  ALLOCATED = 'allocated',
+  PARTIAL = 'partial',
 }
 
 export enum SettlementStatus {

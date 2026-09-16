@@ -84,6 +84,9 @@ export {
   SettlementStatus,
   CashSettlementMethod,
   CashSettlementStatus,
+  FinancialEventType,
+  BalanceType,
+  SettlementAllocationStatus,
 } from './enums';
 
 // ============================================================================

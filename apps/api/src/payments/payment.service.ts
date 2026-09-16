@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { PaystackClient } from './paystack/paystack.client';
 import { FinancialAuditService } from './audit/financial-audit.service';
+import { FinancialEventService, CreateFinancialEventDto } from './financial-event.service';
 import { MatchingService } from '../matching/matching.service';
 import {
   InitializePaymentRequest,
@@ -13,6 +14,9 @@ import {
   PaymentStatus,
   SubscriptionTier,
   Kobo,
+  FinancialEventType,
+  BalanceType,
+  LedgerEntryType,
 } from '@higo/shared-types';
 import { AppException } from '../common/errors/app.exception';
 import { createHmac, timingSafeEqual } from 'crypto';
@@ -30,6 +34,7 @@ export class PaymentService {
     private readonly paystack: PaystackClient,
     private readonly audit: FinancialAuditService,
     private readonly config: ConfigService,
+    private readonly financialEventService: FinancialEventService,
     @Inject(forwardRef(() => MatchingService))
     private readonly matchingService: MatchingService,
   ) {
@@ -201,6 +206,30 @@ export class PaymentService {
       afterStatus: 'refunded',
       metadata: { refundReference: refundData.refund_reference },
     });
+
+    // ── PHASE 1D: Dual-write to FinancialEvent ──
+    const refundAmount = amount || trip.totalFare;
+    if (trip.driverId) {
+      try {
+        await this.financialEventService.createEvent({
+          driverId: trip.driverId,
+          eventType: FinancialEventType.REFUND_ISSUED,
+          tripId: trip.id,
+          idempotencyKey: `refund:${trip.id}:${refundData.refund_reference}`,
+          description: `Refund issued for trip ${trip.id}: ${refundAmount} kobo`,
+          metadata: { refundReference: refundData.refund_reference, tripPaystackReference: reference },
+          deltas: [
+            {
+              balanceType: BalanceType.EARNINGS,
+              movementType: LedgerEntryType.REFUND,
+              amount: -refundAmount,
+            },
+          ],
+        });
+      } catch (error) {
+        this.logger.error(`Failed to create FinancialEvent for refund on trip ${trip.id}: ${error.message}`);
+      }
+    }
 
     return {
       refundReference: refundData.refund_reference,
@@ -551,5 +580,30 @@ export class PaymentService {
       afterStatus: 'active',
       metadata: { tier: pending.tier, subscriptionId: pending.id },
     });
+
+    // ── PHASE 1D: Dual-write to FinancialEvent ──
+    try {
+      await this.financialEventService.createEvent({
+        driverId,
+        eventType: FinancialEventType.SUBSCRIPTION_PAID,
+        idempotencyKey: `subscription:${pending.id}:activated`,
+        description: `Subscription paid & activated: ${pending.tier} (${amount} kobo)`,
+        metadata: { subscriptionId: pending.id, tier: pending.tier, reference },
+        deltas: [
+          {
+            balanceType: BalanceType.LIABILITY,
+            movementType: LedgerEntryType.SUBSCRIPTION_PAYMENT,
+            amount: -amount,
+          },
+          {
+            balanceType: BalanceType.SETTLEMENT,
+            movementType: LedgerEntryType.SUBSCRIPTION_PAYMENT,
+            amount,
+          },
+        ],
+      });
+    } catch (error) {
+      this.logger.error(`Failed to create FinancialEvent for subscription ${pending.id}: ${error.message}`);
+    }
   }
 }

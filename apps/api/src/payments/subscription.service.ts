@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaystackClient } from './paystack/paystack.client';
 import { FinancialAuditService } from './audit/financial-audit.service';
+import { FinancialEventService } from './financial-event.service';
 import {
   CreateSubscriptionRequest,
   CreateSubscriptionResponse,
@@ -10,6 +11,9 @@ import {
   RenewSubscriptionResponse,
   SubscriptionTier,
   Kobo,
+  FinancialEventType,
+  BalanceType,
+  LedgerEntryType,
 } from '@higo/shared-types';
 import { AppException } from '../common/errors/app.exception';
 import { CreateCouponDto, UpdateCouponDto } from './dto/coupon.dto';
@@ -23,6 +27,7 @@ export class SubscriptionService {
     private readonly paystack: PaystackClient,
     private readonly audit: FinancialAuditService,
     private readonly config: ConfigService,
+    private readonly financialEventService: FinancialEventService,
   ) {}
 
   private getPlanCode(tier: SubscriptionTier): string {
@@ -215,6 +220,32 @@ export class SubscriptionService {
       metadata: { couponId: coupon.id, code: normalizedCode, tier: coupon.plan },
     });
 
+    // ── PHASE 1D: Dual-write to FinancialEvent (zero-value for audit trail) ──
+    try {
+      const sub = await this.prisma.subscription.findFirst({
+        where: { driverId, tier: coupon.plan, isActive: true, amount: 0 },
+        orderBy: { startedAt: 'desc' },
+      });
+      if (sub) {
+        await this.financialEventService.createEvent({
+          driverId,
+          eventType: FinancialEventType.SUBSCRIPTION_CHARGED,
+          idempotencyKey: `subscription:${sub.id}:coupon`,
+          description: `Free subscription via coupon: ${coupon.plan} (${coupon.durationDays} days)`,
+          metadata: { subscriptionId: sub.id, couponId: coupon.id, code: normalizedCode },
+          deltas: [
+            {
+              balanceType: BalanceType.LIABILITY,
+              movementType: LedgerEntryType.SUBSCRIPTION_CHARGE,
+              amount: 0,
+            },
+          ],
+        });
+      }
+    } catch (error) {
+      this.logger.error(`Failed to create FinancialEvent for coupon subscription: ${error.message}`);
+    }
+
     return {
       success: true,
       message: `Free ${coupon.plan} subscription activated for ${coupon.durationDays} days`,
@@ -246,7 +277,7 @@ export class SubscriptionService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + durationDays);
 
-    await this.prisma.$transaction([
+    const [, subscription] = await this.prisma.$transaction([
       this.prisma.driver.update({
         where: { id: driverId },
         data: {
@@ -276,6 +307,31 @@ export class SubscriptionService {
       afterStatus: 'active',
       metadata: { driverId, tier, durationDays, reason: 'cash_paid_at_office' },
     });
+
+    // ── PHASE 1D: Dual-write to FinancialEvent ──
+    try {
+      await this.financialEventService.createEvent({
+        driverId,
+        eventType: FinancialEventType.SUBSCRIPTION_PAID,
+        idempotencyKey: `subscription:${subscription.id}:activated`,
+        description: `Admin-activated subscription (cash paid): ${tier} (${amount} kobo)`,
+        metadata: { subscriptionId: subscription.id, tier, adminId, durationDays },
+        deltas: [
+          {
+            balanceType: BalanceType.LIABILITY,
+            movementType: LedgerEntryType.SUBSCRIPTION_PAYMENT,
+            amount: -amount,
+          },
+          {
+            balanceType: BalanceType.SETTLEMENT,
+            movementType: LedgerEntryType.SUBSCRIPTION_PAYMENT,
+            amount,
+          },
+        ],
+      });
+    } catch (error) {
+      this.logger.error(`Failed to create FinancialEvent for admin subscription ${subscription.id}: ${error.message}`);
+    }
 
     return { tier, expiresAt: expiresAt.toISOString() };
   }
