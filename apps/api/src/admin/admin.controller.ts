@@ -2685,10 +2685,18 @@ export class AdminController {
 
     // Step 11: Mark failed migrations as applied
     try {
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE _prisma_migrations SET applied_at = NOW(), rolled_back_at = NULL WHERE migration_name IN ('20260916000000_add_financial_event_architecture', '20260916120000_add_payout_completed_event_type') AND rolled_back_at IS NOT NULL;`
+      // First discover the actual column names
+      const cols = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = '_prisma_migrations' ORDER BY ordinal_position`
       );
-      results.push('Migrations marked as applied');
+      const colNames = cols.map((c: any) => c.column_name);
+      results.push(`Migration table columns: ${colNames.join(', ')}`);
+
+      // Delete the failed migration records so Prisma re-applies (they're idempotent now)
+      const deleted = await this.prisma.$executeRawUnsafe(
+        `DELETE FROM _prisma_migrations WHERE migration_name IN ('20260916000000_add_financial_event_architecture', '20260916120000_add_payout_completed_event_type')`
+      );
+      results.push(`Deleted ${deleted} failed migration records`);
     } catch (e: any) {
       results.push(`Migration resolve: ${e.message}`);
     }
