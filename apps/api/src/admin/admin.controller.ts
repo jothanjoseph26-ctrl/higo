@@ -2524,4 +2524,175 @@ export class AdminController {
     }
     return { success: true, results };
   }
+
+  @Post('resolve-migrations')
+  @Roles('super_admin')
+  async resolveMigrations() {
+    const results: string[] = [];
+
+    // Step 1: Add LedgerEntryType enum values (idempotent)
+    const ledgerValues = [
+      'TRIP_EARNING','BONUS','ADJUSTMENT_CREDIT','PLATFORM_COMMISSION',
+      'SUBSCRIPTION_CHARGE','SUBSCRIPTION_PAYMENT','PENALTY','ADJUSTMENT_DEBIT',
+      'COMMISSION_PAYMENT','DRIVER_PAYOUT','REFUND','REVERSAL','CASH_COLLECTION',
+    ];
+    for (const val of ledgerValues) {
+      try {
+        await this.prisma.$executeRawUnsafe(
+          `DO $$ BEGIN ALTER TYPE "LedgerEntryType" ADD VALUE '${val}'; EXCEPTION WHEN duplicate_object THEN null; END $$;`
+        );
+        results.push(`LedgerEntryType: ${val} added`);
+      } catch (e: any) {
+        results.push(`LedgerEntryType: ${val} - ${e.message}`);
+      }
+    }
+
+    // Step 2: Create FinancialEventType enum if not exists
+    try {
+      await this.prisma.$executeRawUnsafe(`
+        DO $$ BEGIN
+          CREATE TYPE "FinancialEventType" AS ENUM (
+            'TRIP_COMPLETED','COMMISSION_SETTLED','SUBSCRIPTION_CHARGED',
+            'SUBSCRIPTION_PAID','BONUS_GRANTED','PENALTY_APPLIED',
+            'ADJUSTMENT_CREDITED','ADJUSTMENT_DEBITED','REFUND_ISSUED',
+            'ENTRY_REVERSED'
+          );
+        EXCEPTION WHEN duplicate_object THEN null; END $$;
+      `);
+      results.push('FinancialEventType: created');
+    } catch (e: any) {
+      results.push(`FinancialEventType: ${e.message}`);
+    }
+
+    // Step 3: Add PAYOUT_COMPLETED to FinancialEventType
+    try {
+      await this.prisma.$executeRawUnsafe(
+        `DO $$ BEGIN ALTER TYPE "FinancialEventType" ADD VALUE 'PAYOUT_COMPLETED'; EXCEPTION WHEN duplicate_object THEN null; END $$;`
+      );
+      results.push('FinancialEventType: PAYOUT_COMPLETED added');
+    } catch (e: any) {
+      results.push(`FinancialEventType PAYOUT_COMPLETED: ${e.message}`);
+    }
+
+    // Step 4: Create BalanceType enum
+    try {
+      await this.prisma.$executeRawUnsafe(`
+        DO $$ BEGIN
+          CREATE TYPE "BalanceType" AS ENUM ('EARNINGS','LIABILITY','SETTLEMENT','METRIC');
+        EXCEPTION WHEN duplicate_object THEN null; END $$;
+      `);
+      results.push('BalanceType: created');
+    } catch (e: any) {
+      results.push(`BalanceType: ${e.message}`);
+    }
+
+    // Step 5: Create SettlementAllocationStatus enum
+    try {
+      await this.prisma.$executeRawUnsafe(`
+        DO $$ BEGIN
+          CREATE TYPE "SettlementAllocationStatus" AS ENUM ('pending','allocated','partial');
+        EXCEPTION WHEN duplicate_object THEN null; END $$;
+      `);
+      results.push('SettlementAllocationStatus: created');
+    } catch (e: any) {
+      results.push(`SettlementAllocationStatus: ${e.message}`);
+    }
+
+    // Step 6: Create financial_events table
+    try {
+      await this.prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS financial_events (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          driver_id UUID NOT NULL REFERENCES drivers(id),
+          event_type "FinancialEventType" NOT NULL,
+          trip_id UUID REFERENCES trips(id),
+          payment_method "PaymentMethod",
+          idempotency_key VARCHAR(255) UNIQUE,
+          description VARCHAR(500) NOT NULL,
+          metadata JSONB,
+          version INTEGER NOT NULL DEFAULT 1,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      results.push('financial_events: created');
+    } catch (e: any) {
+      results.push(`financial_events: ${e.message}`);
+    }
+
+    // Step 7: Create balance_movements table
+    try {
+      await this.prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS balance_movements (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          event_id UUID NOT NULL REFERENCES financial_events(id),
+          balance_type "BalanceType" NOT NULL,
+          movement_type "LedgerEntryType" NOT NULL,
+          amount INTEGER NOT NULL,
+          allocated_from UUID,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      results.push('balance_movements: created');
+    } catch (e: any) {
+      results.push(`balance_movements: ${e.message}`);
+    }
+
+    // Step 8: Create settlement_allocations table
+    try {
+      await this.prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS settlement_allocations (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          settlement_event_id UUID NOT NULL REFERENCES financial_events(id),
+          liability_event_id UUID NOT NULL REFERENCES financial_events(id),
+          amount INTEGER NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      results.push('settlement_allocations: created');
+    } catch (e: any) {
+      results.push(`settlement_allocations: ${e.message}`);
+    }
+
+    // Step 9: Add columns to drivers (idempotent)
+    const driverCols = [
+      ['ledger_earnings_balance', 'INTEGER NOT NULL DEFAULT 0'],
+      ['ledger_liability_balance', 'INTEGER NOT NULL DEFAULT 0'],
+      ['ledger_settlement_balance', 'INTEGER NOT NULL DEFAULT 0'],
+    ];
+    for (const [col, type] of driverCols) {
+      try {
+        await this.prisma.$executeRawUnsafe(
+          `ALTER TABLE drivers ADD COLUMN IF NOT EXISTS ${col} ${type};`
+        );
+        results.push(`drivers.${col}: added`);
+      } catch (e: any) {
+        results.push(`drivers.${col}: ${e.message}`);
+      }
+    }
+
+    // Step 10: Add columns to cash_settlements
+    try {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE cash_settlements ADD COLUMN IF NOT EXISTS allocation_status "SettlementAllocationStatus" NOT NULL DEFAULT 'pending';`
+      );
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE cash_settlements ADD COLUMN IF NOT EXISTS allocated_event_id UUID REFERENCES financial_events(id);`
+      );
+      results.push('cash_settlements: allocation columns added');
+    } catch (e: any) {
+      results.push(`cash_settlements: ${e.message}`);
+    }
+
+    // Step 11: Mark failed migrations as applied
+    try {
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE _prisma_migrations SET applied_at = NOW(), rolled_back_at = NULL WHERE migration_name IN ('20260916000000_add_financial_event_architecture', '20260916120000_add_payout_completed_event_type') AND rolled_back_at IS NOT NULL;`
+      );
+      results.push('Migrations marked as applied');
+    } catch (e: any) {
+      results.push(`Migration resolve: ${e.message}`);
+    }
+
+    return { success: true, results };
+  }
 }
