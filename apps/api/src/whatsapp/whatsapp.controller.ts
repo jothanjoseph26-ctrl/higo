@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { WhatsAppService } from './whatsapp.service';
 
-@Controller('api/whatsapp')
+@Controller('whatsapp')
 export class WhatsAppController {
   constructor(private readonly whatsappService: WhatsAppService) {}
 
