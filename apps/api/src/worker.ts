@@ -3,11 +3,13 @@ import { Logger, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
 import { NestFactory } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { envSchema } from './config/env.schema';
 import { MatchingModule } from './matching/matching.module';
 import { DispatchProcessor } from './matching/dispatch.processor';
 import { JobsModule } from './jobs/jobs.module';
 import { EmailModule } from './email/email.module';
+import { PresenceModule } from './common/services/presence.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -17,6 +19,8 @@ import { ScheduleModule } from '@nestjs/schedule';
       envFilePath: ['../../.env', '.env'],
       validationSchema: envSchema,
     }),
+    EventEmitterModule.forRoot(),
+    PresenceModule,
     ScheduleModule.forRoot(),
     BullModule.forRootAsync({
       imports: [ConfigModule],

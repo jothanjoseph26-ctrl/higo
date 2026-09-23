@@ -74,8 +74,8 @@ interface SendResult {
 }
 
 @Injectable()
-export class WhatsappService {
-  private readonly logger = new Logger(WhatsappService.name);
+export class WhatsAppService {
+  private readonly logger = new Logger(WhatsAppService.name);
 
   private circuitBreaker: CircuitBreakerState = {
     failures: 0,

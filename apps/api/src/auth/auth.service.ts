@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { SmsService } from '../sms/sms.service';
 import { FirebaseService } from '../firebase/firebase.service';
+import { PresenceService } from '../common/services/presence.service';
 import { AppException } from '../common/errors/app.exception';
 import { OtpService } from './otp.service';
 import { VerifyFirebasePhoneDto } from './dto/auth.dto';
@@ -45,6 +46,7 @@ export class AuthService {
     private readonly sms: SmsService,
     private readonly otp: OtpService,
     private readonly firebase: FirebaseService,
+    private readonly presence: PresenceService,
   ) {
     this.googleClient = new OAuth2Client(
       config.getOrThrow<string>('GOOGLE_OAUTH_CLIENT_ID'),
@@ -136,6 +138,7 @@ export class AuthService {
         sub: user.id,
         type: 'passenger',
       });
+      await this.presence.bump('passenger', user.id, { force: true });
       return {
         ...tokens,
         isNewUser,
@@ -174,6 +177,7 @@ export class AuthService {
       sub: driver.id,
       type: 'driver',
     });
+    await this.presence.bump('driver', driver.id, { force: true });
     return {
       ...tokens,
       isNewUser,
@@ -216,6 +220,7 @@ export class AuthService {
         sub: user.id,
         type: 'passenger',
       });
+      await this.presence.bump('passenger', user.id, { force: true });
       return { ...tokens, isNewUser, user: mapUser(user) };
     }
 
@@ -261,6 +266,7 @@ export class AuthService {
       sub: driver.id,
       type: 'driver',
     });
+    await this.presence.bump('driver', driver.id, { force: true });
     return { ...tokens, isNewUser, driver: mapDriver(driver) };
   }
 
@@ -378,6 +384,12 @@ export class AuthService {
       type: payload.type,
       role,
     });
+
+    if (payload.type === 'passenger') {
+      await this.presence.bump('passenger', payload.sub, { force: true });
+    } else if (payload.type === 'driver') {
+      await this.presence.bump('driver', payload.sub, { force: true });
+    }
 
     const result = {
       response: {

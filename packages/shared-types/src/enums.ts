@@ -23,6 +23,13 @@ export enum TripStatus {
   CANCELLED = 'cancelled',
 }
 
+export enum TripSource {
+  MOBILE_APP = 'mobile_app',
+  WHATSAPP = 'whatsapp',
+  WEB = 'web',
+  ADMIN = 'admin',
+}
+
 export enum RideMode {
   INSTANT = 'instant',
   NEGOTIATE = 'negotiate',

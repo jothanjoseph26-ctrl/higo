@@ -13,6 +13,7 @@
 
 import {
   TripStatus,
+  TripSource,
   KYCStatus,
   VehicleType,
   RideMode,
@@ -329,6 +330,7 @@ export interface Trip {
 
   // P0: City derived from pickup location for matching filter
   city: string | null;
+  source: TripSource;
 
   createdAt: ISODateString;
 }

@@ -13,6 +13,8 @@ import { PushService } from '../push/push.service';
 import { WebPushService } from '../push/web-push.service';
 import { PlatformSettingsReader } from '../admin/platform-settings-reader.service';
 import { PresenceService } from '../realtime/presence.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { DriverMatched, NoDriversAvailable } from '../trips/trip.events';
 import {
   CompositeTrustScore,
   LatLng,
@@ -42,6 +44,7 @@ export class MatchingService {
     private readonly presenceService: PresenceService,
     @InjectQueue('dispatch')
     private readonly dispatchQueue: Queue,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   /** Compute platform-controlled negotiation tiers from the base fare. */
@@ -146,6 +149,8 @@ export class MatchingService {
         tripId,
       });
 
+      this.eventEmitter.emit('trip.no_drivers_available', new NoDriversAvailable(tripId, trip.passengerId));
+
       await this.tripService.transition(tripId, TripStatus.CANCELLED, 'system');
       
       await this.redis.del(offeredDriversKey);
@@ -177,6 +182,7 @@ export class MatchingService {
     if (eligibleToOffer.length === 0) {
       this.logger.warn(`No dispatch-eligible drivers for trip ${tripId} (candidates ${newCandidates.length} but none eligible). Cancelling.`);
       this.eventsGateway.server.to(`passenger:${trip.passengerId}`).emit(SOCKET_EVENTS.TRIP_NO_DRIVERS_AVAILABLE, { tripId });
+      this.eventEmitter.emit('trip.no_drivers_available', new NoDriversAvailable(tripId, trip.passengerId));
       await this.tripService.transition(tripId, TripStatus.CANCELLED, 'system');
       await this.redis.del(offeredDriversKey);
       return;
@@ -513,6 +519,21 @@ export class MatchingService {
       // Transition FIRST — CAS ensures only one driver wins.
       // If this throws (concurrent modification), other offers survive.
       await this.tripService.transition(tripId, TripStatus.MATCHED, 'driver', driverId);
+
+      // Emit DriverMatched for WhatsApp notification
+      const matchedTrip = await this.tripService.getTrip(tripId);
+      const driverRecord = await this.prisma.driver.findUnique({ where: { id: driverId } });
+      if (driverRecord) {
+        this.eventEmitter.emit('driver.matched', new DriverMatched(
+          tripId,
+          driverId,
+          driverRecord.name,
+          driverRecord.phone,
+          `${driverRecord.vehicleColor || ''} ${driverRecord.vehicleModel || ''}`.trim() || null,
+          driverRecord.vehiclePlate,
+          null,
+        ));
+      }
 
       // Now cancel other offers — only reached if transition succeeded
       await this.cancelOtherOffers(tripId, driverId);

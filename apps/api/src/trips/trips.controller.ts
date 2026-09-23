@@ -371,6 +371,9 @@ export class TripsController {
   ) {
     await this.tripService.assertTripAccess(tripId, user);
     const trip = await this.tripService.getTrip(tripId);
+    if (!trip) {
+      throw new AppException('NOT_FOUND', undefined, 'Trip not found');
+    }
     return {
       tripId: trip.id,
       status: trip.status,
@@ -382,6 +385,24 @@ export class TripsController {
       paymentStatus: trip.paymentStatus,
       paymentMethod: trip.paymentMethod,
       totalFare: trip.totalFare,
+      driverCounterFare: trip.driverCounterFare,
+    };
+  }
+
+  @Post(':id/accept-counter')
+  async acceptCounterFare(
+    @CurrentUser() user: AuthUser,
+    @Param('id') tripId: string,
+  ) {
+    if (user.type !== 'passenger') {
+      throw new AppException('FORBIDDEN', undefined, 'Only passengers can accept a price offer');
+    }
+    const result = await this.tripService.acceptCounterFare(tripId, user.sub);
+    return {
+      tripId,
+      status: 'matched',
+      driverId: result.driverId,
+      finalFare: result.counterFare,
     };
   }
 

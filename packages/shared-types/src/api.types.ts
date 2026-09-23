@@ -503,6 +503,8 @@ export interface GetTripStatusResponse {
   paymentStatus: PaymentStatus;
   driver?: MatchedDriverDetails;
   driverLocation?: LatLng & { bearing?: number; etaMin?: number };
+  /** Pending driver counter-fare offer in kobo, or null when none. */
+  driverCounterFare?: number | null;
 }
 
 export interface RateDriverRequest {

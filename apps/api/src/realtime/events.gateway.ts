@@ -1,4 +1,4 @@
-import { Logger, Inject, forwardRef } from '@nestjs/common';
+import { Logger, Inject, forwardRef, HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -11,6 +11,7 @@ import {
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -42,6 +43,7 @@ import { RoomService } from './room.service';
 import { TripService } from '../trips/trips.service';
 import { MatchingService } from '../matching/matching.service';
 import { CallsService } from '../calls/calls.service';
+import { DriverArrived } from '../trips/trip.events';
 import {
   CallInitiatePayload,
   CallAnswerPayload,
@@ -71,6 +73,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     @Inject(forwardRef(() => MatchingService))
     private readonly matchingService: MatchingService,
     private readonly callsService: CallsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   afterInit(server: any): void {
@@ -435,9 +438,9 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
             { lat: driverLocation.lat, lng: driverLocation.lng },
             trip.pickupLocation as any,
           );
-          if (distance > 0.5) { // 500m radius
+          if (distance > 1.5) {
             this.logger.warn(
-              `Driver ${driverId} arrival rejected: ${distance.toFixed(2)}km from pickup (max 0.5km)`,
+              `Driver ${driverId} arrival rejected: ${distance.toFixed(2)}km from pickup (max 1.5km)`,
             );
             client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
               tripId: payload.tripId,
@@ -448,6 +451,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         }
       }
       await this.tripService.transition(payload.tripId, TripStatus.ARRIVED, 'driver');
+      this.eventEmitter.emit('driver.arrived', new DriverArrived(payload.tripId, driverId));
     } catch (error) {
       this.logger.warn(
         `Driver ${driverId} failed to transition to arrived for trip ${payload.tripId}: ${error instanceof Error ? error.message : error}`,
@@ -474,9 +478,9 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
             { lat: driverLocation.lat, lng: driverLocation.lng },
             trip.pickupLocation as any,
           );
-          if (distance > 0.5) { // 500m radius
+          if (distance > 1.5) {
             this.logger.warn(
-              `Driver ${driverId} start rejected: ${distance.toFixed(2)}km from pickup (max 0.5km)`,
+              `Driver ${driverId} start rejected: ${distance.toFixed(2)}km from pickup (max 1.5km)`,
             );
             client.emit(SOCKET_EVENTS.DRIVER_TRIP_ACCEPT_FAILED, {
               tripId: payload.tripId,
@@ -540,76 +544,38 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     this.logger.log(`Passenger ${passengerId} accepting counter-fare for trip ${payload.tripId}`);
 
     try {
-      const trip = await this.tripService.getTrip(payload.tripId);
-      if (!trip || trip.passengerId !== passengerId) {
-        this.logger.warn(`Counter-accept rejected: trip not found or wrong passenger. tripId=${payload.tripId} passengerId=${passengerId}`);
-        return;
-      }
-
-      // Get the counter-fare from the trip record
-      const counterFare = trip.driverCounterFare;
-      if (!counterFare) {
-        this.logger.warn(`Counter-accept rejected: no counter-fare on trip ${payload.tripId}. trip.status=${trip.status} trip.driverId=${trip.driverId}`);
-        return;
-      }
-
-      // The trip must still be in "requested" status and have a driverId (set when counter-fare was sent)
-      if (!trip.driverId) {
-        this.logger.warn(`Counter-accept rejected: no driverId on trip ${payload.tripId}`);
-        return;
-      }
-
-      const driverId = trip.driverId;
-
-      // Atomic: update totalFare + clear driverCounterFare + transition to MATCHED in one SQL statement
-      await this.tripService.transition(payload.tripId, TripStatus.MATCHED, 'driver', driverId, counterFare);
-
-      // Cancel other offers
-      await this.matchingService.cancelOtherOffersForTrip(payload.tripId, driverId);
-
-    // Get driver details for passenger
-    const driver = await this.prisma.driver.findUnique({
-      where: { id: driverId },
-      select: { name: true, vehiclePlate: true, vehicleModel: true, vehicleColor: true, ratingAvg: true, avatarUrl: true },
-    });
-
-      const passenger = await this.prisma.user.findUnique({
-        where: { id: passengerId },
-        select: { name: true },
-      });
-
-    // Join passenger to trip room so they receive driver:location_update broadcasts immediately
-    const passengerSockets = await this.server.in(`passenger:${passengerId}`).fetchSockets();
-    for (const pSock of passengerSockets) {
-      pSock.join(`trip:${payload.tripId}`);
-    }
-
-    // Emit TRIP_MATCHED to passenger
-    this.server.to(`passenger:${passengerId}`).emit(SOCKET_EVENTS.TRIP_MATCHED, {
-      tripId: payload.tripId,
-      driverId,
-      driverDetails: {
-        id: driverId,
-        name: driver?.name || 'Driver',
-        avatarUrl: driver?.avatarUrl || null,
-        vehiclePlate: driver?.vehiclePlate || null,
-        vehicleModel: driver?.vehicleModel || null,
-        vehicleColor: driver?.vehicleColor || null,
-        ratingAvg: driver?.ratingAvg != null ? Number(driver.ratingAvg) : 5.0,
-      },
-      eta: 5,
-    });
-
-      // Emit TRIP_COUNTER_ACCEPTED to driver
-      this.server.to(`driver:${driverId}`).emit(SOCKET_EVENTS.TRIP_COUNTER_ACCEPTED, {
-        tripId: payload.tripId,
-        finalFare: counterFare,
-      });
-
-      this.logger.log(`Passenger ${passengerId} accepted counter-fare ₦${counterFare} for trip ${payload.tripId}, matched to driver ${driverId}`);
+      await this.tripService.acceptCounterFare(payload.tripId, passengerId);
     } catch (err) {
-      this.logger.error(`handleCounterAccept failed for trip ${payload.tripId}: ${err}`);
+      const reason = this.counterAcceptReason(err);
+      this.logger.warn(`Counter-accept rejected for trip ${payload.tripId}: ${reason}`);
+      client.emit(SOCKET_EVENTS.TRIP_COUNTER_ACCEPT_FAILED, {
+        tripId: payload.tripId,
+        reason,
+      });
+      this.server
+        .to(`passenger:${passengerId}`)
+        .emit(SOCKET_EVENTS.TRIP_COUNTER_ACCEPT_FAILED, {
+          tripId: payload.tripId,
+          reason,
+        });
     }
+  }
+
+  private counterAcceptReason(err: unknown): string {
+    if (err instanceof HttpException) {
+      const resp = err.getResponse();
+      if (typeof resp === 'object' && resp !== null && 'error' in resp) {
+        const inner = (resp as { error?: { message?: string } }).error;
+        if (inner?.message) return inner.message;
+      }
+      if (typeof resp === 'string') return resp;
+      const msg = err.message;
+      if (msg && !msg.startsWith('{')) return msg;
+    }
+    if (err instanceof Error && err.message && !err.message.startsWith('{')) {
+      return err.message;
+    }
+    return 'Failed to accept price offer';
   }
 
   @SubscribeMessage(SOCKET_EVENTS.PASSENGER_COUNTER_DECLINE)

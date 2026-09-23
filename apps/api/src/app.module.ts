@@ -2,12 +2,15 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { BullModule } from '@nestjs/bull';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { envSchema } from './config/env.schema';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { ResponseEnvelopeInterceptor } from './common/interceptors/response-envelope.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
+import { PresenceModule } from './common/services/presence.module';
+import { PresenceInterceptor } from './common/services/presence.interceptor';
 import { CryptoModule } from './common/crypto/crypto.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
@@ -49,6 +52,7 @@ import { CallsModule } from './calls/calls.module';
       envFilePath: ['../../.env.local', '../../.env', '.env.local', '.env'],
       validationSchema: envSchema,
     }),
+    EventEmitterModule.forRoot(),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (config: ConfigService) => ({
@@ -59,6 +63,7 @@ import { CallsModule } from './calls/calls.module';
     CryptoModule,
     PrismaModule,
     RedisModule,
+    PresenceModule,
     FirebaseModule,
     PushModule,
     S3Module,
@@ -88,12 +93,13 @@ import { CallsModule } from './calls/calls.module';
     NotificationsModule,
     SupportModule,
     CallsModule,
-    // WhatsAppModule, // TODO: re-enable once circular dependency is resolved
+    WhatsAppModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: ResponseEnvelopeInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: PresenceInterceptor },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RateLimitGuard },
   ],

@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, UnauthorizedException, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { PaystackClient } from './paystack/paystack.client';
@@ -37,6 +38,7 @@ export class PaymentService {
     private readonly financialEventService: FinancialEventService,
     @Inject(forwardRef(() => MatchingService))
     private readonly matchingService: MatchingService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     this.paystackSecret = config.getOrThrow<string>('PAYSTACK_SECRET_KEY');
     this.paymentCallbackUrl = config.getOrThrow<string>('APP_PAYMENT_CALLBACK_URL');
@@ -340,6 +342,12 @@ export class PaymentService {
             );
           });
         }
+
+        // Emit payment.confirmed for WhatsApp notification listener
+        this.eventEmitter.emit('payment.confirmed', {
+          tripId: trip.id,
+          amount: trip.totalFare,
+        });
 
         await this.audit.logEvent({
           action: 'charge.success',

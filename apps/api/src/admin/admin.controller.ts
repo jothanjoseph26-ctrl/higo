@@ -1903,6 +1903,7 @@ export class AdminController {
         select: {
           id: true, name: true, email: true, phone: true,
           isBlocked: true, totalTrips: true, ratingAvg: true, createdAt: true,
+          updatedAt: true, lastSeenAt: true, fcmToken: true, isVerified: true,
         },
       }),
       this.prisma.user.count({ where }),
@@ -1912,10 +1913,57 @@ export class AdminController {
       users: users.map((user) => ({
         ...user,
         ratingAvg: Number(user.ratingAvg),
+        fcmMasked: user.fcmToken ? user.fcmToken.slice(0, 8) + '***' : null,
+        fcmToken: undefined,
       })),
       total,
       limit: Number(limit),
       offset: Number(offset),
+    };
+  }
+
+  @Get('users/:id')
+  async getUser(@Param('id') id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        driverProfile: {
+          select: {
+            id: true, kycStatus: true, vehicleType: true, vehiclePlate: true,
+            isOnline: true, isActive: true, isSuspended: true, totalTrips: true,
+            activityStatus: true, lastTripAt: true, lastSeenAt: true,
+            fcmToken: true, deviceId: true, createdAt: true, updatedAt: true,
+          },
+        },
+        notifications: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: {
+            id: true, title: true, body: true, type: true,
+            isRead: true, createdAt: true,
+          },
+        },
+      },
+    });
+    if (!user) {
+      throw new AppException('NOT_FOUND', undefined, 'User not found');
+    }
+    const { fcmToken, ...rest } = user;
+    return {
+      ...rest,
+      ratingAvg: Number(user.ratingAvg),
+      fcmMasked: fcmToken ? fcmToken.slice(0, 8) + '***' : null,
+      hasFcmToken: Boolean(fcmToken),
+      driverProfile: user.driverProfile
+        ? {
+            ...user.driverProfile,
+            fcmMasked: user.driverProfile.fcmToken
+              ? user.driverProfile.fcmToken.slice(0, 8) + '***'
+              : null,
+            hasFcmToken: Boolean(user.driverProfile.fcmToken),
+            fcmToken: undefined,
+          }
+        : null,
     };
   }
 

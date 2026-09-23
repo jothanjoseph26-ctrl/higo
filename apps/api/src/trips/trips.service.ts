@@ -12,10 +12,13 @@ import { PromosService } from '../promos/promos.service';
 import { MapsService } from '../maps/maps.service';
 import { validateTransition } from './trip-state-machine';
 import { RedisService } from '../redis/redis.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { TripRequested, TripStarted, TripCompleted, TripCancelled } from './trip.events';
 import {
   LatLng,
   Trip,
   TripStatus,
+  TripSource,
   VehicleType,
   PaymentMethod,
   PaymentStatus,
@@ -74,6 +77,7 @@ export class TripService {
     private readonly pushService: PushService,
     private readonly promosService: PromosService,
     private readonly mapsService: MapsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   /**
@@ -376,6 +380,7 @@ export class TripService {
       rejectionReason: row.rejectionReason,
       driverCounterFare: row.driverCounterFare ?? null,
       city: row.city ?? null,
+      source: row.source ?? TripSource.MOBILE_APP,
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -435,6 +440,7 @@ export class TripService {
         rejection_reason AS "rejectionReason",
         driver_counter_fare AS "driverCounterFare",
         city,
+        source,
         created_at AS "createdAt"
       FROM trips
       WHERE id = ${tripId}::uuid
@@ -1116,7 +1122,11 @@ export class TripService {
     return tripId;
   }
 
-  async requestTrip(passengerId: string, dto: RequestTripRequest): Promise<RequestTripResponse> {
+  async requestTrip(
+    passengerId: string,
+    dto: RequestTripRequest,
+    source: TripSource = TripSource.MOBILE_APP,
+  ): Promise<RequestTripResponse> {
     // Auto-cancel stale trips that are stuck in active/requested/matched for > 30 minutes
     // This prevents TRIP_ALREADY_ACTIVE from permanently blocking a passenger.
     const staleThreshold = new Date(Date.now() - 30 * 60 * 1000);
@@ -1184,6 +1194,7 @@ export class TripService {
         scheduled_for,
         is_scheduled,
         city,
+        source,
         created_at
       ) VALUES (
         ${tripId}::uuid,
@@ -1218,6 +1229,7 @@ export class TripService {
         ${dto.scheduledFor ? new Date(dto.scheduledFor) : null},
         ${Boolean(dto.scheduledFor || estimate.rideMode === RideMode.SCHEDULE_FLEX || estimate.rideMode === RideMode.SCHEDULE_EXACT)},
         ${tripCity ?? null},
+        ${source}::"TripSource",
         NOW()
       );
     `;
@@ -1234,6 +1246,20 @@ export class TripService {
       this.dispatchRequestedTrip(tripId);
     }
     // For CARD/TRANSFER: payment webhook will dispatch after payment confirmation
+
+    // Emit domain event for WhatsApp notification listener
+    this.eventEmitter.emit('trip.requested', new TripRequested(
+      tripId,
+      passengerId,
+      dto.pickup,
+      dto.destination,
+      dto.vehicleType,
+      estimate.totalFare,
+      distanceKm,
+      durationMin,
+      dto.paymentMethod,
+      source,
+    ));
 
     this.logger.log(`Trip ${tripId} created for passenger ${passengerId}: status=requested, dispatch initiated`);
 
@@ -1331,6 +1357,77 @@ export class TripService {
       driverLocation,
       driverCounterFare: trip.driverCounterFare,
     };
+  }
+
+  /**
+   * Passenger accepts a driver's counter-fare offer. Shared by the socket
+   * handler and the REST fallback (POST /trips/:id/accept-counter).
+   * transition() emits TRIP_MATCHED immediately on success; side effects
+   * (offer cleanup, room join, driver notify) are best-effort after that.
+   */
+  async acceptCounterFare(
+    tripId: string,
+    passengerId: string,
+  ): Promise<{ driverId: string; counterFare: number }> {
+    const trip = await this.getTrip(tripId);
+    if (!trip || trip.passengerId !== passengerId) {
+      throw new AppException('NOT_FOUND', undefined, 'Trip not found');
+    }
+
+    const counterFare = trip.driverCounterFare;
+    if (counterFare == null) {
+      throw new AppException(
+        'VALIDATION_ERROR',
+        undefined,
+        'No pending price offer on this trip',
+      );
+    }
+
+    if (!trip.driverId) {
+      throw new AppException(
+        'VALIDATION_ERROR',
+        undefined,
+        'No driver assigned to this trip',
+      );
+    }
+
+    const driverId = trip.driverId;
+
+    // Atomic status+fare update. Emits TRIP_MATCHED to passenger + trip room.
+    await this.transition(tripId, TripStatus.MATCHED, 'driver', driverId, counterFare);
+
+    // Best-effort side effects — must not undo the successful match.
+    try {
+      await this.matchingService.cancelOtherOffersForTrip(tripId, driverId);
+    } catch (err) {
+      this.logger.warn(
+        `cancelOtherOffersForTrip failed after counter-accept on ${tripId}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    try {
+      const passengerSockets = await this.eventsGateway.server
+        .in(`passenger:${passengerId}`)
+        .fetchSockets();
+      for (const pSock of passengerSockets) {
+        pSock.join(`trip:${tripId}`);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to join passenger sockets to trip room ${tripId}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    this.eventsGateway.server.to(`driver:${driverId}`).emit(SOCKET_EVENTS.TRIP_COUNTER_ACCEPTED, {
+      tripId,
+      finalFare: counterFare,
+    });
+
+    this.logger.log(
+      `Passenger ${passengerId} accepted counter-fare kobo=${counterFare} on trip ${tripId}, matched to ${driverId}`,
+    );
+
+    return { driverId, counterFare };
   }
 
   async rateDriver(tripId: string, rating: number, comment?: string): Promise<RateResponse> {
@@ -1550,10 +1647,12 @@ export class TripService {
         },
       });
     } else if (to === TripStatus.ARRIVED) {
-      this.eventsGateway.server
-        .to(`trip:${tripId}`)
-        .to(`passenger:${trip.passengerId}`)
-        .emit(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED_AT_PICKUP, { tripId, status: 'arrived' });
+      const rooms = [`trip:${tripId}`, `passenger:${trip.passengerId}`];
+      if (trip.driverId) rooms.push(`driver:${trip.driverId}`);
+      this.eventsGateway.server.to(rooms).emit(SOCKET_EVENTS.TRIP_DRIVER_ARRIVED_AT_PICKUP, {
+        tripId,
+        status: 'arrived',
+      });
 
       void this.pushService.sendToPassenger(trip.passengerId, {
         title: 'Driver has arrived',
@@ -1561,29 +1660,33 @@ export class TripService {
         data: { tripId, type: 'driver_arrived_at_pickup' },
       });
     } else if (to === TripStatus.ACTIVE) {
-      this.eventsGateway.server
-        .to(`trip:${tripId}`)
-        .to(`passenger:${trip.passengerId}`)
-        .emit(SOCKET_EVENTS.TRIP_STARTED, {
+      const rooms = [`trip:${tripId}`, `passenger:${trip.passengerId}`];
+      if (trip.driverId) rooms.push(`driver:${trip.driverId}`);
+      this.eventsGateway.server.to(rooms).emit(SOCKET_EVENTS.TRIP_STARTED, {
           tripId,
           startedAt: updatedTrip.startedAt!,
           status: 'active',
-        });
+      });
+
+      this.eventEmitter.emit('trip.started', new TripStarted(tripId, trip.driverId));
     } else if (to === TripStatus.COMPLETED) {
       if (updatedTrip.paymentStatus === 'held') {
         await this.paymentService.releaseEscrow(tripId);
       }
 
-      this.eventsGateway.server
-        .to(`trip:${tripId}`)
-        .to(`passenger:${trip.passengerId}`)
-        .emit(SOCKET_EVENTS.TRIP_COMPLETED, {
+      const rooms = [`trip:${tripId}`, `passenger:${trip.passengerId}`];
+      if (trip.driverId) rooms.push(`driver:${trip.driverId}`);
+      this.eventsGateway.server.to(rooms).emit(SOCKET_EVENTS.TRIP_COMPLETED, {
           tripId,
           fare: updatedTrip.totalFare,
           paymentRef: updatedTrip.paystackReference,
           completedAt: updatedTrip.completedAt!,
           status: 'completed',
-        });
+      });
+
+      this.eventEmitter.emit('trip.completed', new TripCompleted(
+        tripId, trip.driverId, trip.passengerId, trip.totalFare, trip.paymentMethod,
+      ));
 
       // End any active in-app call
       void this.eventsGateway.endCallForTrip(tripId, 'trip_ended');
@@ -1594,14 +1697,20 @@ export class TripService {
         data: { tripId, type: 'trip_completed', fare: String(updatedTrip.totalFare ?? 0) },
       });
     } else if (to === TripStatus.CANCELLED) {
-      this.eventsGateway.server
-        .to(`trip:${tripId}`)
-        .emit(SOCKET_EVENTS.TRIP_CANCELLED, {
+      const rooms = [`trip:${tripId}`, `passenger:${trip.passengerId}`];
+      if (trip.driverId) rooms.push(`driver:${trip.driverId}`);
+      this.eventsGateway.server.to(rooms).emit(SOCKET_EVENTS.TRIP_CANCELLED, {
           tripId,
           reason: updatedTrip.cancelReason || '',
           cancelledBy: actor,
           status: 'cancelled',
-        });
+      });
+
+      this.eventEmitter.emit('trip.cancelled', new TripCancelled(
+        tripId, trip.passengerId, trip.driverId || null,
+        actor as 'passenger' | 'driver' | 'system',
+        updatedTrip.cancelReason || '',
+      ));
 
       // End any active in-app call
       void this.eventsGateway.endCallForTrip(tripId, 'trip_cancelled');

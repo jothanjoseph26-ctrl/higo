@@ -41,6 +41,13 @@ enum TripStatus {
   cancelled
 }
 
+enum TripSource {
+  mobile_app
+  whatsapp
+  web
+  admin
+}
+
 enum RideMode {
   instant
   negotiate
@@ -477,6 +484,7 @@ model User {
 
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
+  lastSeenAt         DateTime? @map("last_seen_at")
 
   // A user MAY also be a driver (drivers.user_id FK)
   driverProfile      Driver?
@@ -591,6 +599,7 @@ model Driver {
 
   createdAt             DateTime         @default(now()) @map("created_at")
   updatedAt             DateTime         @updatedAt @map("updated_at")
+  lastSeenAt            DateTime?        @map("last_seen_at")
 
   user                  User?            @relation(fields: [userId], references: [id])
   tripsAsDriver         Trip[]           @relation("DriverTrips")
@@ -827,6 +836,7 @@ model Trip {
 
   // P0: City derived from pickup location for matching filter
   city                 String?     @map("city")
+  source               TripSource  @default(mobile_app) @map("source")
 
   createdAt            DateTime    @default(now()) @map("created_at")
 
@@ -1878,6 +1888,9 @@ model WhatsAppConversation {
   isActive             Boolean                 @default(true) @map("is_active")
   failedAiAttempts     Int                     @default(0) @map("failed_ai_attempts")
   lastAiResponseAt     DateTime?               @map("last_ai_response_at")
+  activeTripId         String?                 @map("active_trip_id") @db.Uuid
+  activeBooking        Json?                   @map("active_booking") @db.JsonB
+  sessionExpiresAt     DateTime?               @map("session_expires_at")
   tags                 String[]                @default([])
   notes                String?                 @db.VarChar(2000)
   source               String                  @default("whatsapp")
@@ -2026,4 +2039,14 @@ model SettlementAllocation {
   @@index([settlementEventId])
   @@index([liabilityEventId])
   @@map("settlement_allocations")
+}
+
+model WhatsAppAnalytic {
+  id        String   @id @default(uuid()) @db.Uuid
+  date      DateTime @unique @db.Date
+  stats     Json     @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("whatsapp_analytics")
 }

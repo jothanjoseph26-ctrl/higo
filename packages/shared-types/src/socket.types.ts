@@ -44,6 +44,7 @@ export const SOCKET_EVENTS = {
   TRIP_CANCELLED: 'trip:cancelled',
   TRIP_COUNTER_FARE: 'trip:counter_fare',
   TRIP_COUNTER_ACCEPTED: 'trip:counter_accepted',
+  TRIP_COUNTER_ACCEPT_FAILED: 'trip:counter_accept_failed',
   TRIP_COUNTER_DECLINED: 'trip:counter_declined',
 
   // ---- Client -> Server (trip chat) ----
@@ -149,6 +150,11 @@ export interface TripCounterAcceptedPayload {
 
 export interface TripCounterDeclinedPayload {
   tripId: UUID;
+}
+
+export interface TripCounterAcceptFailedPayload {
+  tripId: UUID;
+  reason: string;
 }
 
 export interface PassengerCounterAcceptPayload {
@@ -444,6 +450,7 @@ export interface ServerToClientEvents {
   [SOCKET_EVENTS.TRIP_CANCELLED]: (p: TripCancelledPayload) => void;
   [SOCKET_EVENTS.TRIP_COUNTER_FARE]: (p: TripCounterFarePayload) => void;
   [SOCKET_EVENTS.TRIP_COUNTER_ACCEPTED]: (p: TripCounterAcceptedPayload) => void;
+  [SOCKET_EVENTS.TRIP_COUNTER_ACCEPT_FAILED]: (p: TripCounterAcceptFailedPayload) => void;
   [SOCKET_EVENTS.TRIP_COUNTER_DECLINED]: (p: TripCounterDeclinedPayload) => void;
   [SOCKET_EVENTS.NOTIFICATION_GENERAL]: (p: NotificationGeneralPayload) => void;
   [SOCKET_EVENTS.MESSAGE_NEW]: (p: TripMessageNewPayload) => void;
