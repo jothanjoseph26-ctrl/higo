@@ -1827,6 +1827,23 @@ enum WhatsAppConversationState {
   awaiting_driver_name
   awaiting_driver_vehicle
   awaiting_driver_city
+  awaiting_pickup
+  awaiting_destination
+  selecting_vehicle
+  confirming_ride
+  selecting_payment
+  waiting_for_match
+  trip_active
+  awaiting_rating
+  booking_completed
+  driver_idle
+  driver_online
+  driver_incoming_request
+  driver_accepted_trip
+  driver_navigating_to_pickup
+  driver_arrived
+  driver_trip_in_progress
+  driver_awaiting_passenger_rating
   human_handoff
 }
 

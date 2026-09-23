@@ -108,7 +108,8 @@ export class WhatsAppAnalytics {
         ON CONFLICT (date) DO UPDATE SET stats = ${JSON.stringify(stats)}::jsonb, updated_at = NOW()
       `;
     } catch (error) {
-      this.logger.error(`Failed to flush analytics: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to flush analytics: ${message}`);
     }
   }
 }

@@ -10,11 +10,13 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { WhatsAppService } from './whatsapp.service';
+import { Public } from '../common/decorators/public.decorator';
 
 @Controller('whatsapp')
 export class WhatsAppController {
   constructor(private readonly whatsappService: WhatsAppService) {}
 
+  @Public()
   @Get('webhook')
   verifyWebhook(
     @Query('hub.mode') mode: string,
@@ -24,12 +26,14 @@ export class WhatsAppController {
     return this.whatsappService.verifyWebhook(mode, token, challenge);
   }
 
+  @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   receiveMessage(@Body() body: Record<string, unknown>) {
     return this.whatsappService.handleIncomingMessage(body);
   }
 
+  @Public()
   @Get('health')
   healthCheck() {
     return this.whatsappService.getHealth();
@@ -61,7 +65,7 @@ export class WhatsAppController {
   @Post('send')
   @HttpCode(HttpStatus.CREATED)
   sendMessage(@Body() body: { to: string; message: string; templateName?: string }) {
-    return this.whatsappService.sendMessage(body);
+    return this.whatsappService.sendMessageToWhatsApp(body);
   }
 
   @Get('config')

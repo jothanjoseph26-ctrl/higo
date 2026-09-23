@@ -17,7 +17,7 @@ export class WhatsAppSocketBridge {
       await this.matchingService.acceptOffer(driverId, tripId);
       this.logger.log(`WhatsApp driver ${driverId} accepted trip ${tripId}`);
     } catch (error) {
-      this.logger.error(`Failed to accept trip: ${error.message}`);
+      this.logger.error(`Failed to accept trip: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
@@ -27,7 +27,7 @@ export class WhatsAppSocketBridge {
       await this.matchingService.declineOffer(driverId, tripId, reason || 'whatsapp_decline');
       this.logger.log(`WhatsApp driver ${driverId} declined trip ${tripId}`);
     } catch (error) {
-      this.logger.error(`Failed to decline trip: ${error.message}`);
+      this.logger.error(`Failed to decline trip: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
@@ -37,7 +37,7 @@ export class WhatsAppSocketBridge {
       await this.tripService.transition(tripId, TripStatus.ARRIVED, 'driver', driverId);
       this.logger.log(`WhatsApp driver ${driverId} arrived at pickup for trip ${tripId}`);
     } catch (error) {
-      this.logger.error(`Failed to mark arrived: ${error.message}`);
+      this.logger.error(`Failed to mark arrived: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
@@ -47,7 +47,7 @@ export class WhatsAppSocketBridge {
       await this.tripService.transition(tripId, TripStatus.ACTIVE, 'driver', driverId);
       this.logger.log(`WhatsApp driver ${driverId} started trip ${tripId}`);
     } catch (error) {
-      this.logger.error(`Failed to start trip: ${error.message}`);
+      this.logger.error(`Failed to start trip: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
@@ -57,7 +57,7 @@ export class WhatsAppSocketBridge {
       await this.tripService.transition(tripId, TripStatus.COMPLETED, 'driver', driverId);
       this.logger.log(`WhatsApp driver ${driverId} completed trip ${tripId}`);
     } catch (error) {
-      this.logger.error(`Failed to complete trip: ${error.message}`);
+      this.logger.error(`Failed to complete trip: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppService } from './whatsapp.service';
 import { NavigationService } from './navigation.service';
@@ -49,7 +50,7 @@ export class WhatsAppNotificationListener {
         },
       });
     } catch (error) {
-      this.logger.error(`Failed to send trip.requested notification: ${error.message}`);
+      this.logger.error(`Failed to send trip.requested notification: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Also notify online WhatsApp drivers
@@ -71,7 +72,7 @@ export class WhatsAppNotificationListener {
         await this.getAccessToken(),
       );
     } catch (error) {
-      this.logger.error(`Failed to send payment confirmation: ${error.message}`);
+      this.logger.error(`Failed to send payment confirmation: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -100,7 +101,7 @@ export class WhatsAppNotificationListener {
 
         void this.analytics.track('driver_matched', passengerConversation.id);
       } catch (error) {
-        this.logger.error(`Failed to send driver.matched to passenger: ${error.message}`);
+        this.logger.error(`Failed to send driver.matched to passenger: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -114,8 +115,16 @@ export class WhatsAppNotificationListener {
 
         if (trip) {
           try {
-            const pickupGeo = JSON.parse(trip.pickupLocationGeoJson || '{}');
-            const destGeo = JSON.parse(trip.destinationLocationGeoJson || '{}');
+            const geoRows = await this.prisma.$queryRaw<
+              Array<{ pickupLocationGeoJson: string; destinationLocationGeoJson: string }>
+            >`
+              SELECT
+                ST_AsGeoJSON(pickup_location) AS "pickupLocationGeoJson",
+                ST_AsGeoJSON(destination_location) AS "destinationLocationGeoJson"
+              FROM trips WHERE id = ${event.tripId}::uuid
+            `;
+            const pickupGeo = JSON.parse(geoRows[0]?.pickupLocationGeoJson || '{}');
+            const destGeo = JSON.parse(geoRows[0]?.destinationLocationGeoJson || '{}');
             const pickup = { lat: pickupGeo.coordinates?.[1], lng: pickupGeo.coordinates?.[0] };
             const dest = { lat: destGeo.coordinates?.[1], lng: destGeo.coordinates?.[0] };
 
@@ -143,7 +152,7 @@ export class WhatsAppNotificationListener {
           await this.getAccessToken(),
         );
       } catch (error) {
-        this.logger.error(`Failed to send driver.matched to driver: ${error.message}`);
+        this.logger.error(`Failed to send driver.matched to driver: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }
@@ -161,7 +170,7 @@ export class WhatsAppNotificationListener {
         await this.getAccessToken(),
       );
     } catch (error) {
-      this.logger.error(`Failed to send driver.arrived: ${error.message}`);
+      this.logger.error(`Failed to send driver.arrived: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -179,7 +188,7 @@ export class WhatsAppNotificationListener {
       );
       void this.analytics.track('trip_started', conversation.id);
     } catch (error) {
-      this.logger.error(`Failed to send trip.started: ${error.message}`);
+      this.logger.error(`Failed to send trip.started: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -207,7 +216,7 @@ export class WhatsAppNotificationListener {
 
       void this.analytics.track('trip_completed', conversation.id);
     } catch (error) {
-      this.logger.error(`Failed to send trip.completed: ${error.message}`);
+      this.logger.error(`Failed to send trip.completed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -235,13 +244,13 @@ export class WhatsAppNotificationListener {
         data: {
           conversationState: ConversationState.IDLE,
           activeTripId: null,
-          activeBooking: null,
+          activeBooking: Prisma.DbNull,
         },
       });
 
       void this.analytics.track('trip_cancelled', conversation.id);
     } catch (error) {
-      this.logger.error(`Failed to send trip.cancelled: ${error.message}`);
+      this.logger.error(`Failed to send trip.cancelled: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -268,11 +277,11 @@ export class WhatsAppNotificationListener {
         data: {
           conversationState: ConversationState.IDLE,
           activeTripId: null,
-          activeBooking: null,
+          activeBooking: Prisma.DbNull,
         },
       });
     } catch (error) {
-      this.logger.error(`Failed to send no_drivers_available: ${error.message}`);
+      this.logger.error(`Failed to send no_drivers_available: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -343,7 +352,7 @@ export class WhatsAppNotificationListener {
           },
         });
       } catch (error) {
-        this.logger.error(`Failed to notify driver ${driver.id}: ${error.message}`);
+        this.logger.error(`Failed to notify driver ${driver.id}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }

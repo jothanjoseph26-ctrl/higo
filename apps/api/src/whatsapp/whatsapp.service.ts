@@ -1,7 +1,9 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { HceService } from '../hce/hce.service';
 import {
+  ConversationState,
   WhatsAppConversationState,
   WhatsAppRole,
   ErrorType,
@@ -236,7 +238,7 @@ export class WhatsAppService {
       );
     } catch (error) {
       this.logger.error(`Error processing message from ${msg.from}:`, error);
-      this.recordError(ErrorType.TEMPORARY_FAILURE, error.message, { from: msg.from });
+      this.recordError(ErrorType.TEMPORARY_FAILURE, error instanceof Error ? error.message : String(error), { from: msg.from });
     }
   }
 
@@ -344,6 +346,7 @@ export class WhatsAppService {
       role: string;
       preferredLanguage: string;
       whatsappPhone: string;
+      whatsappName?: string | null;
       onboardingData: unknown;
       failedAiAttempts: number;
     },
@@ -351,20 +354,34 @@ export class WhatsAppService {
     intent: string,
     language: string,
   ): Promise<string> {
-    const state = conversation.conversationState as WhatsAppConversationState;
+    const state = conversation.conversationState as ConversationState;
 
     switch (state) {
-      case WhatsAppConversationState.AWAITING_PASSENGER_NAME:
+      case ConversationState.AWAITING_PASSENGER_NAME:
         return this.handlePassengerName(conversation, text, language);
-      case WhatsAppConversationState.AWAITING_PASSENGER_CITY:
-        return this.handlePassengerCity(conversation, text, language);
-      case WhatsAppConversationState.AWAITING_DRIVER_NAME:
+      case ConversationState.AWAITING_PASSENGER_CITY:
+        return this.handlePassengerCity(
+          {
+            ...conversation,
+            whatsappName: conversation.whatsappName || 'WhatsApp User',
+          },
+          text,
+          language,
+        );
+      case ConversationState.AWAITING_DRIVER_NAME:
         return this.handleDriverName(conversation, text, language);
-      case WhatsAppConversationState.AWAITING_DRIVER_VEHICLE:
+      case ConversationState.AWAITING_DRIVER_VEHICLE:
         return this.handleDriverVehicle(conversation, text, language);
-      case WhatsAppConversationState.AWAITING_DRIVER_CITY:
-        return this.handleDriverCity(conversation, text, language);
-      case WhatsAppConversationState.HUMAN_HANDOFF:
+      case ConversationState.AWAITING_DRIVER_CITY:
+        return this.handleDriverCity(
+          {
+            ...conversation,
+            whatsappName: conversation.whatsappName || 'WhatsApp User',
+          },
+          text,
+          language,
+        );
+      case ConversationState.HUMAN_HANDOFF:
         return '';
       default:
         return this.handleIdleState(conversation, text, intent, language);
@@ -412,6 +429,46 @@ export class WhatsAppService {
       default:
         return this.getAiResponse(conversation, text, language);
     }
+  }
+
+  private getSupportResponse(language: string): string {
+    return this.t('support_response', language);
+  }
+
+  private getSosResponse(language: string): string {
+    return this.t('sos_response', language);
+  }
+
+  private getMenuResponse(language: string): string {
+    return this.t('menu', language);
+  }
+
+  private getBookRideResponse(language: string): string {
+    return this.t('book_ride', language);
+  }
+
+  private getCancelRideResponse(language: string): string {
+    return this.t('cancel_ride', language);
+  }
+
+  private getStatusResponse(language: string): string {
+    return this.t('track_ride', language);
+  }
+
+  private getFareResponse(language: string): string {
+    return this.t('fare_inquiry', language);
+  }
+
+  private getFeedbackResponse(language: string): string {
+    return this.t('feedback', language);
+  }
+
+  private getReferralResponse(language: string): string {
+    return this.t('referral', language);
+  }
+
+  private getLanguageChangeResponse(language: string): string {
+    return this.t('language_change', language);
   }
 
   private async startPassengerRegistration(
@@ -524,11 +581,10 @@ export class WhatsAppService {
   ): Promise<string> {
     const data = (conversation.onboardingData as Record<string, unknown>) || {};
 
-    const driver = await this.prisma.$executeRaw`
+    await this.prisma.$executeRaw`
       INSERT INTO drivers (id, phone, full_name, city, vehicle_type, status, created_at, updated_at)
-      VALUES (${crypto.randomUUID()}, ${conversation.whatsappPhone}, ${conversation.whatsappName || 'WhatsApp User'}, ${city}, ${data.vehicle || 'unknown'}, 'pending', NOW(), NOW())
-      ON CONFLICT (phone) DO UPDATE SET full_name = EXCLUDED.full_name, city = EXCLUDED.city, vehicle_type = EXCLUDED.vehicle_type, updated_at = NOW()
-      RETURNING id;
+      VALUES (${crypto.randomUUID()}, ${conversation.whatsappPhone}, ${conversation.whatsappName || 'WhatsApp User'}, ${city}, ${typeof data.vehicle === 'string' ? data.vehicle : 'unknown'}, 'pending', NOW(), NOW())
+      ON CONFLICT (phone) DO UPDATE SET full_name = EXCLUDED.full_name, city = EXCLUDED.city, vehicle_type = EXCLUDED.vehicle_type, updated_at = NOW();
     `;
 
     await this.prisma.whatsAppConversation.update({
@@ -539,7 +595,10 @@ export class WhatsAppService {
       },
     });
 
-    return this.t('register_driver_complete', language, { city, vehicle: data.vehicle || '' });
+    return this.t('register_driver_complete', language, {
+      city,
+      vehicle: typeof data.vehicle === 'string' ? data.vehicle : '',
+    });
   }
 
   private async getAiResponse(
@@ -582,7 +641,7 @@ export class WhatsAppService {
         data: { failedAiAttempts: { increment: 1 } },
       });
 
-      this.recordError(ErrorType.AI_RESPONSE_FAILED, error.message, { conversationId: conversation.id });
+      this.recordError(ErrorType.AI_RESPONSE_FAILED, error instanceof Error ? error.message : String(error), { conversationId: conversation.id });
       return this.t('ai_fallback', language);
     }
   }
@@ -620,7 +679,9 @@ export class WhatsAppService {
         });
 
         if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({}));
+          const errorBody = (await response.json().catch(() => ({}))) as {
+            error?: { message?: string };
+          };
           const errorType = this.classifyHttpError(response.status);
 
           this.logger.error(
@@ -648,20 +709,21 @@ export class WhatsAppService {
 
         }
 
-        const result = await response.json();
+        const result = (await response.json()) as { messages?: Array<{ id?: string }> };
         const messageId = result?.messages?.[0]?.id;
 
         this.recordSuccess();
         return { success: true, messageId };
       } catch (error) {
-        const errorType = this.classifyNetworkError(error);
+        const errorType = this.classifyNetworkError(error instanceof Error ? error : new Error(String(error)));
+        const message = error instanceof Error ? error.message : String(error);
 
         this.logger.error(
           `Network error sending message (attempt ${attempt}/${maxAttempts}):`,
-          error.message,
+          message,
         );
 
-        this.recordError(errorType, error.message, { to, attempt });
+        this.recordError(errorType, message, { to, attempt });
 
         if (attempt < maxAttempts && errorType === ErrorType.NETWORK_TIMEOUT) {
           await this.delay(Math.pow(2, attempt) * 500);
@@ -670,7 +732,7 @@ export class WhatsAppService {
 
         return {
           success: false,
-          error: error.message,
+          error: error instanceof Error ? error.message : String(error),
           errorType,
         };
       }
@@ -781,7 +843,7 @@ export class WhatsAppService {
           data: { status: status.status },
         });
       } catch (error) {
-        this.logger.debug(`Failed to update status for message ${status.id}: ${error.message}`);
+        this.logger.debug(`Failed to update status for message ${status.id}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }
@@ -807,7 +869,7 @@ export class WhatsAppService {
         },
       });
     } catch (error) {
-      this.logger.error(`Failed to log inbound message: ${error.message}`);
+      this.logger.error(`Failed to log inbound message: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -831,7 +893,7 @@ export class WhatsAppService {
         },
       });
     } catch (error) {
-      this.logger.error(`Failed to log outbound message: ${error.message}`);
+      this.logger.error(`Failed to log outbound message: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -862,14 +924,6 @@ export class WhatsAppService {
     };
   }
 
-  getErrorStats(): Record<string, number> {
-    const stats: Record<string, number> = {};
-    for (const [type, count] of this.errorStats) {
-      stats[type] = count;
-    }
-    return stats;
-  }
-
   getCircuitBreakerState(): CircuitBreakerState {
     if (
       this.circuitBreaker.state === 'open' &&
@@ -880,6 +934,285 @@ export class WhatsAppService {
       this.logger.log('Circuit breaker HALF-OPEN - testing recovery');
     }
     return { ...this.circuitBreaker };
+  }
+
+  async handleIncomingMessage(body: Record<string, unknown>): Promise<{ status: string }> {
+    try {
+      await this.processWebhook(body as unknown as WhatsAppMessagePayload);
+      return { status: 'ok' };
+    } catch (error) {
+      this.logger.error('Error handling incoming message:', error);
+      return { status: 'error' };
+    }
+  }
+
+  getHealth(): { status: string; timestamp: string; health: HealthStatus } {
+    const health = this.getHealthStatus();
+    return {
+      status: health.status === 'healthy' ? 'ok' : 'error',
+      timestamp: new Date().toISOString(),
+      health,
+    };
+  }
+
+  async listConversations(params: {
+    page: number;
+    limit: number;
+    status?: string;
+  }): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
+    const { page, limit, status } = params;
+    const skip = (page - 1) * limit;
+
+    const where: Record<string, unknown> = {};
+    if (status) {
+      where.conversationState = status;
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.whatsAppConversation.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { lastMessageAt: 'desc' },
+      }),
+      this.prisma.whatsAppConversation.count({ where }),
+    ]);
+
+    return { data, total, page, limit };
+  }
+
+  async getConversation(id: string): Promise<unknown> {
+    const row = await this.prisma.whatsAppConversation.findUnique({
+      where: { id },
+      include: { messages: { orderBy: { createdAt: 'desc' }, take: 50 } },
+    });
+    return row as unknown;
+  }
+
+  async updateConversation(id: string, body: Record<string, unknown>): Promise<unknown> {
+    const { conversationState, role, preferredLanguage, isHumanHandoff, handoffReason, tags, notes } =
+      body as {
+        conversationState?: string;
+        role?: string;
+        preferredLanguage?: string;
+        isHumanHandoff?: boolean;
+        handoffReason?: string;
+        tags?: string[];
+        notes?: string;
+      };
+
+    return this.prisma.whatsAppConversation.update({
+      where: { id },
+      data: {
+        ...(conversationState && {
+          conversationState: conversationState as ConversationState,
+        }),
+        ...(role && { role: role as WhatsAppRole }),
+        ...(preferredLanguage && { preferredLanguage }),
+        ...(isHumanHandoff !== undefined && { isHumanHandoff }),
+        ...(handoffReason && { handoffReason }),
+        ...(tags && { tags }),
+        ...(notes && { notes }),
+      },
+    });
+  }
+
+  async sendMessageToWhatsApp(body: {
+    to: string;
+    message: string;
+    templateName?: string;
+  }): Promise<SendResult> {
+    const config = await this.prisma.whatsAppConfig.findFirst({ where: { isActive: true } });
+    if (!config) {
+      return {
+        success: false,
+        error: 'No active WhatsApp config found',
+        errorType: ErrorType.CONFIG_MISSING,
+      };
+    }
+    return this.sendMessage(config.phoneNumberId, body.to, body.message, config.accessToken);
+  }
+
+  async sendButtonsMessage(
+    phoneNumberId: string,
+    to: string,
+    text: string,
+    buttons: Array<{ id: string; title: string }>,
+    accessToken: string,
+  ): Promise<SendResult> {
+    if (!accessToken || !phoneNumberId) {
+      return {
+        success: false,
+        error: 'WhatsApp config missing',
+        errorType: ErrorType.CONFIG_MISSING,
+      };
+    }
+
+    try {
+      const response = await fetch(`${META_GRAPH_URL}/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to,
+          type: 'interactive',
+          interactive: {
+            type: 'button',
+            body: { text: text.slice(0, MESSAGE_LENGTH_LIMIT) },
+            action: {
+              buttons: buttons.slice(0, 3).map((b, i) => ({
+                type: 'reply',
+                reply: { id: b.id, title: b.title.slice(0, 20) },
+                ...(i === 0 ? {} : {}),
+              })),
+            },
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = (await response.json().catch(() => ({}))) as unknown;
+        this.logger.warn(
+          `Interactive buttons failed (${response.status}), falling back to text: ${JSON.stringify(errorBody)}`,
+        );
+        return this.sendMessage(phoneNumberId, to, text, accessToken);
+      }
+
+      const result = (await response.json().catch(() => ({}))) as {
+        messages?: { id?: string }[];
+      };
+      this.recordSuccess();
+      return { success: true, messageId: result?.messages?.[0]?.id };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`sendButtonsMessage failed, falling back to text: ${message}`);
+      return this.sendMessage(phoneNumberId, to, text, accessToken);
+    }
+  }
+
+  async getConfig(): Promise<unknown> {
+    return this.prisma.whatsAppConfig.findFirst({ where: { isActive: true } });
+  }
+
+  async updateConfig(body: Record<string, unknown>): Promise<unknown> {
+    const existing = await this.prisma.whatsAppConfig.findFirst({ where: { isActive: true } });
+    if (!existing) {
+      return this.prisma.whatsAppConfig.create({ data: body as never });
+    }
+    return this.prisma.whatsAppConfig.update({ where: { id: existing.id }, data: body as never });
+  }
+
+  async getStats(_params: { from?: string; to?: string }): Promise<{
+    total: number;
+    active: number;
+    passengers: number;
+    drivers: number;
+    handoff: number;
+    today: number;
+    totalConversations: number;
+    activeConversations: number;
+    totalMessages: number;
+    errorStats: Record<string, number>;
+  }> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const [totalConversations, activeConversations, totalMessages, passengers, drivers, handoff, today] =
+      await Promise.all([
+        this.prisma.whatsAppConversation.count(),
+        this.prisma.whatsAppConversation.count({ where: { isActive: true } }),
+        this.prisma.whatsAppMessage.count(),
+        this.prisma.whatsAppConversation.count({ where: { role: 'passenger' } }),
+        this.prisma.whatsAppConversation.count({ where: { role: 'driver' } }),
+        this.prisma.whatsAppConversation.count({ where: { isHumanHandoff: true } }),
+        this.prisma.whatsAppConversation.count({
+          where: { lastMessageAt: { gte: startOfDay } },
+        }),
+      ]);
+
+    return {
+      total: totalConversations,
+      active: activeConversations,
+      passengers,
+      drivers,
+      handoff,
+      today,
+      totalConversations,
+      activeConversations,
+      totalMessages,
+      errorStats: this.getErrorCounts(),
+    };
+  }
+
+  getErrorStats(params?: {
+    from?: string;
+    to?: string;
+    limit?: number;
+  }): {
+    total: number;
+    recentRate: number;
+    byType: Record<string, number>;
+    bySeverity: Record<string, number>;
+    errors: ErrorRecord[];
+  } {
+    let errors = [...this.recentErrors];
+    const now = Date.now();
+    const recentWindow = 5 * 60 * 1000;
+
+    if (params?.from) {
+      const fromTime = new Date(params.from).getTime();
+      errors = errors.filter((e) => e.timestamp >= fromTime);
+    }
+    if (params?.to) {
+      const toTime = new Date(params.to).getTime();
+      errors = errors.filter((e) => e.timestamp <= toTime);
+    }
+    if (!params?.from && !params?.to) {
+      errors = errors.filter((e) => now - e.timestamp < recentWindow);
+    }
+    if (params?.limit) {
+      errors = errors.slice(-params.limit);
+    }
+
+    const byType: Record<string, number> = {};
+    const bySeverity: Record<string, number> = {};
+    for (const error of errors) {
+      byType[error.type] = (byType[error.type] || 0) + 1;
+      bySeverity[error.severity] = (bySeverity[error.severity] || 0) + 1;
+    }
+
+    const recentRate =
+      errors.length > 0 ? errors.filter((e) => now - e.timestamp < recentWindow).length / 5 : 0;
+
+    return {
+      total: errors.length,
+      recentRate,
+      byType,
+      bySeverity,
+      errors,
+    };
+  }
+
+  resetCircuitBreaker(service: string): { success: boolean; state: CircuitBreakerState } {
+    this.circuitBreaker = {
+      failures: 0,
+      lastFailure: 0,
+      state: 'closed',
+      successCount: 0,
+    };
+    this.logger.log(`Circuit breaker reset for service: ${service}`);
+    return { success: true, state: this.getCircuitBreakerState() };
+  }
+
+  private getErrorCounts(): Record<string, number> {
+    const stats: Record<string, number> = {};
+    for (const [type, count] of this.errorStats) {
+      stats[type] = count;
+    }
+    return stats;
   }
 
   private t(key: string, lang: string, vars?: Record<string, string>): string {

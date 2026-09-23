@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
 import { PaymentMethod, RideMode, TripSource, VehicleType } from '@higo/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -52,7 +53,7 @@ export class BookingOrchestrator {
   private async clearBooking(conversationId: string): Promise<void> {
     await this.prisma.whatsAppConversation.update({
       where: { id: conversationId },
-      data: { activeBooking: null, activeTripId: null, sessionExpiresAt: null },
+      data: { activeBooking: Prisma.DbNull, activeTripId: null, sessionExpiresAt: null },
     });
   }
 
@@ -216,7 +217,7 @@ export class BookingOrchestrator {
     }
 
     // Online payment flow — create trip first, then initialize Paystack
-    if (paymentMethod === PaymentMethod.CARD || paymentMethod === PaymentMethod.BANK_TRANSFER) {
+    if (paymentMethod === PaymentMethod.CARD || paymentMethod === PaymentMethod.BANK) {
       return this.initiateOnlinePayment(conversationId, conversation.userId, booking, paymentMethod);
     }
 
