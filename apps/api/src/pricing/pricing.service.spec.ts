@@ -102,8 +102,10 @@ describe('PricingService', () => {
     expect(estimate.distanceFare).toBe(60000);
     expect(estimate.timeFare).toBe(22500);
     expect(estimate.rawFare).toBe(132500);
-    expect(estimate.totalFare).toBe(136688);
-    expect(estimate.quotedFare).toBe(136688);
+    expect(estimate.totalFare).toBe(146813);
+    expect(estimate.quotedFare).toBe(146813);
+    expect(estimate.customerStatutoryLevy).toBe(1688);
+    expect(estimate.customerVat).toBe(10125);
     expect(estimate.surgeMultiplier).toBe(1.0);
   });
 
@@ -131,7 +133,7 @@ describe('PricingService', () => {
       pickup,
     });
 
-    expect(estimate.totalFare).toBe(70875);
+    expect(estimate.totalFare).toBe(76125);
   });
 
   it('applies night premium between 10 PM and 5 AM Nigeria time', async () => {
@@ -145,7 +147,7 @@ describe('PricingService', () => {
       pickup,
     });
 
-    expect(estimate.totalFare).toBe(162000);
+    expect(estimate.totalFare).toBe(174000);
   });
 
   it('does not call surge repo when SURGE_ENABLED is false', async () => {
@@ -178,7 +180,7 @@ describe('PricingService', () => {
 
     expect(surgeRepo.getSurgeMultiplier).toHaveBeenCalledWith(pickup);
     expect(estimate.surgeMultiplier).toBe(1.5);
-    expect(estimate.totalFare).toBe(202500);
+    expect(estimate.totalFare).toBe(217500);
   });
 
   it('applies night premium before surge multiplier', async () => {
@@ -194,7 +196,7 @@ describe('PricingService', () => {
       pickup,
     });
 
-    expect(estimate.totalFare).toBe(243000);
+    expect(estimate.totalFare).toBe(261000);
   });
 
   it('calculates all Base44 ride modes independently from the metered base', async () => {
@@ -212,16 +214,17 @@ describe('PricingService', () => {
       rideMode: RideMode.NEGOTIATE,
     });
 
-    // Every mode's total also includes the 1688 FCT levy (1.25% of the
-    // 135000 instant fare) on top of the 5000 booking fee.
-    expect(estimate.modes.instant.totalFare).toBe(141688);
-    expect(estimate.modes.negotiate.recommended).toBe(141688);
-    expect(estimate.modes.negotiate.minimumOffer).toBe(126688);
-    expect(estimate.modes.negotiate.fastMatch).toBe(156688);
-    expect(estimate.modes.share.perSeat).toBe(96688);
-    expect(estimate.modes.scheduleFlex.totalFare).toBe(126688);
-    expect(estimate.modes.scheduleExact.totalFare).toBe(146688);
-    expect(estimate.totalFare).toBe(141688);
+    // Every mode's total includes booking fee + FCT levy (1.25%) + VAT (7.5%).
+    expect(estimate.modes.instant.totalFare).toBe(151813);
+    expect(estimate.modes.negotiate.recommended).toBe(151813);
+    expect(estimate.modes.negotiate.minimumOffer).toBe(136813);
+    expect(estimate.modes.negotiate.fastMatch).toBe(166813);
+    expect(estimate.modes.share.perSeat).toBe(106813);
+    expect(estimate.modes.scheduleFlex.totalFare).toBe(136813);
+    expect(estimate.modes.scheduleExact.totalFare).toBe(156813);
+    expect(estimate.customerStatutoryLevy).toBe(1688);
+    expect(estimate.customerVat).toBe(10125);
+    expect(estimate.totalFare).toBe(151813);
     expect(estimate.rideMode).toBe(RideMode.NEGOTIATE);
   });
 

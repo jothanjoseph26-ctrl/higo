@@ -367,6 +367,7 @@ export interface FareEstimate {
   totalFare: Kobo;
   customerBookingFee: Kobo;
   customerStatutoryLevy: Kobo;
+  customerVat: Kobo;
   priceIsAllIn: boolean;
   currency: string;
   pricingVersion: string;
@@ -388,6 +389,7 @@ export interface FareEstimate {
       baseFare: Kobo;
       bookingFee: Kobo;
       statutoryLevy: Kobo;
+      vat: Kobo;
       modeMultiplier: number;
       fareBasis: string;
     };
@@ -402,6 +404,7 @@ export interface FareEstimate {
       baseFare: Kobo;
       bookingFee: Kobo;
       statutoryLevy: Kobo;
+      vat: Kobo;
       requiresConfirmedMatch: boolean;
       minimumMatchedPassengers: number;
       maximumDetourMinutes: number;
@@ -413,6 +416,7 @@ export interface FareEstimate {
       baseFare: Kobo;
       bookingFee: Kobo;
       statutoryLevy: Kobo;
+      vat: Kobo;
       modeMultiplier: number;
       fareBasis: string;
     };
@@ -421,6 +425,7 @@ export interface FareEstimate {
       baseFare: Kobo;
       bookingFee: Kobo;
       statutoryLevy: Kobo;
+      vat: Kobo;
       modeMultiplier: number;
       fareBasis: string;
     };

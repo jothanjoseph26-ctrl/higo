@@ -8,9 +8,9 @@ import { AppException } from '../common/errors/app.exception';
 
 const DEFAULT_ROUNDING_KOBO = 5000; // Base44 DEFAULT_ROUNDING=50 naira.
 const MATCH_RADIUS_KM = 2.5;
-// FCTA-mandated levy — disabled pending regulatory confirmation.
-// Set to 0.0125 when re-enabled; apply city check for FCT-only trips.
-const FCT_LEVY_RATE = 0;
+// FCTA-mandated levy applied to the metered instant fare.
+const FCT_LEVY_RATE = 0.0125;
+const VAT_RATE = 0.075;
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -110,6 +110,7 @@ export class PricingService {
     const minimumFareApplied = rawFare < minimumFare;
     const instantFare = this.roundToIncrement(meteredBase * surgeMultiplier, roundingIncrement);
     const customerStatutoryLevy = Math.round(instantFare * FCT_LEVY_RATE);
+    const customerVat = Math.round(instantFare * VAT_RATE);
 
     const instantMult = Number(pricingConfig.instantMultiplier ?? 1.0);
     const negotiateRecMult = Number(pricingConfig.negotiateRecommendedMultiplier ?? 1.0);
@@ -127,13 +128,15 @@ export class PricingService {
     const scheduleFlexibleBase = this.roundToIncrement(instantFare * scheduleFlexMult, roundingIncrement);
     const scheduleExactBase = this.roundToIncrement(instantFare * scheduleExactMult, roundingIncrement);
 
-    const addFees = (fare: number) => fare + customerBookingFee + customerStatutoryLevy;
+    const addFees = (fare: number) =>
+      fare + customerBookingFee + customerStatutoryLevy + customerVat;
     const modes = {
       instant: {
         totalFare: addFees(instantBase),
         baseFare: instantBase,
         bookingFee: customerBookingFee,
         statutoryLevy: customerStatutoryLevy,
+        vat: customerVat,
         modeMultiplier: instantMult,
         fareBasis: 'metered_exclusive',
       },
@@ -148,6 +151,7 @@ export class PricingService {
         baseFare: sharePerSeatBase,
         bookingFee: customerBookingFee,
         statutoryLevy: customerStatutoryLevy,
+        vat: customerVat,
         requiresConfirmedMatch: pricingConfig.shareRequiresConfirmedMatch !== false,
         minimumMatchedPassengers: pricingConfig.shareMinimumMatchedPassengers ?? 2,
         maximumDetourMinutes: pricingConfig.shareMaximumDetourMinutes ?? 8,
@@ -159,6 +163,7 @@ export class PricingService {
         baseFare: scheduleFlexibleBase,
         bookingFee: customerBookingFee,
         statutoryLevy: customerStatutoryLevy,
+        vat: customerVat,
         modeMultiplier: scheduleFlexMult,
         fareBasis: 'schedule_flexible',
       },
@@ -167,6 +172,7 @@ export class PricingService {
         baseFare: scheduleExactBase,
         bookingFee: customerBookingFee,
         statutoryLevy: customerStatutoryLevy,
+        vat: customerVat,
         modeMultiplier: scheduleExactMult,
         fareBasis: 'schedule_exact',
       },
@@ -214,7 +220,11 @@ export class PricingService {
           // Override the share mode per-seat fare with corridor profile price
           modes.share = {
             ...modes.share,
-            perSeat: (sharedFareFromProfile ?? modes.share.perSeat) + customerBookingFee + customerStatutoryLevy,
+            perSeat:
+              (sharedFareFromProfile ?? modes.share.perSeat) +
+              customerBookingFee +
+              customerStatutoryLevy +
+              customerVat,
             baseFare: sharedFareFromProfile ?? modes.share.baseFare,
             fareBasis: fareProfile.dataStatus === 'confirmed' ? 'confirmed_profile_shared' : 'estimated_profile_shared',
           };
@@ -263,8 +273,16 @@ export class PricingService {
       totalFareFromRideType = modes.scheduleExact.totalFare;
     }
 
-    const negotiateRangeLow = this.roundToIncrement(instantFare * Number(pricingConfig.negotiateMinimumOfferMultiplier ?? 0.9), roundingIncrement) + customerBookingFee + customerStatutoryLevy;
-    const negotiateRangeHigh = this.roundToIncrement(instantFare * Number(pricingConfig.negotiateFastMatchMultiplier ?? 1.1), roundingIncrement) + customerBookingFee + customerStatutoryLevy;
+    const negotiateRangeLow =
+      this.roundToIncrement(instantFare * Number(pricingConfig.negotiateMinimumOfferMultiplier ?? 0.9), roundingIncrement) +
+      customerBookingFee +
+      customerStatutoryLevy +
+      customerVat;
+    const negotiateRangeHigh =
+      this.roundToIncrement(instantFare * Number(pricingConfig.negotiateFastMatchMultiplier ?? 1.1), roundingIncrement) +
+      customerBookingFee +
+      customerStatutoryLevy +
+      customerVat;
 
     return {
       baseFare,
@@ -281,6 +299,7 @@ export class PricingService {
       totalFare: selected.totalFare,
       customerBookingFee,
       customerStatutoryLevy,
+      customerVat,
       priceIsAllIn: pricingConfig.priceIsAllIn ?? true,
       currency: pricingConfig.currency || 'NGN',
       pricingVersion: pricingConfig.pricingVersion || 'v2.0',

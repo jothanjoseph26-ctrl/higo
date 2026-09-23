@@ -286,6 +286,7 @@ export interface Trip {
   pricingVersion: string;
   customerBookingFee: Kobo;
   customerStatutoryLevy: Kobo;
+  customerVat: Kobo;
   totalFare: Kobo;
 
   paymentMethod: PaymentMethod | null;

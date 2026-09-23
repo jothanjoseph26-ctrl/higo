@@ -789,6 +789,7 @@ model Trip {
   pricingVersion       String      @default("v2.0") @map("pricing_version")
   customerBookingFee   Int         @default(0) @map("customer_booking_fee")
   customerStatutoryLevy Int        @default(0) @map("customer_statutory_levy")
+  customerVat          Int         @default(0) @map("customer_vat")
 
   paymentMethod        PaymentMethod? @map("payment_method")
   paymentStatus        PaymentStatus  @default(pending) @map("payment_status")
