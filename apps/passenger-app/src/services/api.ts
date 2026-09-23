@@ -7,12 +7,14 @@ import type {
 } from '@higo/shared-types';
 import { Platform } from 'react-native';
 import { API_BASE_URL } from '../config';
+import { buildClientHeaders } from './deviceIdentity';
 import { tokenStorage } from './storage';
 
 export const api = createHigoClient({
   baseURL: API_BASE_URL,
   tokenStorage,
   platform: Platform.OS === 'web' ? 'web' : 'mobile',
+  clientHeaders: buildClientHeaders,
   onAuthFailure: () => {
     void import('../stores/authStore').then(({ useAuthStore }) =>
       useAuthStore.getState().logout(),

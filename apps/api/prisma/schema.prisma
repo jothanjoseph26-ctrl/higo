@@ -2068,3 +2068,34 @@ model WhatsAppAnalytic {
 
   @@map("whatsapp_analytics")
 }
+
+// ============================================================================
+// CLIENT INSTALLATIONS — client-source telemetry (WEB_BROWSER | PWA |
+// SIDeloaded APK | GOOGLE_PLAY-verified). One row per (user, install).
+// Polymorphic: userId is users.id / drivers.id / admin_users.id with no FK.
+// ============================================================================
+
+model ClientInstallation {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  role               String // passenger | driver | admin
+  installationId     String    @map("installation_id") @db.VarChar(64)
+  clientType         String    @default("UNKNOWN") @map("client_type") // WEB_BROWSER | PWA | ANDROID_NATIVE | IOS_NATIVE | UNKNOWN
+  devicePlatform     String    @default("UNKNOWN") @map("device_platform") // WEB | ANDROID | IOS | UNKNOWN
+  appVersion         String?   @map("app_version") @db.VarChar(32)
+  buildNumber        String?   @map("build_number") @db.VarChar(32)
+  installSource      String    @default("UNKNOWN") @map("install_source") // GOOGLE_PLAY | SIDELOADED | UNKNOWN
+  installerPackage   String?   @map("installer_package") @db.VarChar(128)
+  integrityVerified  Boolean   @default(false) @map("integrity_verified")
+  integrityVerifiedAt DateTime? @map("integrity_verified_at")
+  integrityReason    String?   @map("integrity_reason") @db.VarChar(64)
+  fcmToken           String?   @map("fcm_token")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  lastSeenAt         DateTime  @default(now()) @map("last_seen_at")
+
+  @@unique([userId, installationId])
+  @@index([userId])
+  @@index([lastSeenAt])
+  @@map("client_installations")
+}

@@ -5,17 +5,32 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { WebViewShell } from '../webview/WebViewShell';
 import { BRIDGE_INJECTED_JS, deliverToWebView, parseBridgeMessage } from '../webview/bridge';
 import { setupFCMHandlers, registerFCM } from '../services/fcm';
+import { resolveDeviceIdentity, type NativeIdentity } from '../services/deviceIdentity';
 import { reconnectSocket } from '../services/socket';
 import { OfflineManager } from '../services/offline';
 import { theme } from '../theme';
 
 export function App() {
   const [ready, setReady] = useState(false);
+  const [identity, setIdentity] = useState<NativeIdentity | null>(null);
   const webViewRef = useRef<WebView>(null);
   const pendingNotificationRef = useRef<Record<string, unknown> | null>(null);
 
   useEffect(() => {
-    setReady(true);
+    let cancelled = false;
+    resolveDeviceIdentity()
+      .then((resolved) => {
+        if (cancelled) return;
+        setIdentity(resolved);
+        setReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -101,7 +116,11 @@ export function App() {
 
   return (
     <SafeAreaProvider>
-      <WebViewShell webViewRef={webViewRef} onWebViewLoad={handleWebViewLoad} />
+      <WebViewShell
+        webViewRef={webViewRef}
+        onWebViewLoad={handleWebViewLoad}
+        identity={identity}
+      />
     </SafeAreaProvider>
   );
 }

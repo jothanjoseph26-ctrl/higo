@@ -44,6 +44,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SupportModule } from './support/support.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { CallsModule } from './calls/calls.module';
+import { DevicesModule } from './devices/devices.module';
+import { ClientTelemetryInterceptor } from './devices/client-telemetry.interceptor';
 
 @Module({
   imports: [
@@ -94,12 +96,14 @@ import { CallsModule } from './calls/calls.module';
     SupportModule,
     CallsModule,
     WhatsAppModule,
+    DevicesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: ResponseEnvelopeInterceptor },
     { provide: APP_INTERCEPTOR, useClass: PresenceInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: ClientTelemetryInterceptor },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RateLimitGuard },
   ],

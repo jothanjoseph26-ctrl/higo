@@ -81,6 +81,12 @@ export const envSchema = Joi.object({
   SURGE_ENABLED: Joi.boolean().default(false),
   PUSH_ENABLED: Joi.boolean().default(false),
 
+  // Play Integrity (client-source telemetry step 4)
+  PLAY_INTEGRITY_API_KEY: Joi.string().allow('').default(''),
+  PLAY_INTEGRITY_PACKAGE_ALLOWLIST: Joi.string()
+    .allow('')
+    .default('com.higopassenger,com.hiconnectgo.driver'),
+
   EXPO_PUBLIC_API_BASE_URL: Joi.string().uri().required(),
   EXPO_PUBLIC_SOCKET_URL: Joi.string().uri().required(),
   EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: Joi.string().required(),

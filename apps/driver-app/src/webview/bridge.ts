@@ -11,8 +11,19 @@
  * need to know it's talking to react-native-webview specifically -- only
  * that `window.HiGONative` exists when running inside the native shell.
  */
-export const BRIDGE_INJECTED_JS = `
+
+export type NativeIdentityPayload = {
+  packageName: string | null;
+  appVersion: string | null;
+  buildNumber: string | null;
+  installSource: string | null;
+};
+
+export function buildBridgeInjectedJs(identity: NativeIdentityPayload | null): string {
+  const identityLiteral = JSON.stringify(identity);
+  return `
 (function () {
+  window.__HIGO_NATIVE_IDENTITY__ = ${identityLiteral};
   if (window.HiGONative) return;
   window.HiGONative = {
     platform: '${process.env.EXPO_OS ?? 'native'}',
@@ -23,6 +34,9 @@ export const BRIDGE_INJECTED_JS = `
   true;
 })();
 `;
+}
+
+export const BRIDGE_INJECTED_JS = buildBridgeInjectedJs(null);
 
 export type BridgeRequest = {
   type: BridgeCommand;
@@ -41,7 +55,8 @@ export type BridgeCommand =
   | 'STOP_ACTIVE_TRIP_TRACKING'
   | 'GET_DEVICE_INFO'
   | 'OPEN_APP_SETTINGS'
-  | 'GET_TRIP_STATE';
+  | 'GET_TRIP_STATE'
+  | 'GET_INTEGRITY_TOKEN';
 
 export function parseBridgeMessage(raw: string): BridgeRequest | null {
   try {

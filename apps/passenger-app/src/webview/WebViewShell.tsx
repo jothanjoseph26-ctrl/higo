@@ -7,22 +7,35 @@ import * as Notifications from 'expo-notifications';
 import * as Sharing from 'expo-sharing';
 import Constants from 'expo-constants';
 import { ALLOWED_DOMAINS, APP_URL, isAllowedUrl } from './allowedDomains';
-import { BRIDGE_INJECTED_JS, deliverToWebView, parseBridgeMessage } from './bridge';
+import { buildBridgeInjectedJs, deliverToWebView, parseBridgeMessage } from './bridge';
 import { OfflineScreen } from './OfflineScreen';
+import {
+  getCachedIdentity,
+  requestIntegrityToken,
+  toBridgeIdentity,
+  type NativeIdentity,
+} from '../services/deviceIdentity';
 import { theme } from '../theme';
 
 type Props = {
   appUrl?: string;
-  webViewRef?: React.RefObject<WebView>;
+  webViewRef?: React.RefObject<WebView | null>;
   onWebViewLoad?: () => void;
+  identity?: NativeIdentity | null;
 };
 
-export function WebViewShell({ appUrl = APP_URL, webViewRef: externalRef, onWebViewLoad }: Props) {
+export function WebViewShell({
+  appUrl = APP_URL,
+  webViewRef: externalRef,
+  onWebViewLoad,
+  identity,
+}: Props) {
   const internalRef = useRef<WebView>(null);
   const webViewRef = externalRef || internalRef;
   const [canGoBack, setCanGoBack] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const activeIdentity = identity ?? getCachedIdentity();
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -110,8 +123,29 @@ export function WebViewShell({ appUrl = APP_URL, webViewRef: externalRef, onWebV
             osName: Device.osName,
             osVersion: Device.osVersion,
             modelName: Device.modelName,
-            appVersion: Constants.expoConfig?.version,
+            appVersion: activeIdentity?.appVersion ?? Constants.expoConfig?.version,
+            buildNumber: activeIdentity?.buildNumber ?? null,
+            packageName: activeIdentity?.packageName ?? null,
+            installSource: activeIdentity?.installSource ?? null,
           });
+          return;
+        }
+        case 'GET_INTEGRITY_TOKEN': {
+          try {
+            const nonce = typeof payload?.nonce === 'string' ? payload.nonce : '';
+            if (!nonce) {
+              respond(requestId, { ok: false, error: 'missing_nonce' });
+              return;
+            }
+            const integrityToken = await requestIntegrityToken(nonce);
+            if (!integrityToken) {
+              respond(requestId, { ok: false, error: 'integrity_unavailable' });
+              return;
+            }
+            respond(requestId, { ok: true, integrityToken });
+          } catch (err) {
+            respond(requestId, { ok: false, error: String(err) });
+          }
           return;
         }
         case 'OPEN_APP_SETTINGS': {
@@ -143,7 +177,9 @@ export function WebViewShell({ appUrl = APP_URL, webViewRef: externalRef, onWebV
         ref={webViewRef}
         source={{ uri: appUrl }}
         originWhitelist={ALLOWED_DOMAINS.map((d) => `https://*.${d}`).concat(ALLOWED_DOMAINS.map((d) => `https://${d}`))}
-        injectedJavaScriptBeforeContentLoaded={BRIDGE_INJECTED_JS}
+        injectedJavaScriptBeforeContentLoaded={buildBridgeInjectedJs(
+          activeIdentity ? toBridgeIdentity(activeIdentity) : null,
+        )}
         onMessage={handleMessage}
         onNavigationStateChange={(nav) => setCanGoBack(nav.canGoBack)}
         onShouldStartLoadWithRequest={handleShouldStartLoad}

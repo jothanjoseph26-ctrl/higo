@@ -1,0 +1,8 @@
+{
+  "name": "higo-device",
+  "version": "0.1.0",
+  "description": "HiGO native device identity and Play Integrity bridge",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "private": true
+}

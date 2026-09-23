@@ -172,6 +172,8 @@ node scripts/smoke-api.cjs
 | `OTP_PROVIDER` | `firebase` |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY` | Auth |
 | `GOOGLE_OAUTH_CLIENT_ID` | Google sign-in |
+| `PLAY_INTEGRITY_API_KEY` | Optional. Play Integrity decode key; empty returns `integrity_not_configured` (step 4) |
+| `PLAY_INTEGRITY_PACKAGE_ALLOWLIST` | Optional. Default `com.higopassenger,com.hiconnectgo.driver` |
 
 Template: `.env.railway` (copy values into Railway dashboard — never commit real secrets).
 

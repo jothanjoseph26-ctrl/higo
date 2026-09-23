@@ -62,6 +62,8 @@ export interface HigoClientOptions {
   tokenStorage: TokenStorage;
   /** Sent as x-client-platform; use 'mobile' so refresh token stays in body. */
   platform?: 'mobile' | 'web';
+  /** Extra headers merged into every request (e.g. x-higo-* telemetry). */
+  clientHeaders?: () => Record<string, string>;
   onAuthFailure?: () => void;
 }
 
@@ -104,6 +106,12 @@ export class HigoClient {
       const token = await options.tokenStorage.getAccessToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+      if (options.clientHeaders) {
+        const extra = options.clientHeaders();
+        for (const [key, value] of Object.entries(extra)) {
+          if (value) config.headers.set(key, value);
+        }
       }
       return config;
     });
