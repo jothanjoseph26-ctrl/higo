@@ -48,7 +48,7 @@ class HigoDeviceModule : Module() {
       )
     }
 
-    AsyncFunction("requestIntegrityToken") { nonce: String ->
+    AsyncFunction("requestIntegrityToken") suspend { nonce: String ->
       suspendCoroutine<String> { continuation ->
         var completed = false
         try {
