@@ -2,13 +2,11 @@ package expo.modules.higodevice
 
 import android.content.Context
 import android.os.Build
+import com.google.android.gms.tasks.Tasks
 import com.google.android.play.core.integrity.IntegrityManagerFactory
 import com.google.android.play.core.integrity.IntegrityTokenRequest
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
 
 class HigoDeviceModule : Module() {
   private val context: Context
@@ -48,34 +46,12 @@ class HigoDeviceModule : Module() {
       )
     }
 
-    AsyncFunction("requestIntegrityToken") suspend { nonce: String ->
-      suspendCoroutine<String> { continuation ->
-        var completed = false
-        try {
-          val manager = IntegrityManagerFactory.create(context)
-          manager
-            .requestIntegrityToken(
-              IntegrityTokenRequest.builder().setNonce(nonce).build(),
-            )
-            .addOnSuccessListener { result ->
-              if (!completed) {
-                completed = true
-                continuation.resume(result.token())
-              }
-            }
-            .addOnFailureListener { error ->
-              if (!completed) {
-                completed = true
-                continuation.resumeWithException(error)
-              }
-            }
-        } catch (error: Exception) {
-          if (!completed) {
-            completed = true
-            continuation.resumeWithException(error)
-          }
-        }
-      }
+    AsyncFunction("requestIntegrityToken") { nonce: String ->
+      val manager = IntegrityManagerFactory.create(context)
+      val task = manager.requestIntegrityToken(
+        IntegrityTokenRequest.builder().setNonce(nonce).build(),
+      )
+      Tasks.await(task).token()
     }
   }
 }
