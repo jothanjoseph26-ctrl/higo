@@ -50,6 +50,7 @@ class HigoDeviceModule : Module() {
 
     AsyncFunction("requestIntegrityToken") { nonce: String ->
       suspendCoroutine<String> { continuation ->
+        var completed = false
         try {
           val manager = IntegrityManagerFactory.create(context)
           manager
@@ -57,15 +58,20 @@ class HigoDeviceModule : Module() {
               IntegrityTokenRequest.builder().setNonce(nonce).build(),
             )
             .addOnSuccessListener { result ->
-              if (!continuation.isCompleted) continuation.resume(result.token())
+              if (!completed) {
+                completed = true
+                continuation.resume(result.token())
+              }
             }
             .addOnFailureListener { error ->
-              if (!continuation.isCompleted) {
+              if (!completed) {
+                completed = true
                 continuation.resumeWithException(error)
               }
             }
         } catch (error: Exception) {
-          if (!continuation.isCompleted) {
+          if (!completed) {
+            completed = true
             continuation.resumeWithException(error)
           }
         }
