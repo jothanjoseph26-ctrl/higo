@@ -102,11 +102,42 @@ describe('PricingService', () => {
     expect(estimate.distanceFare).toBe(60000);
     expect(estimate.timeFare).toBe(22500);
     expect(estimate.rawFare).toBe(132500);
-    expect(estimate.totalFare).toBe(146813);
-    expect(estimate.quotedFare).toBe(146813);
-    expect(estimate.customerStatutoryLevy).toBe(1688);
+    expect(estimate.totalFare).toBe(145125);
+    expect(estimate.quotedFare).toBe(145125);
+    expect(estimate.customerStatutoryLevy).toBeUndefined();
+    expect(estimate.modes.instant.statutoryLevy).toBeUndefined();
     expect(estimate.customerVat).toBe(10125);
     expect(estimate.surgeMultiplier).toBe(1.0);
+  });
+
+  it('applies FCT levy only for Abuja/FCT fares', async () => {
+    prisma.pricingConfig.findFirst.mockResolvedValue(kekeConfig);
+    jest.useFakeTimers().setSystemTime(new Date('2026-06-25T12:00:00Z'));
+
+    const abujaEstimate = await service.estimateFare({
+      vehicleType: VehicleType.KEKE,
+      distanceKm: 5,
+      durationMin: 15,
+      pickup,
+      city: 'Abuja',
+    });
+
+    const warriEstimate = await service.estimateFare({
+      vehicleType: VehicleType.KEKE,
+      distanceKm: 5,
+      durationMin: 15,
+      pickup,
+      city: 'Warri',
+    });
+
+    expect(abujaEstimate.customerStatutoryLevy).toBe(1688);
+    expect(abujaEstimate.modes.instant.statutoryLevy).toBe(1688);
+    expect(abujaEstimate.customerVat).toBe(10125);
+    expect(abujaEstimate.totalFare).toBe(146813);
+    expect(warriEstimate.customerStatutoryLevy).toBeUndefined();
+    expect(warriEstimate.modes.instant.statutoryLevy).toBeUndefined();
+    expect(warriEstimate.customerVat).toBe(10125);
+    expect(warriEstimate.totalFare).toBe(145125);
   });
 
   it('throws when no active pricing config exists', async () => {
@@ -133,7 +164,7 @@ describe('PricingService', () => {
       pickup,
     });
 
-    expect(estimate.totalFare).toBe(76125);
+    expect(estimate.totalFare).toBe(75250);
   });
 
   it('applies night premium between 10 PM and 5 AM Nigeria time', async () => {
@@ -147,7 +178,7 @@ describe('PricingService', () => {
       pickup,
     });
 
-    expect(estimate.totalFare).toBe(174000);
+    expect(estimate.totalFare).toBe(172000);
   });
 
   it('does not call surge repo when SURGE_ENABLED is false', async () => {
@@ -180,7 +211,7 @@ describe('PricingService', () => {
 
     expect(surgeRepo.getSurgeMultiplier).toHaveBeenCalledWith(pickup);
     expect(estimate.surgeMultiplier).toBe(1.5);
-    expect(estimate.totalFare).toBe(217500);
+    expect(estimate.totalFare).toBe(215000);
   });
 
   it('applies night premium before surge multiplier', async () => {
@@ -196,7 +227,7 @@ describe('PricingService', () => {
       pickup,
     });
 
-    expect(estimate.totalFare).toBe(261000);
+    expect(estimate.totalFare).toBe(258000);
   });
 
   it('calculates all Base44 ride modes independently from the metered base', async () => {
@@ -214,17 +245,21 @@ describe('PricingService', () => {
       rideMode: RideMode.NEGOTIATE,
     });
 
-    // Every mode's total includes booking fee + FCT levy (1.25%) + VAT (7.5%).
-    expect(estimate.modes.instant.totalFare).toBe(151813);
-    expect(estimate.modes.negotiate.recommended).toBe(151813);
-    expect(estimate.modes.negotiate.minimumOffer).toBe(136813);
-    expect(estimate.modes.negotiate.fastMatch).toBe(166813);
-    expect(estimate.modes.share.perSeat).toBe(106813);
-    expect(estimate.modes.scheduleFlex.totalFare).toBe(136813);
-    expect(estimate.modes.scheduleExact.totalFare).toBe(156813);
-    expect(estimate.customerStatutoryLevy).toBe(1688);
+    // Default/no-city fares include VAT, but not the Abuja/FCT-only levy.
+    expect(estimate.modes.instant.totalFare).toBe(150125);
+    expect(estimate.modes.negotiate.recommended).toBe(150125);
+    expect(estimate.modes.negotiate.minimumOffer).toBe(135125);
+    expect(estimate.modes.negotiate.fastMatch).toBe(165125);
+    expect(estimate.modes.share.perSeat).toBe(105125);
+    expect(estimate.modes.scheduleFlex.totalFare).toBe(135125);
+    expect(estimate.modes.scheduleExact.totalFare).toBe(155125);
+    expect(estimate.customerStatutoryLevy).toBeUndefined();
+    expect(estimate.modes.instant.statutoryLevy).toBeUndefined();
+    expect(estimate.modes.share.statutoryLevy).toBeUndefined();
+    expect(estimate.modes.scheduleFlex.statutoryLevy).toBeUndefined();
+    expect(estimate.modes.scheduleExact.statutoryLevy).toBeUndefined();
     expect(estimate.customerVat).toBe(10125);
-    expect(estimate.totalFare).toBe(151813);
+    expect(estimate.totalFare).toBe(150125);
     expect(estimate.rideMode).toBe(RideMode.NEGOTIATE);
   });
 

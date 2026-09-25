@@ -8,9 +8,10 @@ import { AppException } from '../common/errors/app.exception';
 
 const DEFAULT_ROUNDING_KOBO = 5000; // Base44 DEFAULT_ROUNDING=50 naira.
 const MATCH_RADIUS_KM = 2.5;
-// FCTA-mandated levy applied to the metered instant fare.
+// FCTA-mandated levy applied only to FCT/Abuja trips.
 const FCT_LEVY_RATE = 0.0125;
 const VAT_RATE = 0.075;
+const FCT_CITY_NAMES = new Set(['abuja', 'fct', 'federal capital territory']);
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -22,6 +23,11 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function isFctCity(city?: string | null): boolean {
+  if (!city) return false;
+  return FCT_CITY_NAMES.has(city.trim().toLowerCase());
 }
 
 @Injectable()
@@ -109,7 +115,8 @@ export class PricingService {
     const meteredBase = Math.max(rawFare, minimumFare);
     const minimumFareApplied = rawFare < minimumFare;
     const instantFare = this.roundToIncrement(meteredBase * surgeMultiplier, roundingIncrement);
-    const customerStatutoryLevy = Math.round(instantFare * FCT_LEVY_RATE);
+    const appliesFctLevy = isFctCity(input.city);
+    const customerStatutoryLevy = appliesFctLevy ? Math.round(instantFare * FCT_LEVY_RATE) : 0;
     const customerVat = Math.round(instantFare * VAT_RATE);
 
     const instantMult = Number(pricingConfig.instantMultiplier ?? 1.0);
@@ -135,7 +142,7 @@ export class PricingService {
         totalFare: addFees(instantBase),
         baseFare: instantBase,
         bookingFee: customerBookingFee,
-        statutoryLevy: customerStatutoryLevy,
+        ...(appliesFctLevy ? { statutoryLevy: customerStatutoryLevy } : {}),
         vat: customerVat,
         modeMultiplier: instantMult,
         fareBasis: 'metered_exclusive',
@@ -150,7 +157,7 @@ export class PricingService {
         perSeat: addFees(sharePerSeatBase),
         baseFare: sharePerSeatBase,
         bookingFee: customerBookingFee,
-        statutoryLevy: customerStatutoryLevy,
+        ...(appliesFctLevy ? { statutoryLevy: customerStatutoryLevy } : {}),
         vat: customerVat,
         requiresConfirmedMatch: pricingConfig.shareRequiresConfirmedMatch !== false,
         minimumMatchedPassengers: pricingConfig.shareMinimumMatchedPassengers ?? 2,
@@ -162,7 +169,7 @@ export class PricingService {
         totalFare: addFees(scheduleFlexibleBase),
         baseFare: scheduleFlexibleBase,
         bookingFee: customerBookingFee,
-        statutoryLevy: customerStatutoryLevy,
+        ...(appliesFctLevy ? { statutoryLevy: customerStatutoryLevy } : {}),
         vat: customerVat,
         modeMultiplier: scheduleFlexMult,
         fareBasis: 'schedule_flexible',
@@ -171,7 +178,7 @@ export class PricingService {
         totalFare: addFees(scheduleExactBase),
         baseFare: scheduleExactBase,
         bookingFee: customerBookingFee,
-        statutoryLevy: customerStatutoryLevy,
+        ...(appliesFctLevy ? { statutoryLevy: customerStatutoryLevy } : {}),
         vat: customerVat,
         modeMultiplier: scheduleExactMult,
         fareBasis: 'schedule_exact',
@@ -298,7 +305,7 @@ export class PricingService {
       quotedFare: selected.totalFare,
       totalFare: selected.totalFare,
       customerBookingFee,
-      customerStatutoryLevy,
+      ...(appliesFctLevy ? { customerStatutoryLevy } : {}),
       customerVat,
       priceIsAllIn: pricingConfig.priceIsAllIn ?? true,
       currency: pricingConfig.currency || 'NGN',
