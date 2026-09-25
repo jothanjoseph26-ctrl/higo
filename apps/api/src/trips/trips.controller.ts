@@ -271,6 +271,14 @@ export class TripsController {
     return this.tripService.getTrip(activeTrip.id);
   }
 
+  @Get('negotiation/active')
+  async getActiveNegotiations(@CurrentUser() user: AuthUser) {
+    if (user.type !== 'driver') {
+      throw new AppException('FORBIDDEN', undefined, 'Only drivers can list active negotiations');
+    }
+    return this.tripService.getActiveNegotiationsForDriver(user.sub);
+  }
+
   @Get(':id')
   async getTrip(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     const trip = await this.tripService.getTrip(id);

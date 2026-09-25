@@ -1014,6 +1014,55 @@ export class TripService {
     throw new AppException('VALIDATION_ERROR', undefined, 'Unknown negotiation action');
   }
 
+  /**
+   * Driver-side discovery: active negotiations within the driver's
+   * negotiation radius. Powers DriverHome's 5s "Fare Negotiations" poll
+   * (fareNegotiation action=get_active), which previously threw
+   * notImplemented — so drivers could never see or respond to a
+   * negotiation created by a passenger.
+   */
+  async getActiveNegotiationsForDriver(
+    driverId: string,
+  ): Promise<{ negotiations: FareNegotiationResponse[] }> {
+    const driver = await this.prisma.driver.findUnique({ where: { id: driverId } });
+    if (!driver) {
+      throw new AppException('NOT_FOUND', undefined, 'Driver profile not found');
+    }
+
+    const rows = await this.prisma.fareNegotiation.findMany({
+      where: { status: 'active', expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    const maxDist = Number(driver.maxNegotiationDistKm || 5);
+    const negotiations = rows.filter((row) => {
+      if (driver.vehicleType && row.vehicleType !== driver.vehicleType) return false;
+      if (!driver.currentLocation) return false;
+      const loc = driver.currentLocation as any;
+      let driverLat: number;
+      let driverLng: number;
+      if (typeof loc === 'object' && loc?.coordinates) {
+        driverLng = Number(loc.coordinates[0]);
+        driverLat = Number(loc.coordinates[1]);
+      } else if (typeof loc === 'string') {
+        const match = loc.match(/[\d.-]+/g);
+        if (!match || match.length < 2) return false;
+        driverLng = parseFloat(match[0]);
+        driverLat = parseFloat(match[1]);
+      } else {
+        return false;
+      }
+      const dLat = (driverLat - Number(row.pickupLat)) * 111;
+      const dLng =
+        (driverLng - Number(row.pickupLng)) * 111 * Math.cos((Number(row.pickupLat) * Math.PI) / 180);
+      const dkm = Math.sqrt(dLat * dLat + dLng * dLng);
+      return dkm <= maxDist;
+    });
+
+    return { negotiations: negotiations.map((row) => this.mapNegotiation(row)) };
+  }
+
   private assertNegotiationOwner(negotiation: { passengerId: string }, user: AuthUser): void {
     if (user.type === 'admin') return;
     if (user.type === 'passenger' && user.sub === negotiation.passengerId) return;
@@ -1222,7 +1271,7 @@ export class TripService {
         ${estimate.modeMultiplier},
         ${estimate.pricingVersion},
         ${estimate.customerBookingFee},
-        ${estimate.customerStatutoryLevy},
+        ${estimate.customerStatutoryLevy ?? 0},
         ${estimate.customerVat},
         ${estimate.totalFare},
         ${dto.paymentMethod}::"PaymentMethod",
